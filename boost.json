@@ -1,0 +1,13 @@
+{
+    "agents": [
+        "codex"
+    ],
+    "cloud": false,
+    "guidelines": true,
+    "skills": [
+        "laravel-best-practices",
+        "fluxui-development",
+        "volt-development",
+        "tailwindcss-development"
+    ]
+}
