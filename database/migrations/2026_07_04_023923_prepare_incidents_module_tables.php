@@ -34,16 +34,21 @@ return new class extends Migration
 
             if (Schema::hasColumn('incidents', 'priority')) {
                 /*
-                 * Important:
-                 * MySQL ENUM must allow "moderate" before we update existing rows.
+                 * MySQL supports ALTER TABLE ... MODIFY ENUM.
+                 * SQLite does not, so CI tests skip only the ENUM structure changes.
+                 * The data update still runs safely.
                  */
-                DB::statement("ALTER TABLE incidents MODIFY priority ENUM('low', 'normal', 'moderate', 'high', 'critical') NOT NULL DEFAULT 'low'");
+                if (DB::getDriverName() !== 'sqlite') {
+                    DB::statement("ALTER TABLE incidents MODIFY priority ENUM('low', 'normal', 'moderate', 'high', 'critical') NOT NULL DEFAULT 'low'");
+                }
 
                 DB::table('incidents')
                     ->where('priority', 'normal')
                     ->update(['priority' => 'moderate']);
 
-                DB::statement("ALTER TABLE incidents MODIFY priority ENUM('low', 'moderate', 'high', 'critical') NOT NULL DEFAULT 'low'");
+                if (DB::getDriverName() !== 'sqlite') {
+                    DB::statement("ALTER TABLE incidents MODIFY priority ENUM('low', 'moderate', 'high', 'critical') NOT NULL DEFAULT 'low'");
+                }
             } else {
                 Schema::table('incidents', function (Blueprint $table) {
                     $table->enum('priority', ['low', 'moderate', 'high', 'critical'])
@@ -166,7 +171,7 @@ return new class extends Migration
                 });
             }
 
-            if (Schema::hasColumn('incidents', 'priority')) {
+            if (Schema::hasColumn('incidents', 'priority') && DB::getDriverName() !== 'sqlite') {
                 DB::statement("ALTER TABLE incidents MODIFY priority ENUM('low', 'normal', 'high', 'critical') NOT NULL DEFAULT 'normal'");
             }
         }
