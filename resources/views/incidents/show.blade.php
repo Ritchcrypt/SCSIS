@@ -56,6 +56,15 @@ $messageUrl = $messageRouteName
     ? route($messageRouteName, $incident)
     : null;
 
+$createCaseUrl = null;
+
+if ($role === 'admin' && Route::has('admin.cases.index')) {
+    $createCaseUrl = route('admin.cases.index', [
+        'incident_id' => data_get($incident, 'id'),
+        'open_create' => 1,
+    ]);
+}
+
 $statuses = $statuses ?? collect();
 $responders = $responders ?? ($tanods ?? collect());
 
@@ -226,6 +235,17 @@ $currentAssigneeId = data_get($incident, 'assigned_to')
     $messages = data_get($incident, 'messages')
         ?? data_get($incident, 'incidentMessages')
         ?? collect();
+        
+        $relatedCases = data_get($incident, 'caseRecords') ?? collect();
+
+$createCaseUrl = null;
+
+if ($role === 'admin' && Route::has('admin.cases.index')) {
+    $createCaseUrl = route('admin.cases.index', [
+        'incident_id' => data_get($incident, 'id'),
+        'open_create' => 1,
+    ]);
+}
 
     $agencyOptions = $agencyOptions ?? [
         'PNP' => 'PNP',
@@ -264,6 +284,13 @@ $currentAssigneeId = data_get($incident, 'assigned_to')
             </div>
 
             <div class="flex flex-wrap gap-2">
+                @if ($createCaseUrl)
+                    <a href="{{ $createCaseUrl }}"
+                       class="inline-flex items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800">
+                        + Create Case
+                    </a>
+                @endif
+
                 <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $severityBadgeClass($severityLabel) }}">
                     {{ ucfirst((string) $severityLabel) }}
                 </span>
@@ -614,6 +641,121 @@ $currentAssigneeId = data_get($incident, 'assigned_to')
             </div>
 
             {{-- Status Update --}}
+            {{-- Related Cases --}}
+@if ($role === 'admin')
+    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-200 px-6 py-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">
+                        Related Cases
+                    </h2>
+
+                    <p class="mt-1 text-sm text-slate-500">
+                        Barangay case records connected to this incident.
+                    </p>
+                </div>
+
+                @if ($createCaseUrl)
+                    <a href="{{ $createCaseUrl }}"
+                       class="shrink-0 rounded-xl bg-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-blue-800">
+                        + Case
+                    </a>
+                @endif
+            </div>
+        </div>
+
+        <div class="space-y-4 p-6">
+            @if (count($relatedCases))
+                @foreach ($relatedCases as $caseRecord)
+                    @php
+                        $caseNumber = data_get($caseRecord, 'case_number') ?? ('Case #' . data_get($caseRecord, 'id'));
+
+                        $caseType = data_get($caseRecord, 'display_type')
+                            ?? ucfirst(str_replace('_', ' ', (string) data_get($caseRecord, 'case_type')));
+
+                        $caseStatus = data_get($caseRecord, 'display_status')
+                            ?? ucfirst(str_replace('_', ' ', (string) data_get($caseRecord, 'status')));
+
+                        $hearingDateRaw = data_get($caseRecord, 'hearing_date');
+
+                        try {
+                            $hearingDate = $hearingDateRaw
+                                ? \Carbon\Carbon::parse($hearingDateRaw)->format('M d, Y')
+                                : 'No hearing date';
+                        } catch (\Throwable $e) {
+                            $hearingDate = 'No hearing date';
+                        }
+
+                        $handledBy = data_get($caseRecord, 'handled_by') ?: 'Not assigned';
+                    @endphp
+
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="text-sm font-bold text-blue-700">
+                            Case No. {{ $caseNumber }}
+                        </p>
+
+                        <div class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    Type
+                                </p>
+                                <p class="mt-1 font-semibold text-slate-800">
+                                    {{ $caseType }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    Status
+                                </p>
+                                <p class="mt-1 font-semibold text-slate-800">
+                                    {{ $caseStatus }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    Hearing Date
+                                </p>
+                                <p class="mt-1 font-semibold text-slate-800">
+                                    {{ $hearingDate }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    Handled By
+                                </p>
+                                <p class="mt-1 font-semibold text-slate-800">
+                                    {{ $handledBy }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            @else
+                <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                    <h3 class="text-sm font-bold text-slate-900">
+                        No related case yet
+                    </h3>
+
+                    <p class="mt-1 text-sm text-slate-500">
+                        Create a case record if this incident needs formal barangay handling.
+                    </p>
+
+                    @if ($createCaseUrl)
+                        <a href="{{ $createCaseUrl }}"
+                           class="mt-4 inline-flex items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                            + Create Case
+                        </a>
+                    @endif
+                </div>
+            @endif
+        </div>
+    </div>
+@endif
+
             @if ($updateStatusUrl && auth()->check() && in_array($role, ['admin', 'official', 'tanod'], true))
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-6 py-4">

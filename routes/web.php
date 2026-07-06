@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\IncidentController;
+use App\Http\Controllers\TanodAlertController;
+use App\Http\Controllers\CaseManagementController;
+use App\Http\Controllers\AnnouncementController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -50,6 +53,24 @@ Route::middleware(['auth', 'role:admin'])
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
 
+        Route::get('/announcements', [AnnouncementController::class, 'index'])
+    ->name('announcements.index');
+
+Route::post('/announcements', [AnnouncementController::class, 'store'])
+    ->name('announcements.store');
+
+Route::patch('/announcements/{announcement}/toggle', [AnnouncementController::class, 'toggle'])
+    ->name('announcements.toggle');
+
+Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])
+    ->name('announcements.destroy');
+    
+        Route::get('/tanod-alerts', [TanodAlertController::class, 'index'])
+    ->name('tanod-alerts.index');
+
+Route::patch('/tanod-alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
+    ->name('tanod-alerts.acknowledge');
+
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');
 
@@ -70,6 +91,18 @@ Route::middleware(['auth', 'role:admin'])
 
         Route::post('/incidents/{incident}/messages', [IncidentController::class, 'storeMessage'])
             ->name('incidents.messages.store');
+
+        Route::get('/cases', [CaseManagementController::class, 'index'])
+    ->name('cases.index');
+
+Route::post('/cases', [CaseManagementController::class, 'store'])
+    ->name('cases.store');
+
+Route::patch('/cases/{caseRecord}', [CaseManagementController::class, 'update'])
+    ->name('cases.update');
+
+Route::delete('/cases/{caseRecord}', [CaseManagementController::class, 'destroy'])
+    ->name('cases.destroy');
     });
 
 /*
@@ -123,6 +156,12 @@ Route::middleware(['auth', 'role:tanod'])
         Route::get('/dashboard', function () {
             return view('dashboard');
         })->name('dashboard');
+
+        Route::get('/alerts', [TanodAlertController::class, 'index'])
+    ->name('tanod-alerts.index');
+
+Route::patch('/alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
+    ->name('tanod-alerts.acknowledge');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');

@@ -12,24 +12,70 @@ return new class extends Migration
             Schema::create('announcements', function (Blueprint $table) {
                 $table->id();
 
-                $table->foreignId('created_by')
+                $table->string('title');
+                $table->text('content');
+
+                $table->string('category', 50)->default('general');
+                $table->string('priority', 50)->default('normal');
+                $table->string('audience', 50)->default('everyone');
+
+                $table->boolean('is_active')->default(true);
+                $table->boolean('activate_calamity_mode')->default(false);
+
+                $table->foreignId('posted_by')
                     ->nullable()
                     ->constrained('users')
                     ->nullOnDelete();
 
-                $table->string('title', 150);
-                $table->text('message');
-
-                $table->enum('target_role', ['all', 'resident', 'official', 'tanod', 'admin'])
-                    ->default('all');
-
-                $table->timestamp('starts_at')->nullable();
-                $table->timestamp('ends_at')->nullable();
-                $table->boolean('is_active')->default(true);
+                $table->timestamp('published_at')->nullable();
 
                 $table->timestamps();
             });
+
+            return;
         }
+
+        Schema::table('announcements', function (Blueprint $table) {
+            if (! Schema::hasColumn('announcements', 'title')) {
+                $table->string('title')->after('id');
+            }
+
+            if (! Schema::hasColumn('announcements', 'content')) {
+                $table->text('content')->after('title');
+            }
+
+            if (! Schema::hasColumn('announcements', 'category')) {
+                $table->string('category', 50)->default('general')->after('content');
+            }
+
+            if (! Schema::hasColumn('announcements', 'priority')) {
+                $table->string('priority', 50)->default('normal')->after('category');
+            }
+
+            if (! Schema::hasColumn('announcements', 'audience')) {
+                $table->string('audience', 50)->default('everyone')->after('priority');
+            }
+
+            if (! Schema::hasColumn('announcements', 'is_active')) {
+                $table->boolean('is_active')->default(true)->after('audience');
+            }
+
+            if (! Schema::hasColumn('announcements', 'activate_calamity_mode')) {
+                $table->boolean('activate_calamity_mode')->default(false)->after('is_active');
+            }
+
+            if (! Schema::hasColumn('announcements', 'posted_by')) {
+                $table->foreignId('posted_by')
+                    ->nullable()
+                    ->after('activate_calamity_mode')
+                    ->constrained('users')
+                    ->nullOnDelete();
+            }
+
+            if (! Schema::hasColumn('announcements', 'published_at')) {
+                $table->timestamp('published_at')->nullable()->after('posted_by');
+            }
+        });
     }
 
     public function down(): void

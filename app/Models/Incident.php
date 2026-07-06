@@ -137,6 +137,11 @@ class Incident extends Model
         return $this->hasMany(IncidentMessage::class, 'incident_id');
     }
 
+    public function caseRecords(): HasMany
+    {
+        return $this->hasMany(CaseRecord::class, 'incident_id');
+    }
+
     public function scopePending($query)
     {
         return $query->whereHas('currentStatus', function ($statusQuery) {

@@ -126,6 +126,7 @@ class IncidentController extends Controller
     'statusHistories.updatedBy',
     'escalations.escalatedBy',
     'messages.user',
+    'caseRecords.creator',
 ]);
 
         $statuses = Status::active()
@@ -339,10 +340,14 @@ class IncidentController extends Controller
             'remarks' => ['nullable', 'string', 'max:3000'],
         ]);
 
-        DB::transaction(function () use ($request, $incident, $validated) {
+        $oldAssignedTo = $incident->assigned_to;
+        $oldStatusId = $incident->status_id;
+        $newAssignedTo = $validated['assigned_to'] ?? null;
+
+        DB::transaction(function () use ($request, $incident, $validated, $oldAssignedTo, $oldStatusId, $newAssignedTo) {
             $incident->update([
                 'status_id' => $validated['status_id'],
-                'assigned_to' => $validated['assigned_to'] ?? null,
+                'assigned_to' => $newAssignedTo,
             ]);
 
             IncidentStatusHistory::create([
@@ -355,11 +360,40 @@ class IncidentController extends Controller
 
             $status = Status::find($validated['status_id']);
 
+            $freshIncident = $incident->fresh([
+                'reporter',
+                'assignedTanod.user',
+                'currentStatus',
+                'category',
+                'barangay',
+            ]);
+
             $this->notifyIncidentUsers(
-                incident: $incident->fresh(['reporter', 'assignedTanod.user']),
+                incident: $freshIncident,
                 title: 'Incident status updated',
-                message: 'Incident ' . $incident->display_code . ' status changed to ' . ($status?->status_name ?? 'Updated') . '.'
+                message: 'Incident ' . $freshIncident->display_code . ' status changed to ' . ($status?->status_name ?? 'Updated') . '.'
             );
+
+            if ($newAssignedTo && (int) $oldAssignedTo !== (int) $newAssignedTo) {
+                $this->createTanodAlert(
+                    incident: $freshIncident,
+                    type: 'dispatch',
+                    title: 'Tanod Dispatch Alert',
+                    message: 'You have been assigned to respond to incident ' . $freshIncident->display_code . ': ' . $freshIncident->display_title . '.'
+                );
+            }
+
+            $statusName = strtolower((string) ($status?->status_name ?? ''));
+
+            if ((int) $oldStatusId !== (int) $validated['status_id']
+                && in_array($statusName, ['resolved', 'closed', 'completed'], true)) {
+                $this->createTanodAlert(
+                    incident: $freshIncident,
+                    type: 'resolved',
+                    title: 'Incident Resolved',
+                    message: 'Incident ' . $freshIncident->display_code . ' has been marked as ' . ($status?->status_name ?? 'resolved') . '.'
+                );
+            }
         });
 
         return back()->with('success', 'Incident status updated successfully.');
@@ -399,10 +433,25 @@ class IncidentController extends Controller
                 ]);
             }
 
+            $freshIncident = $incident->fresh([
+                'reporter',
+                'assignedTanod.user',
+                'currentStatus',
+                'category',
+                'barangay',
+            ]);
+
             $this->notifyIncidentUsers(
-                incident: $incident->fresh(['reporter', 'assignedTanod.user']),
+                incident: $freshIncident,
                 title: 'Incident escalated',
-                message: 'Incident ' . $incident->display_code . ' has been escalated to ' . $validated['agency'] . '.'
+                message: 'Incident ' . $freshIncident->display_code . ' has been escalated to ' . $validated['agency'] . '.'
+            );
+
+            $this->createTanodAlert(
+                incident: $freshIncident,
+                type: 'escalation',
+                title: 'Incident Escalated',
+                message: 'Incident ' . $freshIncident->display_code . ' has been escalated to ' . $validated['agency'] . '.'
             );
         });
 
@@ -490,6 +539,29 @@ class IncidentController extends Controller
         }
     }
 
+
+    private function createTanodAlert(Incident $incident, string $type, string $title, string $message): void
+    {
+        $incident->loadMissing('assignedTanod.user');
+
+        $assignedTanodUser = $incident->assignedTanod?->user;
+
+        if (! $assignedTanodUser) {
+            return;
+        }
+
+        UserNotification::create([
+            'user_id' => $assignedTanodUser->id,
+            'type' => $type,
+            'source_id' => $incident->id,
+            'title' => $title,
+            'message' => $message,
+            'is_read' => false,
+            'read_at' => null,
+            'acknowledged_by' => null,
+            'acknowledged_at' => null,
+        ]);
+    }
 
     private function generateIncidentCode(): string
     {

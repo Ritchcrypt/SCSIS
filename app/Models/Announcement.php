@@ -11,51 +11,63 @@ class Announcement extends Model
     use HasFactory;
 
     protected $fillable = [
-        'created_by',
         'title',
-        'message',
-        'target_role',
-        'starts_at',
-        'ends_at',
+        'content',
+        'category',
+        'priority',
+        'audience',
         'is_active',
+        'activate_calamity_mode',
+        'posted_by',
+        'published_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'starts_at' => 'datetime',
-            'ends_at' => 'datetime',
             'is_active' => 'boolean',
+            'activate_calamity_mode' => 'boolean',
+            'published_at' => 'datetime',
         ];
     }
 
-    public function creator(): BelongsTo
+    public function poster(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(User::class, 'posted_by');
     }
 
-    public function scopeActive($query)
+    public function getDisplayCategoryAttribute(): string
     {
-        return $query
-            ->where('is_active', true)
-            ->where(function ($dateQuery) {
-                $dateQuery
-                    ->whereNull('starts_at')
-                    ->orWhere('starts_at', '<=', now());
-            })
-            ->where(function ($dateQuery) {
-                $dateQuery
-                    ->whereNull('ends_at')
-                    ->orWhere('ends_at', '>=', now());
-            });
+        return match ($this->category) {
+            'advisory' => 'Advisory',
+            'emergency' => 'Emergency',
+            'calamity' => 'Calamity',
+            'community' => 'Community',
+            'health' => 'Health',
+            'general' => 'General',
+            default => ucfirst(str_replace('_', ' ', (string) $this->category)),
+        };
     }
 
-    public function scopeForRole($query, string $role)
+    public function getDisplayPriorityAttribute(): string
     {
-        return $query->where(function ($roleQuery) use ($role) {
-            $roleQuery
-                ->where('target_role', 'all')
-                ->orWhere('target_role', $role);
-        });
+        return match ($this->priority) {
+            'normal' => 'Normal',
+            'important' => 'Important',
+            'urgent' => 'Urgent',
+            'emergency' => 'Emergency',
+            default => ucfirst(str_replace('_', ' ', (string) $this->priority)),
+        };
+    }
+
+    public function getDisplayAudienceAttribute(): string
+    {
+        return match ($this->audience) {
+            'everyone' => 'All',
+            'tanod' => 'Tanod',
+            'residents' => 'Residents',
+            'admin' => 'Admin',
+            default => ucfirst(str_replace('_', ' ', (string) $this->audience)),
+        };
     }
 }

@@ -131,12 +131,173 @@
         <div class="min-h-screen flex-1 pl-72">
             <header class="sticky top-0 z-20 flex h-16 items-center justify-end border-b border-slate-200 bg-white px-8">
                 <div class="flex items-center gap-4">
-                    <div class="relative">
-                        <span class="text-xl">🔔</span>
-                        <span class="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                            6
-                        </span>
-                    </div>
+                    @php
+                        $authUser = auth()->user();
+
+                        $importantNotificationTypes = [
+                            'incident',
+                            'dispatch',
+                            'escalation',
+                            'emergency',
+                            'calamity',
+                            'resolved',
+                            'announcement',
+                        ];
+
+                        $notificationTypeLabels = [
+                            'incident' => 'Incident Update',
+                            'dispatch' => 'Dispatch',
+                            'escalation' => 'Escalation',
+                            'emergency' => 'Emergency',
+                            'calamity' => 'Calamity',
+                            'resolved' => 'Resolved',
+                            'announcement' => 'Announcement',
+                        ];
+
+                        $unreadNotificationCount = 0;
+                        $notificationUrl = '#';
+                        $latestUnreadNotifications = collect();
+
+                        if ($authUser) {
+                            $notificationQuery = \App\Models\UserNotification::query()
+                                ->where('is_read', false)
+                                ->whereIn('type', $importantNotificationTypes);
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | Notification Visibility Rule
+                            |--------------------------------------------------------------------------
+                            | Admin sees all important unread system notifications.
+                            | Other roles only see unread notifications assigned to their account.
+                            */
+                            if ($authUser->role !== 'admin') {
+                                $notificationQuery->where('user_id', $authUser->id);
+                            }
+
+                            $unreadNotificationCount = (clone $notificationQuery)->count();
+
+                            $latestUnreadNotifications = (clone $notificationQuery)
+                                ->latest()
+                                ->limit(6)
+                                ->get();
+
+                            $notificationUrl = match ($authUser->role) {
+                                'admin' => Route::has('admin.tanod-alerts.index')
+                                    ? route('admin.tanod-alerts.index')
+                                    : '#',
+
+                                'tanod' => Route::has('tanod.tanod-alerts.index')
+                                    ? route('tanod.tanod-alerts.index')
+                                    : '#',
+
+                                'official' => Route::has('official.incidents.index')
+                                    ? route('official.incidents.index')
+                                    : '#',
+
+                                'resident' => Route::has('resident.incidents.index')
+                                    ? route('resident.incidents.index')
+                                    : '#',
+
+                                default => '#',
+                            };
+                        }
+                    @endphp
+
+                    <details class="relative">
+                        <summary class="relative inline-flex cursor-pointer list-none items-center justify-center">
+                            <span class="text-xl">🔔</span>
+
+                            @if ($unreadNotificationCount > 0)
+                                <span class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+                                    {{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}
+                                </span>
+                            @endif
+                        </summary>
+
+                        <div class="absolute right-0 top-9 z-50 w-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                                <div>
+                                    <p class="text-sm font-bold text-slate-900">Unread Notifications</p>
+                                    <p class="text-xs text-slate-500">Important new updates only</p>
+                                </div>
+
+                                <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                                    {{ $unreadNotificationCount }}
+                                </span>
+                            </div>
+
+                            <div class="max-h-96 overflow-y-auto">
+                                @forelse ($latestUnreadNotifications as $notification)
+                                    @php
+                                        $type = strtolower($notification->type ?? 'incident');
+                                        $typeLabel = $notificationTypeLabels[$type] ?? ucfirst($type);
+
+                                        $incidentRoute = null;
+
+                                        if ($notification->source_id) {
+                                            $incidentRouteName = match ($authUser?->role) {
+                                                'admin' => 'admin.incidents.show',
+                                                'official' => 'official.incidents.show',
+                                                'tanod' => 'tanod.incidents.show',
+                                                'resident' => 'resident.incidents.show',
+                                                default => null,
+                                            };
+
+                                            if ($incidentRouteName && Route::has($incidentRouteName)) {
+                                                $incidentRoute = route($incidentRouteName, $notification->source_id);
+                                            }
+                                        }
+                                    @endphp
+
+                                    <div class="border-b border-slate-100 px-4 py-3 hover:bg-slate-50">
+                                        <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                                            {{ $typeLabel }}
+                                        </span>
+
+                                        <h3 class="mt-2 text-sm font-bold text-slate-900">
+                                            {{ $notification->title ?? 'Untitled notification' }}
+                                        </h3>
+
+                                        <p class="mt-1 text-xs leading-5 text-slate-600">
+                                            {{ $notification->message ?? 'No notification message provided.' }}
+                                        </p>
+
+                                        <p class="mt-2 text-[11px] text-slate-400">
+                                            {{ $notification->created_at?->diffForHumans() ?? 'No date' }}
+                                        </p>
+
+                                        @if ($incidentRoute)
+                                            <a href="{{ $incidentRoute }}"
+                                               class="mt-3 inline-flex text-xs font-bold text-blue-700 hover:text-blue-900">
+                                                Open Related Incident →
+                                            </a>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <div class="px-4 py-8 text-center">
+                                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl">
+                                            🔔
+                                        </div>
+
+                                        <p class="mt-3 text-sm font-bold text-slate-900">
+                                            No unread notifications
+                                        </p>
+
+                                        <p class="mt-1 text-xs text-slate-500">
+                                            New important updates will appear here.
+                                        </p>
+                                    </div>
+                                @endforelse
+                            </div>
+
+                            <div class="border-t border-slate-200 bg-slate-50 px-4 py-3">
+                                <a href="{{ $notificationUrl }}"
+                                   class="block rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-bold text-white hover:bg-blue-700">
+                                    View All Alerts
+                                </a>
+                            </div>
+                        </div>
+                    </details>
 
                     <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-950 text-sm font-bold text-white">
                         {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
