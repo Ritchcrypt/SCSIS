@@ -9,16 +9,15 @@ use App\Models\IncidentEscalation;
 use App\Models\IncidentMessage;
 use App\Models\IncidentStatusHistory;
 use App\Models\Status;
+use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Route;
-use Illuminate\View\View;
-use App\Models\User;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 class IncidentController extends Controller
 {
@@ -89,13 +88,11 @@ class IncidentController extends Controller
             ->ordered()
             ->get();
 
-        $severityOptions = $this->severityOptions();
-
         return view('incidents.index', [
             'incidents' => $incidents,
             'categories' => $categories,
             'statuses' => $statuses,
-            'severityOptions' => $severityOptions,
+            'severityOptions' => $this->severityOptions(),
             'filters' => [
                 'search' => $request->query('search'),
                 'type' => $request->query('type', 'all'),
@@ -110,24 +107,24 @@ class IncidentController extends Controller
         $this->authorizeIncidentAccess($request, $incident);
 
         $incident->load([
-    'barangay',
-    'category',
-    'currentStatus',
-    'location',
-    'reporter',
-    'resident.user',
-    'assignedTanod.user',
-    'evidence.uploader',
-    'evidences.uploader',
-    'attachments.uploader',
-    'statusHistory.status',
-    'statusHistory.updatedBy',
-    'statusHistories.status',
-    'statusHistories.updatedBy',
-    'escalations.escalatedBy',
-    'messages.user',
-    'caseRecords.creator',
-]);
+            'barangay',
+            'category',
+            'currentStatus',
+            'location',
+            'reporter',
+            'resident.user',
+            'assignedTanod.user',
+            'evidence.uploader',
+            'evidences.uploader',
+            'attachments.uploader',
+            'statusHistory.status',
+            'statusHistory.updatedBy',
+            'statusHistories.status',
+            'statusHistories.updatedBy',
+            'escalations.escalatedBy',
+            'messages.user',
+            'caseRecords.creator',
+        ]);
 
         $statuses = Status::active()
             ->ordered()
@@ -150,29 +147,13 @@ class IncidentController extends Controller
         ]);
     }
 
-
     public function create(Request $request): View
     {
         $user = $request->user();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Access Control
-        |--------------------------------------------------------------------------
-        | Residents can submit reports.
-        | Admin and officials are also allowed in case they need to encode reports.
-        */
-
         if (! in_array($user->role, ['resident', 'admin', 'official'], true)) {
             abort(403, 'Unauthorized access.');
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Incident Form Data
-        |--------------------------------------------------------------------------
-        | These records are needed for the create incident form.
-        */
 
         $categories = IncidentCategory::active()
             ->orderBy('category_name')
@@ -190,7 +171,6 @@ class IncidentController extends Controller
             'severityOptions' => $this->severityOptions(),
         ]);
     }
-
 
     public function store(Request $request): RedirectResponse
     {
@@ -307,15 +287,9 @@ class IncidentController extends Controller
         });
 
         $showRoute = match ($user->role) {
-            'resident' => Route::has('resident.incidents.show')
-                ? 'resident.incidents.show'
-                : null,
-            'admin' => Route::has('admin.incidents.show')
-                ? 'admin.incidents.show'
-                : null,
-            'official' => Route::has('official.incidents.show')
-                ? 'official.incidents.show'
-                : null,
+            'resident' => Route::has('resident.incidents.show') ? 'resident.incidents.show' : null,
+            'admin' => Route::has('admin.incidents.show') ? 'admin.incidents.show' : null,
+            'official' => Route::has('official.incidents.show') ? 'official.incidents.show' : null,
             default => null,
         };
 
@@ -539,7 +513,6 @@ class IncidentController extends Controller
         }
     }
 
-
     private function createTanodAlert(Incident $incident, string $type, string $title, string $message): void
     {
         $incident->loadMissing('assignedTanod.user');
@@ -576,49 +549,6 @@ class IncidentController extends Controller
 
     private function storeIncidentLocation(Incident $incident, array $validated): void
     {
-        if (Schema::hasTable('incident_locations')) {
-            $columns = Schema::getColumnListing('incident_locations');
-            $locationData = [];
-
-            if (in_array('incident_id', $columns, true)) {
-                $locationData['incident_id'] = $incident->id;
-            }
-
-            if (in_array('barangay_id', $columns, true)) {
-                $locationData['barangay_id'] = $validated['barangay_id'];
-            }
-
-            if (in_array('location_address', $columns, true)) {
-                $locationData['location_address'] = $validated['location_address'];
-            }
-
-            if (in_array('address', $columns, true)) {
-                $locationData['address'] = $validated['location_address'];
-            }
-
-            if (in_array('latitude', $columns, true)) {
-                $locationData['latitude'] = $validated['latitude'] ?? null;
-            }
-
-            if (in_array('longitude', $columns, true)) {
-                $locationData['longitude'] = $validated['longitude'] ?? null;
-            }
-
-            if (in_array('created_at', $columns, true)) {
-                $locationData['created_at'] = now();
-            }
-
-            if (in_array('updated_at', $columns, true)) {
-                $locationData['updated_at'] = now();
-            }
-
-            if (! empty($locationData)) {
-                DB::table('incident_locations')->insert($locationData);
-            }
-
-            return;
-        }
-
         $incidentUpdates = [];
 
         if (Schema::hasColumn('incidents', 'location_address')) {
@@ -637,8 +567,59 @@ class IncidentController extends Controller
             $incidentUpdates['longitude'] = $validated['longitude'] ?? null;
         }
 
+        if (Schema::hasColumn('incidents', 'map_location_name')) {
+            $incidentUpdates['map_location_name'] = $validated['location_address'];
+        }
+
+        if (Schema::hasColumn('incidents', 'map_severity')) {
+            $incidentUpdates['map_severity'] = $validated['priority'];
+        }
+
         if (! empty($incidentUpdates)) {
-            $incident->update($incidentUpdates);
+            $incident->forceFill($incidentUpdates)->save();
+        }
+
+        if (! Schema::hasTable('incident_locations')) {
+            return;
+        }
+
+        $columns = Schema::getColumnListing('incident_locations');
+        $locationData = [];
+
+        if (in_array('incident_id', $columns, true)) {
+            $locationData['incident_id'] = $incident->id;
+        }
+
+        if (in_array('barangay_id', $columns, true)) {
+            $locationData['barangay_id'] = $validated['barangay_id'];
+        }
+
+        if (in_array('location_address', $columns, true)) {
+            $locationData['location_address'] = $validated['location_address'];
+        }
+
+        if (in_array('address', $columns, true)) {
+            $locationData['address'] = $validated['location_address'];
+        }
+
+        if (in_array('latitude', $columns, true)) {
+            $locationData['latitude'] = $validated['latitude'] ?? null;
+        }
+
+        if (in_array('longitude', $columns, true)) {
+            $locationData['longitude'] = $validated['longitude'] ?? null;
+        }
+
+        if (in_array('created_at', $columns, true)) {
+            $locationData['created_at'] = now();
+        }
+
+        if (in_array('updated_at', $columns, true)) {
+            $locationData['updated_at'] = now();
+        }
+
+        if (! empty($locationData)) {
+            DB::table('incident_locations')->insert($locationData);
         }
     }
 
@@ -647,14 +628,14 @@ class IncidentController extends Controller
         $evidenceTable = null;
 
         if (Schema::hasTable('evidence')) {
-    $evidenceTable = 'evidence';
-} elseif (Schema::hasTable('incident_evidence')) {
-    $evidenceTable = 'incident_evidence';
-} elseif (Schema::hasTable('incident_evidences')) {
-    $evidenceTable = 'incident_evidences';
-} elseif (Schema::hasTable('incident_attachments')) {
-    $evidenceTable = 'incident_attachments';
-}
+            $evidenceTable = 'evidence';
+        } elseif (Schema::hasTable('incident_evidence')) {
+            $evidenceTable = 'incident_evidence';
+        } elseif (Schema::hasTable('incident_evidences')) {
+            $evidenceTable = 'incident_evidences';
+        } elseif (Schema::hasTable('incident_attachments')) {
+            $evidenceTable = 'incident_attachments';
+        }
 
         if (! $evidenceTable) {
             return;

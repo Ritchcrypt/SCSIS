@@ -3,6 +3,27 @@
 @section('title', 'Incident Details | DaoSystem')
 
 @section('content')
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+    #incidentDetailMap {
+        height: 360px;
+        width: 100%;
+        border-radius: 1rem;
+        z-index: 1;
+    }
+
+    .incident-detail-pin {
+        width: 26px;
+        height: 26px;
+        border-radius: 9999px;
+        background: #172554;
+        border: 4px solid white;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.45);
+    }
+</style>
+
 @php
     /*
     |--------------------------------------------------------------------------
@@ -158,10 +179,24 @@ $currentAssigneeId = data_get($incident, 'assigned_to')
         ?? 'No exact location provided';
 
     $latitude = data_get($incident, 'location.latitude')
-        ?? data_get($incident, 'latitude');
+    ?? data_get($incident, 'latitude');
 
-    $longitude = data_get($incident, 'location.longitude')
-        ?? data_get($incident, 'longitude');
+$longitude = data_get($incident, 'location.longitude')
+    ?? data_get($incident, 'longitude');
+
+$hasMapCoordinates = is_numeric($latitude) && is_numeric($longitude);
+
+$incidentMapLatitude = $hasMapCoordinates
+    ? (float) $latitude
+    : 11.3945;
+
+$incidentMapLongitude = $hasMapCoordinates
+    ? (float) $longitude
+    : 122.6858;
+
+$barangayMapUrl = Route::has('admin.map.index')
+    ? route('admin.map.index', ['search' => $incidentCode])
+    : null;
 
     $reporterName = data_get($incident, 'reporter.name')
         ?? data_get($incident, 'user.name')
@@ -414,53 +449,80 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
             </div>
 
             {{-- Location --}}
-            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-6 py-4">
-                    <h2 class="text-base font-bold text-slate-900">
-                        Location Details
-                    </h2>
+<div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div class="border-b border-slate-200 px-6 py-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 class="text-base font-bold text-slate-900">
+                    Location Details
+                </h2>
 
-                    <p class="mt-1 text-sm text-slate-500">
-                        Barangay and exact location information.
-                    </p>
-                </div>
-
-                <div class="grid gap-5 p-6 sm:grid-cols-2">
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Barangay
-                        </p>
-
-                        <p class="mt-1 text-sm font-semibold text-slate-900">
-                            {{ $barangayName }}
-                        </p>
-                    </div>
-
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Coordinates
-                        </p>
-
-                        <p class="mt-1 text-sm font-semibold text-slate-900">
-                            @if ($latitude && $longitude)
-                                {{ $latitude }}, {{ $longitude }}
-                            @else
-                                Not provided
-                            @endif
-                        </p>
-                    </div>
-
-                    <div class="sm:col-span-2">
-                        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Exact Address / Landmark
-                        </p>
-
-                        <p class="mt-1 text-sm leading-6 text-slate-700">
-                            {{ $locationAddress }}
-                        </p>
-                    </div>
-                </div>
+                <p class="mt-1 text-sm text-slate-500">
+                    Barangay, exact location, and map preview.
+                </p>
             </div>
+
+            @if ($barangayMapUrl)
+                <a href="{{ $barangayMapUrl }}"
+                   class="inline-flex items-center justify-center rounded-xl border border-blue-700 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">
+                    Open in Barangay Map
+                </a>
+            @endif
+        </div>
+    </div>
+
+    <div class="space-y-5 p-6">
+        <div class="grid gap-5 sm:grid-cols-2">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Barangay
+                </p>
+
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                    {{ $barangayName }}
+                </p>
+            </div>
+
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Coordinates
+                </p>
+
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                    @if ($hasMapCoordinates)
+                        {{ $latitude }}, {{ $longitude }}
+                    @else
+                        Not provided
+                    @endif
+                </p>
+            </div>
+
+            <div class="sm:col-span-2">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Exact Address / Landmark
+                </p>
+
+                <p class="mt-1 text-sm leading-6 text-slate-700">
+                    {{ $locationAddress }}
+                </p>
+            </div>
+        </div>
+
+        <div>
+            <p class="mb-3 text-sm font-semibold text-slate-700">
+                Incident Location Preview
+            </p>
+
+            <div id="incidentDetailMap"></div>
+
+            @unless ($hasMapCoordinates)
+                <p class="mt-3 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm font-medium text-yellow-700">
+                    No coordinates saved for this incident yet. Set its location from the Barangay Map module.
+                </p>
+            @endunless
+        </div>
+    </div>
+</div>
 
             {{-- Evidence --}}
             <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1148,4 +1210,66 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
         </div>
     </div>
 </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div id="incidentDetailMapData"
+     class="hidden"
+     data-latitude="{{ $incidentMapLatitude }}"
+     data-longitude="{{ $incidentMapLongitude }}"
+     data-has-coordinates="{{ $hasMapCoordinates ? '1' : '0' }}"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    const incidentDetailMapData = document.getElementById('incidentDetailMapData');
+
+    const incidentDetailLatitude = parseFloat(
+        incidentDetailMapData.getAttribute('data-latitude') || '11.3945'
+    );
+
+    const incidentDetailLongitude = parseFloat(
+        incidentDetailMapData.getAttribute('data-longitude') || '122.6858'
+    );
+
+    const incidentHasCoordinates =
+        incidentDetailMapData.getAttribute('data-has-coordinates') === '1';
+
+    const incidentDetailMap = L.map('incidentDetailMap', {
+        zoomControl: true,
+        scrollWheelZoom: true,
+    }).setView(
+        [incidentDetailLatitude, incidentDetailLongitude],
+        incidentHasCoordinates ? 16 : 13
+    );
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(incidentDetailMap);
+
+    function createIncidentDetailIcon() {
+        return L.divIcon({
+            className: '',
+            html: '<div class="incident-detail-pin"></div>',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            popupAnchor: [0, -12],
+        });
+    }
+
+    if (incidentHasCoordinates) {
+        L.marker([incidentDetailLatitude, incidentDetailLongitude], {
+            icon: createIncidentDetailIcon(),
+        })
+            .addTo(incidentDetailMap)
+            .bindPopup('Incident location')
+            .openPopup();
+    } else {
+        L.popup()
+            .setLatLng([incidentDetailLatitude, incidentDetailLongitude])
+            .setContent('No saved coordinates for this incident.')
+            .openOn(incidentDetailMap);
+    }
+</script>
 @endsection

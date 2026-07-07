@@ -203,103 +203,130 @@
                 </div>
 
                 {{-- Location --}}
-                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="border-b border-slate-200 px-6 py-4">
-                        <h2 class="text-base font-bold text-slate-900">
-                            Location
-                        </h2>
+{{-- Location --}}
+<div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div class="border-b border-slate-200 px-6 py-4">
+        <h2 class="text-base font-bold text-slate-900">
+            Location
+        </h2>
 
-                        <p class="mt-1 text-sm text-slate-500">
-                            Provide the barangay and exact landmark or address.
-                        </p>
-                    </div>
+        <p class="mt-1 text-sm text-slate-500">
+            Provide the barangay, exact landmark, and pin the location on the map.
+        </p>
+    </div>
 
-                    <div class="space-y-5 p-6">
-                        <div>
-                            <label for="barangay_id" class="mb-2 block text-sm font-semibold text-slate-700">
-                                Barangay
-                            </label>
+    <div class="space-y-5 p-6">
+        <div>
+            <label for="barangay_id" class="mb-2 block text-sm font-semibold text-slate-700">
+                Barangay
+            </label>
 
-                            <select
-                                id="barangay_id"
-                                name="barangay_id"
-                                required
-                                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            >
-                                <option value="">Select barangay</option>
+            <select
+                id="barangay_id"
+                name="barangay_id"
+                required
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+                <option value="">Select barangay</option>
 
-                                @foreach ($barangays as $barangay)
-                                    <option value="{{ $barangay->id }}" @selected((string) old('barangay_id') === (string) $barangay->id)>
-                                        {{ $barangay->barangay_name ?? $barangay->name ?? 'Barangay' }}
-                                    </option>
-                                @endforeach
-                            </select>
+                @foreach ($barangays as $barangay)
+                    <option value="{{ $barangay->id }}" @selected((string) old('barangay_id') === (string) $barangay->id)>
+                        {{ $barangay->barangay_name ?? $barangay->name ?? 'Barangay' }}
+                    </option>
+                @endforeach
+            </select>
 
-                            @error('barangay_id')
-                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
+            @error('barangay_id')
+                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+            @enderror
+        </div>
 
-                        <div>
-                            <label for="location_address" class="mb-2 block text-sm font-semibold text-slate-700">
-                                Exact Location / Landmark
-                            </label>
+        <div>
+            <label for="location_address" class="mb-2 block text-sm font-semibold text-slate-700">
+                Exact Location / Landmark
+            </label>
 
-                            <textarea
-                                id="location_address"
-                                name="location_address"
-                                rows="4"
-                                required
-                                placeholder="Example: Near Dao Public Market, beside the tricycle terminal..."
-                                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            >{{ old('location_address') }}</textarea>
+            <textarea
+                id="location_address"
+                name="location_address"
+                rows="4"
+                required
+                placeholder="Example: Near Dao Public Market, beside the tricycle terminal..."
+                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >{{ old('location_address') }}</textarea>
 
-                            @error('location_address')
-                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
+            @error('location_address')
+                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+            @enderror
+        </div>
 
-                        <div class="grid gap-5 md:grid-cols-2">
-                            <div>
-                                <label for="latitude" class="mb-2 block text-sm font-semibold text-slate-700">
-                                    Latitude <span class="font-normal text-slate-400">(optional)</span>
-                                </label>
+        <div>
+            <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-sm font-semibold text-slate-700">
+                        Pin Incident Location
+                    </p>
 
-                                <input
-                                    id="latitude"
-                                    type="text"
-                                    name="latitude"
-                                    value="{{ old('latitude') }}"
-                                    placeholder="Example: 11.3945"
-                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                >
-
-                                @error('latitude')
-                                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
-
-                            <div>
-                                <label for="longitude" class="mb-2 block text-sm font-semibold text-slate-700">
-                                    Longitude <span class="font-normal text-slate-400">(optional)</span>
-                                </label>
-
-                                <input
-                                    id="longitude"
-                                    type="text"
-                                    name="longitude"
-                                    value="{{ old('longitude') }}"
-                                    placeholder="Example: 122.6842"
-                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                >
-
-                                @error('longitude')
-                                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                                @enderror
-                            </div>
-                        </div>
-                    </div>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Click the map to automatically fill latitude and longitude.
+                    </p>
                 </div>
+
+                <button
+                    type="button"
+                    onclick="clearIncidentMapPin()"
+                    class="rounded-xl border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                    Clear Pin
+                </button>
+            </div>
+
+            <div id="incidentCreateMap" class="h-[360px] w-full rounded-2xl border border-slate-200"></div>
+        </div>
+
+        <div class="grid gap-5 md:grid-cols-2">
+            <div>
+                <label for="latitude" class="mb-2 block text-sm font-semibold text-slate-700">
+                    Latitude <span class="font-normal text-slate-400">(auto-filled by map)</span>
+                </label>
+
+                <input
+                    id="latitude"
+                    type="text"
+                    name="latitude"
+                    value="{{ old('latitude') }}"
+                    readonly
+                    placeholder="Click the map"
+                    class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+
+                @error('latitude')
+                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div>
+                <label for="longitude" class="mb-2 block text-sm font-semibold text-slate-700">
+                    Longitude <span class="font-normal text-slate-400">(auto-filled by map)</span>
+                </label>
+
+                <input
+                    id="longitude"
+                    type="text"
+                    name="longitude"
+                    value="{{ old('longitude') }}"
+                    readonly
+                    placeholder="Click the map"
+                    class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+
+                @error('longitude')
+                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+        </div>
+    </div>
+</div>
 
                 {{-- Evidence --}}
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -415,4 +442,75 @@
         </div>
     </form>
 </div>
+
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    const incidentCreateMapCenter = [11.3945, 122.6858];
+
+    const incidentCreateMap = L.map('incidentCreateMap', {
+        zoomControl: true,
+        scrollWheelZoom: true,
+    }).setView(incidentCreateMapCenter, 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(incidentCreateMap);
+
+    let incidentCreateMarker = null;
+
+    const oldLatitude = document.getElementById('latitude').value;
+    const oldLongitude = document.getElementById('longitude').value;
+
+    function createIncidentPickerIcon() {
+        return L.divIcon({
+            className: '',
+            html: '<div style="height:26px;width:26px;border-radius:9999px;background:#172554;border:4px solid white;box-shadow:0 8px 20px rgba(15,23,42,.45);"></div>',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            popupAnchor: [0, -12],
+        });
+    }
+
+    function placeIncidentMapPin(latitude, longitude) {
+        if (incidentCreateMarker) {
+            incidentCreateMap.removeLayer(incidentCreateMarker);
+        }
+
+        incidentCreateMarker = L.marker([latitude, longitude], {
+            icon: createIncidentPickerIcon(),
+        }).addTo(incidentCreateMap);
+
+        incidentCreateMarker.bindPopup('Selected incident location').openPopup();
+    }
+
+    function clearIncidentMapPin() {
+        document.getElementById('latitude').value = '';
+        document.getElementById('longitude').value = '';
+
+        if (incidentCreateMarker) {
+            incidentCreateMap.removeLayer(incidentCreateMarker);
+            incidentCreateMarker = null;
+        }
+    }
+
+    incidentCreateMap.on('click', function (event) {
+        const latitude = event.latlng.lat.toFixed(7);
+        const longitude = event.latlng.lng.toFixed(7);
+
+        document.getElementById('latitude').value = latitude;
+        document.getElementById('longitude').value = longitude;
+
+        placeIncidentMapPin(latitude, longitude);
+    });
+
+    if (oldLatitude && oldLongitude) {
+        placeIncidentMapPin(oldLatitude, oldLongitude);
+        incidentCreateMap.setView([oldLatitude, oldLongitude], 16);
+    }
+</script>
 @endsection

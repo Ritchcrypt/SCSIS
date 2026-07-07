@@ -7,6 +7,7 @@ use App\Http\Controllers\CaseManagementController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\EmergencyModeController;
 use App\Http\Controllers\TanodRosterController;
+use App\Http\Controllers\BarangayMapController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -22,8 +23,6 @@ Route::get('/', function () {
 |--------------------------------------------------------------------------
 | Main Dashboard Redirect
 |--------------------------------------------------------------------------
-| This route checks the logged-in user's role and sends them to the correct
-| dashboard area.
 */
 Route::get('/dashboard', function () {
     $user = Auth::user();
@@ -45,8 +44,6 @@ Route::get('/dashboard', function () {
 |--------------------------------------------------------------------------
 | Admin Routes
 |--------------------------------------------------------------------------
-| Administrator manages users, barangays, categories, announcements,
-| reports, settings, and system maintenance.
 */
 Route::middleware(['auth', 'role:admin'])
     ->prefix('admin')
@@ -55,47 +52,53 @@ Route::middleware(['auth', 'role:admin'])
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
 
+        Route::get('/map', [BarangayMapController::class, 'index'])
+            ->name('map.index');
+
+        Route::patch('/map/incidents/{incident}/location', [BarangayMapController::class, 'updateLocation'])
+            ->name('map.incidents.location');
+
         Route::get('/tanods', [TanodRosterController::class, 'index'])
-    ->name('tanods.index');
+            ->name('tanods.index');
 
-Route::post('/tanods', [TanodRosterController::class, 'store'])
-    ->name('tanods.store');
+        Route::post('/tanods', [TanodRosterController::class, 'store'])
+            ->name('tanods.store');
 
-Route::patch('/tanods/{tanod}', [TanodRosterController::class, 'update'])
-    ->name('tanods.update');
+        Route::patch('/tanods/{tanod}', [TanodRosterController::class, 'update'])
+            ->name('tanods.update');
 
-Route::delete('/tanods/{tanod}', [TanodRosterController::class, 'destroy'])
-    ->name('tanods.destroy');
+        Route::delete('/tanods/{tanod}', [TanodRosterController::class, 'destroy'])
+            ->name('tanods.destroy');
 
         Route::get('/emergency-mode', [EmergencyModeController::class, 'index'])
-    ->name('emergency-mode.index');
+            ->name('emergency-mode.index');
 
-Route::post('/emergency-mode/notify', [EmergencyModeController::class, 'notify'])
-    ->name('emergency-mode.notify');
+        Route::post('/emergency-mode/notify', [EmergencyModeController::class, 'notify'])
+            ->name('emergency-mode.notify');
 
-Route::patch('/emergency-mode/{emergencyAgencyLog}/status', [EmergencyModeController::class, 'updateStatus'])
-    ->name('emergency-mode.update-status');
+        Route::patch('/emergency-mode/{emergencyAgencyLog}/status', [EmergencyModeController::class, 'updateStatus'])
+            ->name('emergency-mode.update-status');
 
-Route::delete('/emergency-mode/{emergencyAgencyLog}', [EmergencyModeController::class, 'destroy'])
-    ->name('emergency-mode.destroy');
+        Route::delete('/emergency-mode/{emergencyAgencyLog}', [EmergencyModeController::class, 'destroy'])
+            ->name('emergency-mode.destroy');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
-    ->name('announcements.index');
+            ->name('announcements.index');
 
-Route::post('/announcements', [AnnouncementController::class, 'store'])
-    ->name('announcements.store');
+        Route::post('/announcements', [AnnouncementController::class, 'store'])
+            ->name('announcements.store');
 
-Route::patch('/announcements/{announcement}/toggle', [AnnouncementController::class, 'toggle'])
-    ->name('announcements.toggle');
+        Route::patch('/announcements/{announcement}/toggle', [AnnouncementController::class, 'toggle'])
+            ->name('announcements.toggle');
 
-Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])
-    ->name('announcements.destroy');
-    
+        Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])
+            ->name('announcements.destroy');
+
         Route::get('/tanod-alerts', [TanodAlertController::class, 'index'])
-    ->name('tanod-alerts.index');
+            ->name('tanod-alerts.index');
 
-Route::patch('/tanod-alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
-    ->name('tanod-alerts.acknowledge');
+        Route::patch('/tanod-alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
+            ->name('tanod-alerts.acknowledge');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');
@@ -119,24 +122,22 @@ Route::patch('/tanod-alerts/{notification}/acknowledge', [TanodAlertController::
             ->name('incidents.messages.store');
 
         Route::get('/cases', [CaseManagementController::class, 'index'])
-    ->name('cases.index');
+            ->name('cases.index');
 
-Route::post('/cases', [CaseManagementController::class, 'store'])
-    ->name('cases.store');
+        Route::post('/cases', [CaseManagementController::class, 'store'])
+            ->name('cases.store');
 
-Route::patch('/cases/{caseRecord}', [CaseManagementController::class, 'update'])
-    ->name('cases.update');
+        Route::patch('/cases/{caseRecord}', [CaseManagementController::class, 'update'])
+            ->name('cases.update');
 
-Route::delete('/cases/{caseRecord}', [CaseManagementController::class, 'destroy'])
-    ->name('cases.destroy');
+        Route::delete('/cases/{caseRecord}', [CaseManagementController::class, 'destroy'])
+            ->name('cases.destroy');
     });
 
 /*
 |--------------------------------------------------------------------------
 | Barangay Official Routes
 |--------------------------------------------------------------------------
-| Barangay Officials validate incidents, assign responders, manage reports,
-| and monitor barangay-level safety activity.
 */
 Route::middleware(['auth', 'role:official'])
     ->prefix('official')
@@ -172,8 +173,6 @@ Route::middleware(['auth', 'role:official'])
 |--------------------------------------------------------------------------
 | Barangay Tanod Routes
 |--------------------------------------------------------------------------
-| Tanods view assigned incidents, receive alerts, update response status,
-| and add response remarks.
 */
 Route::middleware(['auth', 'role:tanod'])
     ->prefix('tanod')
@@ -184,10 +183,10 @@ Route::middleware(['auth', 'role:tanod'])
         })->name('dashboard');
 
         Route::get('/alerts', [TanodAlertController::class, 'index'])
-    ->name('tanod-alerts.index');
+            ->name('tanod-alerts.index');
 
-Route::patch('/alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
-    ->name('tanod-alerts.acknowledge');
+        Route::patch('/alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
+            ->name('tanod-alerts.acknowledge');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');
@@ -206,8 +205,6 @@ Route::patch('/alerts/{notification}/acknowledge', [TanodAlertController::class,
 |--------------------------------------------------------------------------
 | Resident Routes
 |--------------------------------------------------------------------------
-| Residents submit incident reports, track their own reports, receive
-| notifications, and view safety announcements.
 */
 Route::middleware(['auth', 'role:resident'])
     ->prefix('resident')
@@ -237,7 +234,6 @@ Route::middleware(['auth', 'role:resident'])
 |--------------------------------------------------------------------------
 | Authentication / Logout
 |--------------------------------------------------------------------------
-| This creates the missing route named "logout".
 */
 Route::match(['GET', 'POST'], '/logout', function () {
     Auth::logout();

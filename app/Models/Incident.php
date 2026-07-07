@@ -28,6 +28,10 @@ class Incident extends Model
         'incident_datetime',
         'reported_at',
         'priority',
+        'latitude',
+        'longitude',
+        'map_location_name',
+        'map_severity',
     ];
 
     protected function casts(): array
@@ -35,6 +39,10 @@ class Incident extends Model
         return [
             'incident_datetime' => 'datetime',
             'reported_at' => 'datetime',
+            'latitude' => 'float',
+            'longitude' => 'float',
+            'latitude' => 'float',
+            'longitude' => 'float',
         ];
     }
 
@@ -193,4 +201,65 @@ class Incident extends Model
         return $this->incident_description
             ?: ($this->description ?: 'No description provided.');
     }
+
+    public function getHasMapCoordinatesAttribute(): bool
+{
+    return $this->latitude !== null && $this->longitude !== null;
+}
+
+public function getMapSeverityValueAttribute(): string
+{
+    $severity = $this->map_severity;
+
+    if (! $severity && isset($this->severity)) {
+        $severity = $this->severity;
+    }
+
+    if (! $severity && isset($this->priority)) {
+        $severity = $this->priority;
+    }
+
+    $severity = strtolower((string) $severity);
+
+    return match ($severity) {
+        'low' => 'low',
+        'moderate', 'medium' => 'moderate',
+        'high' => 'high',
+        'critical', 'urgent', 'emergency' => 'critical',
+        default => 'moderate',
+    };
+}
+
+public function getMapSeverityLabelAttribute(): string
+{
+    return match ($this->map_severity_value) {
+        'low' => 'Low',
+        'moderate' => 'Moderate',
+        'high' => 'High',
+        'critical' => 'Critical',
+        default => 'Moderate',
+    };
+}
+
+public function getMapPinColorAttribute(): string
+{
+    return match ($this->map_severity_value) {
+        'low' => '#22c55e',
+        'moderate' => '#eab308',
+        'high' => '#f97316',
+        'critical' => '#ef4444',
+        default => '#eab308',
+    };
+}
+
+public function getMapHeatIntensityAttribute(): float
+{
+    return match ($this->map_severity_value) {
+        'low' => 0.35,
+        'moderate' => 0.55,
+        'high' => 0.75,
+        'critical' => 1.0,
+        default => 0.55,
+    };
+}
 }
