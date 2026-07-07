@@ -5,6 +5,8 @@ use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\TanodAlertController;
 use App\Http\Controllers\CaseManagementController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\EmergencyModeController;
+use App\Http\Controllers\TanodRosterController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +54,30 @@ Route::middleware(['auth', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::get('/tanods', [TanodRosterController::class, 'index'])
+    ->name('tanods.index');
+
+Route::post('/tanods', [TanodRosterController::class, 'store'])
+    ->name('tanods.store');
+
+Route::patch('/tanods/{tanod}', [TanodRosterController::class, 'update'])
+    ->name('tanods.update');
+
+Route::delete('/tanods/{tanod}', [TanodRosterController::class, 'destroy'])
+    ->name('tanods.destroy');
+
+        Route::get('/emergency-mode', [EmergencyModeController::class, 'index'])
+    ->name('emergency-mode.index');
+
+Route::post('/emergency-mode/notify', [EmergencyModeController::class, 'notify'])
+    ->name('emergency-mode.notify');
+
+Route::patch('/emergency-mode/{emergencyAgencyLog}/status', [EmergencyModeController::class, 'updateStatus'])
+    ->name('emergency-mode.update-status');
+
+Route::delete('/emergency-mode/{emergencyAgencyLog}', [EmergencyModeController::class, 'destroy'])
+    ->name('emergency-mode.destroy');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
     ->name('announcements.index');
