@@ -8,6 +8,7 @@ use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\EmergencyModeController;
 use App\Http\Controllers\TanodRosterController;
 use App\Http\Controllers\BarangayMapController;
+use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,18 @@ Route::middleware(['auth', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::get('/dashboard', [DashboardController::class, 'index'])
+            ->name('dashboard');
+
+        Route::get('/reports', [ReportController::class, 'index'])
+        ->name('reports.index');
+
+        Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
+        ->name('reports.pdf');
+
+        Route::get('/map', [BarangayMapController::class, 'index'])
+        ->name('map.index');
 
         Route::get('/map', [BarangayMapController::class, 'index'])
             ->name('map.index');
@@ -115,7 +128,7 @@ Route::middleware(['auth', 'role:admin'])
         Route::patch('/incidents/{incident}/status', [IncidentController::class, 'updateStatus'])
             ->name('incidents.update-status');
 
-        Route::post('/incidents/{incident}/escalate', [IncidentController::class, 'escalate'])
+        Route::match(['post', 'patch'], '/incidents/{incident}/escalate', [IncidentController::class, 'escalate'])
             ->name('incidents.escalate');
 
         Route::post('/incidents/{incident}/messages', [IncidentController::class, 'storeMessage'])

@@ -224,8 +224,28 @@ class IncidentController extends Controller
             }
 
             if (Schema::hasColumn('incidents', 'category_id')) {
-                $incident->category_id = $validated['category_id'];
-            }
+    $incident->category_id = $validated['category_id'];
+}
+
+$selectedCategory = IncidentCategory::find($validated['category_id']);
+
+$selectedCategoryName = $selectedCategory?->category_name
+    ?? $selectedCategory?->name
+    ?? null;
+
+if ($selectedCategoryName) {
+    if (Schema::hasColumn('incidents', 'type')) {
+        $incident->type = $selectedCategoryName;
+    }
+
+    if (Schema::hasColumn('incidents', 'incident_type')) {
+        $incident->incident_type = $selectedCategoryName;
+    }
+
+    if (Schema::hasColumn('incidents', 'category_name')) {
+        $incident->category_name = $selectedCategoryName;
+    }
+}
 
             if (Schema::hasColumn('incidents', 'barangay_id')) {
                 $incident->barangay_id = $validated['barangay_id'];

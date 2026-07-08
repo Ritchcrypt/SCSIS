@@ -954,7 +954,6 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
 
                     <form method="POST" action="{{ $escalateUrl }}" class="space-y-5 p-6">
                         @csrf
-                        @method('PATCH')
 
                         <div>
                             <label for="agency" class="mb-2 block text-sm font-semibold text-slate-700">
