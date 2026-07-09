@@ -42,33 +42,51 @@
                 </a>
 
                 <a href="{{ Route::has('admin.tanod-alerts.index') ? route('admin.tanod-alerts.index') : '#' }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.tanod-alerts.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>🔔</span>
-                    <span>Tanod Alerts</span>
-                </a>
+   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
+   {{ request()->routeIs('admin.tanod-alerts.*')
+        ? 'bg-blue-600 font-semibold text-white'
+        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
+    <span>🔔</span>
+    <span>Tanod Alerts</span>
+</a>
 
-                <a href="{{ Route::has('admin.cases.index') ? route('admin.cases.index') : '#' }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.cases.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>📘</span>
-                    <span>Case Management</span>
-                </a>
+<a href="{{ Route::has('admin.tanods.index') ? route('admin.tanods.index') : '#' }}"
+   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
+   {{ request()->routeIs('admin.tanods.*')
+        ? 'bg-blue-600 font-semibold text-white'
+        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
+    <span>👥</span>
+    <span>Tanod Roster</span>
+</a>
 
-                <a href="{{ Route::has('admin.announcements.index') ? route('admin.announcements.index') : '#' }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.announcements.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>📢</span>
-                    <span>Announcements</span>
-                </a>
+<a href="{{ Route::has('admin.tanod-tasks.index') ? route('admin.tanod-tasks.index') : '#' }}"
+   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
+   {{ request()->routeIs('admin.tanod-tasks.*')
+        ? 'bg-blue-600 font-semibold text-white'
+        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
+    <span>📋</span>
+    <span>Tanod Tasks</span>
+</a>
 
-                <a href="{{ Route::has('admin.emergency-mode.index') ? route('admin.emergency-mode.index') : '#' }}"
+<a href="{{ Route::has('admin.cases.index') ? route('admin.cases.index') : '#' }}"
+   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
+   {{ request()->routeIs('admin.cases.*')
+        ? 'bg-blue-600 font-semibold text-white'
+        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
+    <span>📘</span>
+    <span>Case Management</span>
+</a>
+
+<a href="{{ Route::has('admin.announcements.index') ? route('admin.announcements.index') : '#' }}"
+   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
+   {{ request()->routeIs('admin.announcements.*')
+        ? 'bg-blue-600 font-semibold text-white'
+        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
+    <span>📢</span>
+    <span>Announcements</span>
+</a>
+
+<a href="{{ Route::has('admin.emergency-mode.index') ? route('admin.emergency-mode.index') : '#' }}"
    class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
    {{ request()->routeIs('admin.emergency-mode.*')
         ? 'bg-blue-600 font-semibold text-white'
@@ -76,14 +94,6 @@
     <span>🚨</span>
     <span>Emergency Mode</span>
 </a>
-
-                <a href="{{ Route::has('admin.tanods.index') ? route('admin.tanods.index') : '#' }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.tanods.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>👥</span>
-                    <span>Tanod Roster</span>
                 </a>
 
                 <a href="{{ Route::has('admin.map.index') ? route('admin.map.index') : '#' }}"

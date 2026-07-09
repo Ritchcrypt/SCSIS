@@ -7,39 +7,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 
 class User extends Authenticatable
 {
     use HasFactory, Notifiable;
-
-    public function initials(): string
-{
-    $name = trim((string) $this->name);
-
-    if ($name === '') {
-        $name = trim((string) $this->email);
-    }
-
-    $words = preg_split('/\s+/', $name);
-
-    if (! $words || count($words) === 0) {
-        return 'U';
-    }
-
-    $initials = '';
-
-    foreach ($words as $word) {
-        if ($word !== '') {
-            $initials .= strtoupper(mb_substr($word, 0, 1));
-        }
-
-        if (strlen($initials) >= 2) {
-            break;
-        }
-    }
-
-    return $initials ?: 'U';
-}
 
     protected $fillable = [
         'name',
@@ -48,6 +20,10 @@ class User extends Authenticatable
         'password',
         'role',
         'status',
+        'contact_number',
+        'barangay_id',
+        'address',
+        'is_active',
     ];
 
     protected $hidden = [
@@ -55,12 +31,60 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (User $user): void {
+            if (empty($user->role)) {
+                $user->role = 'resident';
+            }
+
+            if (Schema::hasColumn('users', 'is_active') && $user->is_active === null) {
+                $user->is_active = true;
+            }
+
+            if (Schema::hasColumn('users', 'status') && $user->status === null) {
+                $user->status = true;
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
+            'status' => 'boolean',
         ];
+    }
+
+    public function initials(): string
+    {
+        $name = trim((string) $this->name);
+
+        if ($name === '') {
+            $name = trim((string) $this->email);
+        }
+
+        $words = preg_split('/\s+/', $name);
+
+        if (! $words || count($words) === 0) {
+            return 'U';
+        }
+
+        $initials = '';
+
+        foreach ($words as $word) {
+            if ($word !== '') {
+                $initials .= strtoupper(mb_substr($word, 0, 1));
+            }
+
+            if (strlen($initials) >= 2) {
+                break;
+            }
+        }
+
+        return $initials ?: 'U';
     }
 
     public function resident(): HasOne
@@ -127,6 +151,10 @@ class User extends Authenticatable
 
     public function isActive(): bool
     {
+        if (Schema::hasColumn('users', 'is_active')) {
+            return (bool) $this->is_active;
+        }
+
         return (bool) $this->status;
     }
 }

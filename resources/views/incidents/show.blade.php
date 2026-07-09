@@ -151,11 +151,22 @@ $currentAssigneeId = data_get($incident, 'assigned_to')
         ?? data_get($incident, 'details')
         ?? 'No description provided.';
 
-    $categoryName = data_get($incident, 'category.category_name')
-        ?? data_get($incident, 'category.name')
-        ?? data_get($incident, 'type')
-        ?? 'Uncategorized';
+    $categoryId = data_get($incident, 'category_id');
 
+$categoryRecord = null;
+
+if ($categoryId) {
+    $categoryRecord = \App\Models\IncidentCategory::find($categoryId);
+}
+
+$categoryName = data_get($incident, 'category.category_name')
+    ?? data_get($incident, 'category.name')
+    ?? data_get($categoryRecord, 'category_name')
+    ?? data_get($categoryRecord, 'name')
+    ?? data_get($incident, 'type')
+    ?? data_get($incident, 'incident_type')
+    ?? 'Uncategorized';
+    
     $severityLabel = data_get($incident, 'severity_label')
         ?? data_get($incident, 'severity')
         ?? data_get($incident, 'priority')

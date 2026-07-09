@@ -9,6 +9,8 @@ use App\Http\Controllers\EmergencyModeController;
 use App\Http\Controllers\TanodRosterController;
 use App\Http\Controllers\BarangayMapController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\TanodTaskController;
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -39,31 +41,76 @@ Route::get('/dashboard', function () {
         'resident' => redirect()->route('resident.dashboard'),
         default => abort(403, 'Invalid user role.'),
     };
-})->middleware(['auth'])->name('dashboard');
+})->middleware(['auth', 'active.user'])->name('dashboard');
 
 /*
 |--------------------------------------------------------------------------
 | Admin Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:admin'])
+Route::middleware(['auth', 'active.user'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
 
-        Route::get('/dashboard', [DashboardController::class, 'index'])
-            ->name('dashboard');
+        Route::get('/users', [UserManagementController::class, 'index'])
+            ->name('users.index');
+
+        Route::get('/users/export', [UserManagementController::class, 'export'])
+            ->name('users.export');
+
+        Route::get('/users/create', [UserManagementController::class, 'create'])
+            ->name('users.create');
+
+        Route::post('/users', [UserManagementController::class, 'store'])
+            ->name('users.store');
+
+        Route::get('/users/{user}', [UserManagementController::class, 'show'])
+            ->name('users.show');
+
+        Route::get('/users/{user}/edit', [UserManagementController::class, 'edit'])
+            ->name('users.edit');
+
+        Route::patch('/users/{user}', [UserManagementController::class, 'update'])
+            ->name('users.update');
+
+        Route::patch('/users/{user}/activate', [UserManagementController::class, 'activate'])
+            ->name('users.activate');
+
+        Route::patch('/users/{user}/deactivate', [UserManagementController::class, 'deactivate'])
+            ->name('users.deactivate');
+
+        Route::patch('/users/{user}/reset-password', [UserManagementController::class, 'resetPassword'])
+            ->name('users.reset-password');
+
+        Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])
+            ->name('users.destroy');
+
+        Route::get('/tanod-tasks', [TanodTaskController::class, 'index'])
+            ->name('tanod-tasks.index');
+
+        Route::get('/tanod-tasks/create', [TanodTaskController::class, 'create'])
+            ->name('tanod-tasks.create');
+
+        Route::post('/tanod-tasks', [TanodTaskController::class, 'store'])
+            ->name('tanod-tasks.store');
+
+        Route::get('/tanod-tasks/{tanodTask}', [TanodTaskController::class, 'show'])
+            ->name('tanod-tasks.show');
+
+        Route::patch('/tanod-tasks/{tanodTask}/close', [TanodTaskController::class, 'close'])
+            ->name('tanod-tasks.close');
+
+        Route::patch('/tanod-tasks/{tanodTask}/cancel', [TanodTaskController::class, 'cancel'])
+            ->name('tanod-tasks.cancel');
 
         Route::get('/reports', [ReportController::class, 'index'])
-        ->name('reports.index');
+            ->name('reports.index');
 
         Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
-        ->name('reports.pdf');
-
-        Route::get('/map', [BarangayMapController::class, 'index'])
-        ->name('map.index');
+            ->name('reports.pdf');
 
         Route::get('/map', [BarangayMapController::class, 'index'])
             ->name('map.index');
@@ -152,12 +199,12 @@ Route::middleware(['auth', 'role:admin'])
 | Barangay Official Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:official'])
+Route::middleware(['auth', 'active.user'])
     ->prefix('official')
     ->name('official.')
     ->group(function () {
         Route::get('/dashboard', function () {
-            return view('dashboard');
+            return redirect()->route('official.incidents.index');
         })->name('dashboard');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
@@ -175,7 +222,7 @@ Route::middleware(['auth', 'role:official'])
         Route::patch('/incidents/{incident}/status', [IncidentController::class, 'updateStatus'])
             ->name('incidents.update-status');
 
-        Route::post('/incidents/{incident}/escalate', [IncidentController::class, 'escalate'])
+        Route::match(['post', 'patch'], '/incidents/{incident}/escalate', [IncidentController::class, 'escalate'])
             ->name('incidents.escalate');
 
         Route::post('/incidents/{incident}/messages', [IncidentController::class, 'storeMessage'])
@@ -187,13 +234,19 @@ Route::middleware(['auth', 'role:official'])
 | Barangay Tanod Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:tanod'])
+Route::middleware(['auth', 'active.user'])
     ->prefix('tanod')
     ->name('tanod.')
     ->group(function () {
         Route::get('/dashboard', function () {
-            return view('dashboard');
+            return redirect()->route('tanod.tanod-tasks.index');
         })->name('dashboard');
+
+        Route::get('/tanod-tasks', [TanodTaskController::class, 'tanodIndex'])
+            ->name('tanod-tasks.index');
+
+        Route::patch('/tanod-tasks/responses/{response}', [TanodTaskController::class, 'respond'])
+            ->name('tanod-tasks.respond');
 
         Route::get('/alerts', [TanodAlertController::class, 'index'])
             ->name('tanod-alerts.index');
@@ -219,12 +272,12 @@ Route::middleware(['auth', 'role:tanod'])
 | Resident Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:resident'])
+Route::middleware(['auth', 'active.user'])
     ->prefix('resident')
     ->name('resident.')
     ->group(function () {
         Route::get('/dashboard', function () {
-            return view('dashboard');
+            return redirect()->route('resident.incidents.index');
         })->name('dashboard');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
