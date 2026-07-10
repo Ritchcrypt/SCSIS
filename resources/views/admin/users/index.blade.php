@@ -51,6 +51,13 @@
         </div>
     @endif
 
+    <div class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
+        <p class="font-bold">Permanent Delete Safety Rule</p>
+        <p class="mt-1 leading-6">
+            Permanent delete is only for accounts with no connected system records. If the user is connected to incidents, task responses, notifications, employee/tanod records, or other audit records, deletion will be blocked. Use <strong>Deactivate</strong> instead for real accounts.
+        </p>
+    </div>
+
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Total Users</p>
@@ -188,13 +195,44 @@
                         @php
                             $barangay = $barangays->firstWhere('id', $userRecord->barangay_id ?? null);
                             $isActive = ! Schema::hasColumn('users', 'is_active') || (bool) $userRecord->is_active;
+                            $isCurrentUser = auth()->id() && (int) auth()->id() === (int) $userRecord->id;
+                            $profilePhotoPath = Schema::hasColumn('users', 'profile_photo_path') ? ($userRecord->profile_photo_path ?? null) : null;
+                            $profilePhotoUrl = $profilePhotoPath && Route::has('users.profile-photo')
+                                ? route('users.profile-photo', $userRecord)
+                                : null;
+                            $userInitial = strtoupper(mb_substr($userRecord->name ?? 'U', 0, 1));
                         @endphp
 
                         <tr class="hover:bg-slate-50">
                             <td class="px-5 py-4">
-                                <p class="font-semibold text-slate-900">
-                                    {{ $userRecord->name }}
-                                </p>
+                                <div class="flex items-center gap-3">
+                                    <div class="relative h-10 w-10 shrink-0">
+                                        @if ($profilePhotoUrl)
+                                            <img src="{{ $profilePhotoUrl }}"
+                                                 alt="{{ $userRecord->name }} profile photo"
+                                                 class="h-10 w-10 rounded-full border border-slate-200 object-cover shadow-sm"
+                                                 onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+
+                                            <div class="hidden h-10 w-10 items-center justify-center rounded-full bg-blue-950 text-sm font-bold text-white shadow-sm">
+                                                {{ $userInitial }}
+                                            </div>
+                                        @else
+                                            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-950 text-sm font-bold text-white shadow-sm">
+                                                {{ $userInitial }}
+                                            </div>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <p class="font-semibold text-slate-900">
+                                            {{ $userRecord->name }}
+                                        </p>
+
+                                        <p class="mt-0.5 text-xs text-slate-500">
+                                            {{ ucfirst((string) $userRecord->role) }} account
+                                        </p>
+                                    </div>
+                                </div>
                             </td>
 
                             <td class="px-5 py-4 text-sm text-slate-700">
@@ -277,16 +315,25 @@
                                         </form>
                                     @endif
 
-                                    <form method="POST" action="{{ route('admin.users.destroy', $userRecord) }}">
-                                        @csrf
-                                        @method('DELETE')
-
-                                        <button type="submit"
-                                                onclick="return confirm('Delete this user? This is blocked if the user has connected records.')"
-                                                class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100">
-                                            Delete
+                                    @if ($isCurrentUser)
+                                        <button type="button"
+                                                disabled
+                                                title="You cannot permanently delete your own account."
+                                                class="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-400">
+                                            Delete Locked
                                         </button>
-                                    </form>
+                                    @else
+                                        <form method="POST" action="{{ route('admin.users.destroy', $userRecord) }}">
+                                            @csrf
+                                            @method('DELETE')
+
+                                            <button type="submit"
+                                                    onclick="return confirm('Permanent delete will run safety checks first. If this user has incidents, tasks, notifications, employee/tanod records, messages, or logs, deletion will be blocked and you should deactivate instead. Continue?')"
+                                                    class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100">
+                                                Permanent Delete
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>

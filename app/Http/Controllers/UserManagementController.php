@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -59,14 +60,19 @@ $users = $this->filteredUsersQuery($request)
         $this->authorizeAdmin($request);
 
         $validated = $this->validateUser($request);
+        $profilePhotoPath = $this->storeProfilePhoto($request);
 
-        DB::transaction(function () use ($validated) {
+        DB::transaction(function () use ($validated, $profilePhotoPath) {
             $user = new User();
 
             $user->name = $validated['name'];
             $user->email = $validated['email'];
             $user->password = Hash::make($validated['password']);
             $user->role = $validated['role'];
+
+            if (Schema::hasColumn('users', 'profile_photo_path')) {
+                $user->profile_photo_path = $profilePhotoPath;
+            }
 
             if (Schema::hasColumn('users', 'contact_number')) {
                 $user->contact_number = $validated['contact_number'] ?? null;
@@ -109,6 +115,27 @@ $users = $this->filteredUsersQuery($request)
         ]);
     }
 
+    public function profilePhoto(Request $request, User $user)
+    {
+        $authUser = $request->user();
+
+        if (! $authUser) {
+            abort(403, 'Unauthorized access.');
+        }
+
+        if ((int) $authUser->id !== (int) $user->id && $authUser->role !== 'admin') {
+            abort(403, 'Unauthorized access.');
+        }
+
+        $profilePhotoPath = $this->normalizeProfilePhotoPath($user->profile_photo_path ?? null);
+
+        if (! $profilePhotoPath || ! Storage::disk('public')->exists($profilePhotoPath)) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('public')->path($profilePhotoPath));
+    }
+
     public function edit(Request $request, User $user): View
     {
         $this->authorizeAdmin($request);
@@ -126,11 +153,17 @@ $users = $this->filteredUsersQuery($request)
         $this->authorizeAdmin($request);
 
         $validated = $this->validateUser($request, $user);
+        $oldProfilePhotoPath = $user->profile_photo_path ?? null;
+        $newProfilePhotoPath = $this->storeProfilePhoto($request);
 
-        DB::transaction(function () use ($validated, $user) {
+        DB::transaction(function () use ($validated, $user, $newProfilePhotoPath) {
             $user->name = $validated['name'];
             $user->email = $validated['email'];
             $user->role = $validated['role'];
+
+            if ($newProfilePhotoPath && Schema::hasColumn('users', 'profile_photo_path')) {
+                $user->profile_photo_path = $newProfilePhotoPath;
+            }
 
             if (Schema::hasColumn('users', 'contact_number')) {
                 $user->contact_number = $validated['contact_number'] ?? null;
@@ -152,6 +185,14 @@ $users = $this->filteredUsersQuery($request)
 
             $this->syncEmployeeProfile($user);
         });
+
+        if ($newProfilePhotoPath && $oldProfilePhotoPath) {
+            $oldProfilePhotoPath = $this->normalizeProfilePhotoPath($oldProfilePhotoPath);
+
+            if ($oldProfilePhotoPath && Storage::disk('public')->exists($oldProfilePhotoPath)) {
+                Storage::disk('public')->delete($oldProfilePhotoPath);
+            }
+        }
 
         return redirect()
             ->route('admin.users.index')
@@ -209,7 +250,7 @@ $users = $this->filteredUsersQuery($request)
         $this->authorizeAdmin($request);
 
         if ((int) $request->user()->id === (int) $user->id) {
-            return back()->with('error', 'You cannot delete your own account.');
+            return back()->with('error', 'You cannot permanently delete your own account.');
         }
 
         $blockingRecords = $this->deleteBlockingRecords($user);
@@ -217,25 +258,17 @@ $users = $this->filteredUsersQuery($request)
         if (! empty($blockingRecords)) {
             return back()->with(
                 'error',
-                'This user cannot be deleted because they are connected to existing records: ' . implode(', ', $blockingRecords) . '. Deactivate instead.'
+                'This user cannot be permanently deleted because they are connected to system records: ' . implode(', ', $blockingRecords) . '. Deactivate the account instead.'
             );
         }
 
-        DB::transaction(function () use ($user) {
-            if (Schema::hasTable('employees') && Schema::hasColumn('employees', 'user_id')) {
-                DB::table('employees')->where('user_id', $user->id)->delete();
-            }
+        $userName = $user->name;
 
-            if (Schema::hasTable('tanod_profiles') && Schema::hasColumn('tanod_profiles', 'user_id')) {
-                DB::table('tanod_profiles')->where('user_id', $user->id)->delete();
-            }
-
-            $user->delete();
-        });
+        $user->delete();
 
         return redirect()
             ->route('admin.users.index')
-            ->with('success', 'User account deleted successfully.');
+            ->with('success', "User {$userName} was permanently deleted successfully.");
     }
 
     public function export(Request $request)
@@ -344,6 +377,7 @@ $users = $this->filteredUsersQuery($request)
             'role' => ['required', Rule::in(array_keys($this->roles()))],
             'is_active' => ['required', 'boolean'],
             'password' => $passwordRule,
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:51200'],
         ];
 
         $validated = $request->validate($rules);
@@ -353,6 +387,39 @@ $users = $this->filteredUsersQuery($request)
         }
 
         return $validated;
+    }
+
+    private function storeProfilePhoto(Request $request): ?string
+    {
+        if (! Schema::hasColumn('users', 'profile_photo_path')) {
+            return null;
+        }
+
+        if (! $request->hasFile('profile_photo')) {
+            return null;
+        }
+
+        $path = $request->file('profile_photo')->store('profile-photos', 'public');
+
+        return $this->normalizeProfilePhotoPath($path);
+    }
+
+    private function normalizeProfilePhotoPath(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        $path = str_replace('\\', '/', trim($path));
+        $path = preg_replace('#^/?storage/#', '', $path);
+        $path = preg_replace('#^/?public/#', '', $path);
+        $path = ltrim($path, '/');
+
+        if ($path === '' || str_contains($path, '..')) {
+            return null;
+        }
+
+        return $path;
     }
 
     private function syncEmployeeProfile(User $user): void
@@ -410,23 +477,34 @@ $users = $this->filteredUsersQuery($request)
     {
         $blocks = [];
 
-        $userChecks = [
+        $recordChecks = [
             ['incidents', 'reporter_id', 'reported incidents'],
+            ['incidents', 'resident_id', 'resident incident records'],
             ['incident_messages', 'user_id', 'incident messages'],
             ['incident_status_histories', 'updated_by', 'incident status history'],
             ['notifications', 'user_id', 'notifications'],
             ['tanod_task_responses', 'user_id', 'tanod task responses'],
-            ['case_records', 'created_by', 'case records'],
-            ['case_records', 'creator_id', 'case records'],
-            ['announcements', 'created_by', 'announcements'],
+            ['case_records', 'created_by', 'case records created'],
+            ['case_records', 'creator_id', 'case records created'],
+            ['announcements', 'created_by', 'announcements created'],
             ['emergency_agency_logs', 'contacted_by', 'emergency logs'],
+            ['activity_logs', 'actor_id', 'activity logs as actor'],
+            ['activity_logs', 'target_user_id', 'activity logs as target'],
+            ['employees', 'user_id', 'employee/staff profile'],
+            ['tanod_profiles', 'user_id', 'tanod profile'],
         ];
 
-        foreach ($userChecks as [$table, $column, $label]) {
-            if (Schema::hasTable($table) && Schema::hasColumn($table, $column)) {
-                if (DB::table($table)->where($column, $user->id)->exists()) {
-                    $blocks[] = $label;
-                }
+        foreach ($recordChecks as [$table, $column, $label]) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            $count = DB::table($table)
+                ->where($column, $user->id)
+                ->count();
+
+            if ($count > 0) {
+                $blocks[] = "{$label} ({$count})";
             }
         }
 
@@ -436,15 +514,22 @@ $users = $this->filteredUsersQuery($request)
                 ->pluck('id');
 
             if ($employeeIds->isNotEmpty()) {
-                if (Schema::hasTable('incidents') && Schema::hasColumn('incidents', 'assigned_to')) {
-                    if (DB::table('incidents')->whereIn('assigned_to', $employeeIds)->exists()) {
-                        $blocks[] = 'assigned incidents';
-                    }
-                }
+                $employeeRecordChecks = [
+                    ['incidents', 'assigned_to', 'assigned incidents'],
+                    ['tanod_task_responses', 'employee_id', 'tanod task responses as employee'],
+                ];
 
-                if (Schema::hasTable('tanod_task_responses') && Schema::hasColumn('tanod_task_responses', 'employee_id')) {
-                    if (DB::table('tanod_task_responses')->whereIn('employee_id', $employeeIds)->exists()) {
-                        $blocks[] = 'tanod task responses';
+                foreach ($employeeRecordChecks as [$table, $column, $label]) {
+                    if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+                        continue;
+                    }
+
+                    $count = DB::table($table)
+                        ->whereIn($column, $employeeIds)
+                        ->count();
+
+                    if ($count > 0) {
+                        $blocks[] = "{$label} ({$count})";
                     }
                 }
             }

@@ -32,12 +32,65 @@
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <form method="POST"
               action="{{ $isEdit ? route('admin.users.update', $userRecord) : route('admin.users.store') }}"
+              enctype="multipart/form-data"
               class="space-y-6 p-6">
             @csrf
 
             @if ($isEdit)
                 @method('PATCH')
             @endif
+
+            @php
+                $profilePhotoPath = $userRecord->profile_photo_path ?? null;
+                $profilePhotoUrl = $profilePhotoPath && $userRecord && Route::has('users.profile-photo')
+                    ? route('users.profile-photo', $userRecord)
+                    : null;
+                $profileInitial = strtoupper(mb_substr($userRecord->name ?? 'U', 0, 1));
+            @endphp
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+                    <div class="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        @if ($profilePhotoUrl)
+                            <img src="{{ $profilePhotoUrl }}"
+                                 alt="{{ $userRecord->name ?? 'User' }} profile photo"
+                                 class="h-full w-full object-cover"
+                                 onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+
+                            <span class="hidden text-3xl font-bold text-blue-700">
+                                {{ $profileInitial }}
+                            </span>
+                        @else
+                            <span class="text-3xl font-bold text-blue-700">
+                                {{ $profileInitial }}
+                            </span>
+                        @endif
+                    </div>
+
+                    <div class="flex-1">
+                        <label for="profile_photo" class="mb-2 block text-sm font-semibold text-slate-700">
+                            Profile Picture
+                        </label>
+
+                        <input id="profile_photo"
+                               type="file"
+                               name="profile_photo"
+                               accept="image/jpeg,image/png,image/webp"
+                               class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                        <p class="mt-2 text-xs text-slate-500">
+                            Accepted formats: JPG, PNG, or WEBP. Maximum size: 50 MB.
+                            @if ($isEdit && $profilePhotoUrl)
+                                Uploading a new image will replace the current profile picture.
+                            @endif
+                        </p>
+
+                        @error('profile_photo')
+                            <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            </div>
 
             <div class="grid gap-5 md:grid-cols-2">
                 <div>

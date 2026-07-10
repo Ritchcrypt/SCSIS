@@ -46,6 +46,14 @@ Route::get('/dashboard', function () {
 
 /*
 |--------------------------------------------------------------------------
+| Shared Authenticated Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->get('/users/{user}/profile-photo', [UserManagementController::class, 'profilePhoto'])
+    ->name('users.profile-photo');
+
+/*
+|--------------------------------------------------------------------------
 | Admin Routes
 |--------------------------------------------------------------------------
 */
@@ -301,6 +309,7 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
 */
 Route::match(['GET', 'POST'], '/logout', function () {
     Auth::logout();
+
 
     request()->session()->invalidate();
     request()->session()->regenerateToken();
