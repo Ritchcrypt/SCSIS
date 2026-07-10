@@ -11,6 +11,7 @@ use App\Http\Controllers\BarangayMapController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TanodTaskController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\RoleDashboardController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -36,7 +37,7 @@ Route::get('/dashboard', function () {
 
     return match ($user->role) {
         'admin' => redirect()->route('admin.dashboard'),
-        'official' => redirect()->route('official.dashboard'),
+        'official', 'dao' => redirect()->route('official.dashboard'),
         'tanod' => redirect()->route('tanod.dashboard'),
         'resident' => redirect()->route('resident.dashboard'),
         default => abort(403, 'Invalid user role.'),
@@ -48,7 +49,7 @@ Route::get('/dashboard', function () {
 | Admin Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'active.user'])
+Route::middleware(['auth', 'active.user', 'role:admin'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
@@ -199,13 +200,12 @@ Route::middleware(['auth', 'active.user'])
 | Barangay Official Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'active.user'])
+Route::middleware(['auth', 'active.user', 'role:official,dao'])
     ->prefix('official')
     ->name('official.')
     ->group(function () {
-        Route::get('/dashboard', function () {
-            return redirect()->route('official.incidents.index');
-        })->name('dashboard');
+        Route::get('/dashboard', [RoleDashboardController::class, 'official'])
+            ->name('dashboard');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');
@@ -234,13 +234,12 @@ Route::middleware(['auth', 'active.user'])
 | Barangay Tanod Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'active.user'])
+Route::middleware(['auth', 'active.user', 'role:tanod'])
     ->prefix('tanod')
     ->name('tanod.')
     ->group(function () {
-        Route::get('/dashboard', function () {
-            return redirect()->route('tanod.tanod-tasks.index');
-        })->name('dashboard');
+        Route::get('/dashboard', [RoleDashboardController::class, 'tanod'])
+            ->name('dashboard');
 
         Route::get('/tanod-tasks', [TanodTaskController::class, 'tanodIndex'])
             ->name('tanod-tasks.index');
@@ -272,13 +271,12 @@ Route::middleware(['auth', 'active.user'])
 | Resident Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'active.user'])
+Route::middleware(['auth', 'active.user', 'role:resident'])
     ->prefix('resident')
     ->name('resident.')
     ->group(function () {
-        Route::get('/dashboard', function () {
-            return redirect()->route('resident.incidents.index');
-        })->name('dashboard');
+        Route::get('/dashboard', [RoleDashboardController::class, 'resident'])
+            ->name('dashboard');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');

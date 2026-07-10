@@ -293,7 +293,19 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
     ]);
 }
 
-    $agencyOptions = $agencyOptions ?? [
+    $canUpdateIncident = $updateStatusUrl
+    && auth()->check()
+    && in_array($role, ['admin', 'official', 'tanod'], true);
+
+$canAssignResponder = $role === 'admin';
+
+$canEscalateIncident = $escalateUrl
+    && auth()->check()
+    && in_array($role, ['admin', 'official'], true);
+
+$canOpenBarangayMap = $role === 'admin' && $barangayMapUrl;
+
+$agencyOptions = $agencyOptions ?? [
         'PNP' => 'PNP',
         'BFP' => 'BFP',
         'MDRRMO' => 'MDRRMO',
@@ -473,7 +485,7 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
                 </p>
             </div>
 
-            @if ($barangayMapUrl)
+            @if ($canOpenBarangayMap)
                 <a href="{{ $barangayMapUrl }}"
                    class="inline-flex items-center justify-center rounded-xl border border-blue-700 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50">
                     Open in Barangay Map
@@ -829,7 +841,7 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
     </div>
 @endif
 
-            @if ($updateStatusUrl && auth()->check() && in_array($role, ['admin', 'official', 'tanod'], true))
+            @if ($canUpdateIncident)
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-6 py-4">
                         <h2 class="text-base font-bold text-slate-900">
@@ -837,7 +849,9 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
                         </h2>
 
                         <p class="mt-1 text-sm text-slate-500">
-                            Change the current status, assign a responder, and add remarks.
+                            {{ $canAssignResponder
+    ? 'Change the current status, assign a responder, and add remarks.'
+    : 'Change the current status and add remarks.' }}
                         </p>
                     </div>
 
@@ -880,45 +894,47 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
                             @enderror
                         </div>
 
-                        <div>
-                            <label for="assigned_to" class="mb-2 block text-sm font-semibold text-slate-700">
-                                Assigned Responder
-                            </label>
+                        @if ($canAssignResponder)
+                            <div>
+                                <label for="assigned_to" class="mb-2 block text-sm font-semibold text-slate-700">
+                                    Assigned Responder
+                                </label>
 
-                            <select
-                                id="assigned_to"
-                                name="assigned_to"
-                                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            >
-                                <option value="">Not Assigned</option>
+                                <select
+                                    id="assigned_to"
+                                    name="assigned_to"
+                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                >
+                                    <option value="">Not Assigned</option>
 
-                                @foreach ($responders as $responder)
-                                    @php
-                                        $responderId = data_get($responder, 'id');
+                                    @foreach ($responders as $responder)
+                                        @php
+                                            $responderId = data_get($responder, 'id');
 
-                                        $responderName = data_get($responder, 'user.name')
-                                            ?? data_get($responder, 'full_name')
-                                            ?? data_get($responder, 'name')
-                                            ?? ('Tanod #' . $responderId);
+                                            $responderName = data_get($responder, 'user.name')
+                                                ?? data_get($responder, 'full_name')
+                                                ?? data_get($responder, 'name')
+                                                ?? ('Tanod #' . $responderId);
 
-                                        $responderRole = data_get($responder, 'position')
-                                            ?? data_get($responder, 'employee_type')
-                                            ?? data_get($responder, 'user.role')
-                                            ?? 'tanod';
-                                    @endphp
+                                            $responderRole = data_get($responder, 'position')
+                                                ?? data_get($responder, 'employee_type')
+                                                ?? data_get($responder, 'user.role')
+                                                ?? 'tanod';
+                                        @endphp
 
-                                    <option value="{{ $responderId }}" @selected((string) $currentAssigneeId === (string) $responderId)>
-                                        {{ $responderName }} — {{ ucfirst((string) $responderRole) }}
-                                    </option>
-                                @endforeach
-                            </select>
+                                        <option value="{{ $responderId }}" @selected((string) $currentAssigneeId === (string) $responderId)>
+                                            {{ $responderName }} — {{ ucfirst((string) $responderRole) }}
+                                        </option>
+                                    @endforeach
+                                </select>
 
-                            @error('assigned_to')
-                                <p class="mt-2 text-sm font-medium text-red-600">
-                                    {{ $message }}
-                                </p>
-                            @enderror
-                        </div>
+                                @error('assigned_to')
+                                    <p class="mt-2 text-sm font-medium text-red-600">
+                                        {{ $message }}
+                                    </p>
+                                @enderror
+                            </div>
+                        @endif
 
                         <div>
                             <label for="remarks" class="mb-2 block text-sm font-semibold text-slate-700">
@@ -951,7 +967,7 @@ if ($role === 'admin' && Route::has('admin.cases.index')) {
             @endif
 
             {{-- Escalate Incident --}}
-            @if ($escalateUrl && auth()->check() && in_array($role, ['admin', 'official', 'tanod'], true))
+            @if ($canEscalateIncident)
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-6 py-4">
                         <h2 class="text-base font-bold text-slate-900">

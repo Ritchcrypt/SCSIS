@@ -328,15 +328,32 @@ if ($selectedCategoryName) {
     {
         $this->authorizeIncidentManagement($request, $incident);
 
-        $validated = $request->validate([
+        $user = $request->user();
+
+        $rules = [
             'status_id' => ['required', 'exists:statuses,id'],
-            'assigned_to' => ['nullable', 'exists:employees,id'],
             'remarks' => ['nullable', 'string', 'max:3000'],
-        ]);
+        ];
+
+        if ($user->role === 'admin') {
+            $rules['assigned_to'] = ['nullable', 'exists:employees,id'];
+        }
+
+        $validated = $request->validate($rules);
 
         $oldAssignedTo = $incident->assigned_to;
         $oldStatusId = $incident->status_id;
-        $newAssignedTo = $validated['assigned_to'] ?? null;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Assignment Rule
+        |--------------------------------------------------------------------------
+        | Admin can assign or reassign responders.
+        | Official and tanod can update status, but cannot change assigned responder.
+        */
+        $newAssignedTo = $user->role === 'admin'
+            ? ($validated['assigned_to'] ?? null)
+            : $incident->assigned_to;
 
         DB::transaction(function () use ($request, $incident, $validated, $oldAssignedTo, $oldStatusId, $newAssignedTo) {
             $incident->update([
@@ -395,7 +412,7 @@ if ($selectedCategoryName) {
 
     public function escalate(Request $request, Incident $incident): RedirectResponse
     {
-        $this->authorizeIncidentManagement($request, $incident);
+        $this->authorizeIncidentEscalation($request, $incident);
 
         $validated = $request->validate([
             'agency' => ['required', 'string', 'max:100'],
@@ -506,6 +523,18 @@ if ($selectedCategoryName) {
             if ($employeeId && (int) $incident->assigned_to === (int) $employeeId) {
                 return;
             }
+        }
+
+        abort(403, 'Unauthorized access.');
+    }
+
+
+    private function authorizeIncidentEscalation(Request $request, Incident $incident): void
+    {
+        $user = $request->user();
+
+        if (in_array($user->role, ['admin', 'official'], true)) {
+            return;
         }
 
         abort(403, 'Unauthorized access.');
