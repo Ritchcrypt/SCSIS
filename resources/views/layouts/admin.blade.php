@@ -22,106 +22,173 @@
                 </div>
             </div>
 
-            <nav class="flex-1 space-y-1 overflow-y-auto px-4 py-5">
-                <a href="{{ route('admin.dashboard') }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.dashboard')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>▦</span>
-                    <span>Dashboard</span>
-                </a>
+            @php
+    $authUser = auth()->user();
+    $role = strtolower(trim($authUser?->role ?? ''));
 
-                <a href="{{ route('admin.incidents.index') }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.incidents.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>📄</span>
-                    <span>Incidents</span>
-                </a>
+    $navItems = match ($role) {
+        'admin' => [
+            [
+                'label' => 'Dashboard',
+                'icon' => '▦',
+                'route' => 'admin.dashboard',
+                'active' => ['admin.dashboard'],
+            ],
+            [
+                'label' => 'Incidents',
+                'icon' => '📄',
+                'route' => 'admin.incidents.index',
+                'active' => ['admin.incidents.*'],
+            ],
+            [
+                'label' => 'Tanod Alerts',
+                'icon' => '🔔',
+                'route' => 'admin.tanod-alerts.index',
+                'active' => ['admin.tanod-alerts.*'],
+            ],
+            [
+                'label' => 'Tanod Roster',
+                'icon' => '👥',
+                'route' => 'admin.tanods.index',
+                'active' => ['admin.tanods.*'],
+            ],
+            [
+                'label' => 'Tanod Tasks',
+                'icon' => '📋',
+                'route' => 'admin.tanod-tasks.index',
+                'active' => ['admin.tanod-tasks.*'],
+            ],
+            [
+                'label' => 'Case Management',
+                'icon' => '📘',
+                'route' => 'admin.cases.index',
+                'active' => ['admin.cases.*'],
+            ],
+            [
+                'label' => 'Announcements',
+                'icon' => '📢',
+                'route' => 'admin.announcements.index',
+                'active' => ['admin.announcements.*'],
+            ],
+            [
+                'label' => 'Emergency Mode',
+                'icon' => '🚨',
+                'route' => 'admin.emergency-mode.index',
+                'active' => ['admin.emergency-mode.*'],
+            ],
+            [
+                'label' => 'Map',
+                'icon' => '🗺',
+                'route' => 'admin.map.index',
+                'active' => ['admin.map.*'],
+            ],
+            [
+                'label' => 'Reports',
+                'icon' => '📊',
+                'route' => 'admin.reports.index',
+                'active' => ['admin.reports.*'],
+            ],
+            [
+                'label' => 'User Management',
+                'icon' => '⚙',
+                'route' => 'admin.users.index',
+                'active' => ['admin.users.*'],
+            ],
+        ],
 
-                <a href="{{ Route::has('admin.tanod-alerts.index') ? route('admin.tanod-alerts.index') : '#' }}"
-   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-   {{ request()->routeIs('admin.tanod-alerts.*')
-        ? 'bg-blue-600 font-semibold text-white'
-        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-    <span>🔔</span>
-    <span>Tanod Alerts</span>
-</a>
+        'official', 'dao' => [
+            [
+                'label' => 'Dashboard',
+                'icon' => '▦',
+                'route' => 'official.dashboard',
+                'active' => ['official.dashboard'],
+            ],
+            [
+                'label' => 'Incidents',
+                'icon' => '📄',
+                'route' => 'official.incidents.index',
+                'active' => ['official.incidents.*'],
+            ],
+        ],
 
-<a href="{{ Route::has('admin.tanods.index') ? route('admin.tanods.index') : '#' }}"
-   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-   {{ request()->routeIs('admin.tanods.*')
-        ? 'bg-blue-600 font-semibold text-white'
-        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-    <span>👥</span>
-    <span>Tanod Roster</span>
-</a>
+        'tanod' => [
+            [
+                'label' => 'Dashboard',
+                'icon' => '▦',
+                'route' => 'tanod.dashboard',
+                'active' => ['tanod.dashboard'],
+            ],
+            [
+                'label' => 'Tanod Tasks',
+                'icon' => '📋',
+                'route' => 'tanod.tanod-tasks.index',
+                'active' => ['tanod.tanod-tasks.*'],
+            ],
+            [
+                'label' => 'Tanod Alerts',
+                'icon' => '🔔',
+                'route' => 'tanod.tanod-alerts.index',
+                'active' => ['tanod.tanod-alerts.*'],
+            ],
+            [
+                'label' => 'Assigned Incidents',
+                'icon' => '📄',
+                'route' => 'tanod.incidents.index',
+                'active' => ['tanod.incidents.*'],
+            ],
+        ],
 
-<a href="{{ Route::has('admin.tanod-tasks.index') ? route('admin.tanod-tasks.index') : '#' }}"
-   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-   {{ request()->routeIs('admin.tanod-tasks.*')
-        ? 'bg-blue-600 font-semibold text-white'
-        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-    <span>📋</span>
-    <span>Tanod Tasks</span>
-</a>
+        'resident' => [
+            [
+                'label' => 'Dashboard',
+                'icon' => '▦',
+                'route' => 'resident.dashboard',
+                'active' => ['resident.dashboard'],
+            ],
+            [
+                'label' => 'Report Incident',
+                'icon' => '➕',
+                'route' => 'resident.incidents.create',
+                'active' => ['resident.incidents.create'],
+            ],
+            [
+                'label' => 'My Reports',
+                'icon' => '📄',
+                'route' => 'resident.incidents.index',
+                'active' => ['resident.incidents.index', 'resident.incidents.show'],
+            ],
+        ],
 
-<a href="{{ Route::has('admin.cases.index') ? route('admin.cases.index') : '#' }}"
-   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-   {{ request()->routeIs('admin.cases.*')
-        ? 'bg-blue-600 font-semibold text-white'
-        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-    <span>📘</span>
-    <span>Case Management</span>
-</a>
+        default => [
+            [
+                'label' => 'Dashboard',
+                'icon' => '▦',
+                'route' => 'dashboard',
+                'active' => ['dashboard'],
+            ],
+        ],
+    };
+@endphp
 
-<a href="{{ Route::has('admin.announcements.index') ? route('admin.announcements.index') : '#' }}"
-   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-   {{ request()->routeIs('admin.announcements.*')
-        ? 'bg-blue-600 font-semibold text-white'
-        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-    <span>📢</span>
-    <span>Announcements</span>
-</a>
+<nav class="flex-1 space-y-1 overflow-y-auto px-4 py-5">
+    @foreach ($navItems as $item)
+        @continue(! Route::has($item['route']))
 
-<a href="{{ Route::has('admin.emergency-mode.index') ? route('admin.emergency-mode.index') : '#' }}"
-   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-   {{ request()->routeIs('admin.emergency-mode.*')
-        ? 'bg-blue-600 font-semibold text-white'
-        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-    <span>🚨</span>
-    <span>Emergency Mode</span>
-</a>
+        @php
+            $isActive = collect($item['active'])
+                ->contains(fn ($pattern) => request()->routeIs($pattern));
+        @endphp
 
-                <a href="{{ Route::has('admin.map.index') ? route('admin.map.index') : '#' }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.map.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>🗺</span>
-                    <span>Map</span>
-                </a>
-
-                <a href="{{ Route::has('admin.reports.index') ? route('admin.reports.index') : '#' }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.reports.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>📊</span>
-                    <span>Reports</span>
-                </a>
-
-                <a href="{{ Route::has('admin.users.index') ? route('admin.users.index') : '#' }}"
-                   class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-                   {{ request()->routeIs('admin.users.*')
-                        ? 'bg-blue-600 font-semibold text-white'
-                        : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                    <span>⚙</span>
-                    <span>User Management</span>
-                </a>
-            </nav>
+        <a href="{{ route($item['route']) }}"
+           class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
+           {{ $isActive
+                ? 'bg-blue-600 font-semibold text-white'
+                : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
+            <span>{{ $item['icon'] }}</span>
+            <span>{{ $item['label'] }}</span>
+        </a>
+    @endforeach
+</nav>
 
             <div class="border-t border-blue-900 px-6 py-5">
                 <p class="text-sm font-semibold">{{ auth()->user()->name }}</p>
