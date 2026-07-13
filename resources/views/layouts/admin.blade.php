@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>DaoSystem Admin</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -10,197 +11,285 @@
 
 <body class="bg-slate-100 text-slate-900">
     <div class="flex min-h-screen">
-        <aside class="fixed inset-y-0 left-0 z-30 flex w-72 flex-col bg-blue-950 text-white">
-            <div class="flex items-center gap-3 border-b border-blue-900 px-6 py-6">
+        <aside class="fixed left-0 top-0 z-30 flex h-screen w-72 flex-col overflow-hidden bg-blue-950 text-white">
+            <div class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6">
                 <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600">
                     <span class="text-lg font-bold">🛡</span>
                 </div>
 
                 <div>
-                    <h1 class="text-lg font-bold leading-tight">BrgySafe</h1>
+                    <h1 class="text-lg font-bold leading-tight">SCSISystem</h1>
                     <p class="text-sm text-blue-200">Dao, Capiz</p>
                 </div>
             </div>
 
             @php
-    $authUser = auth()->user();
-    $role = strtolower(trim($authUser?->role ?? ''));
+                $authUser = auth()->user();
+                $role = strtolower(trim($authUser?->role ?? ''));
 
-    $navItems = match ($role) {
-        'admin' => [
-            [
-                'label' => 'Dashboard',
-                'icon' => '▦',
-                'route' => 'admin.dashboard',
-                'active' => ['admin.dashboard'],
-            ],
-            [
-                'label' => 'Incidents',
-                'icon' => '📄',
-                'route' => 'admin.incidents.index',
-                'active' => ['admin.incidents.*'],
-            ],
-            [
-                'label' => 'Tanod Alerts',
-                'icon' => '🔔',
-                'route' => 'admin.tanod-alerts.index',
-                'active' => ['admin.tanod-alerts.*'],
-            ],
-            [
-                'label' => 'Tanod Roster',
-                'icon' => '👥',
-                'route' => 'admin.tanods.index',
-                'active' => ['admin.tanods.*'],
-            ],
-            [
-                'label' => 'Tanod Tasks',
-                'icon' => '📋',
-                'route' => 'admin.tanod-tasks.index',
-                'active' => ['admin.tanod-tasks.*'],
-            ],
-            [
-                'label' => 'Case Management',
-                'icon' => '📘',
-                'route' => 'admin.cases.index',
-                'active' => ['admin.cases.*'],
-            ],
-            [
-                'label' => 'Announcements',
-                'icon' => '📢',
-                'route' => 'admin.announcements.index',
-                'active' => ['admin.announcements.*'],
-            ],
-            [
-                'label' => 'Emergency Mode',
-                'icon' => '🚨',
-                'route' => 'admin.emergency-mode.index',
-                'active' => ['admin.emergency-mode.*'],
-            ],
-            [
-                'label' => 'Map',
-                'icon' => '🗺',
-                'route' => 'admin.map.index',
-                'active' => ['admin.map.*'],
-            ],
-            [
-                'label' => 'Reports',
-                'icon' => '📊',
-                'route' => 'admin.reports.index',
-                'active' => ['admin.reports.*'],
-            ],
-            [
-                'label' => 'User Management',
-                'icon' => '⚙',
-                'route' => 'admin.users.index',
-                'active' => ['admin.users.*'],
-            ],
-        ],
+                $authPhotoPath = $authUser && \Illuminate\Support\Facades\Schema::hasColumn('users', 'profile_photo_path')
+                    ? ($authUser->profile_photo_path ?? null)
+                    : null;
 
-        'official', 'dao' => [
-            [
-                'label' => 'Dashboard',
-                'icon' => '▦',
-                'route' => 'official.dashboard',
-                'active' => ['official.dashboard'],
-            ],
-            [
-                'label' => 'Incidents',
-                'icon' => '📄',
-                'route' => 'official.incidents.index',
-                'active' => ['official.incidents.*'],
-            ],
-        ],
+                $authPhotoUrl = $authPhotoPath && Route::has('users.profile-photo')
+                    ? route('users.profile-photo', $authUser)
+                    : null;
 
-        'tanod' => [
-            [
-                'label' => 'Dashboard',
-                'icon' => '▦',
-                'route' => 'tanod.dashboard',
-                'active' => ['tanod.dashboard'],
-            ],
-            [
-                'label' => 'Tanod Tasks',
-                'icon' => '📋',
-                'route' => 'tanod.tanod-tasks.index',
-                'active' => ['tanod.tanod-tasks.*'],
-            ],
-            [
-                'label' => 'Tanod Alerts',
-                'icon' => '🔔',
-                'route' => 'tanod.tanod-alerts.index',
-                'active' => ['tanod.tanod-alerts.*'],
-            ],
-            [
-                'label' => 'Assigned Incidents',
-                'icon' => '📄',
-                'route' => 'tanod.incidents.index',
-                'active' => ['tanod.incidents.*'],
-            ],
-        ],
+                $authInitial = strtoupper(mb_substr($authUser?->name ?? 'U', 0, 1));
 
-        'resident' => [
-            [
-                'label' => 'Dashboard',
-                'icon' => '▦',
-                'route' => 'resident.dashboard',
-                'active' => ['resident.dashboard'],
-            ],
-            [
-                'label' => 'Report Incident',
-                'icon' => '➕',
-                'route' => 'resident.incidents.create',
-                'active' => ['resident.incidents.create'],
-            ],
-            [
-                'label' => 'My Reports',
-                'icon' => '📄',
-                'route' => 'resident.incidents.index',
-                'active' => ['resident.incidents.index', 'resident.incidents.show'],
-            ],
-        ],
+                $authProfileUrl = $authUser && $authUser->role === 'admin' && Route::has('admin.users.edit')
+                    ? route('admin.users.edit', $authUser)
+                    : '#';
 
-        default => [
-            [
-                'label' => 'Dashboard',
-                'icon' => '▦',
-                'route' => 'dashboard',
-                'active' => ['dashboard'],
-            ],
-        ],
-    };
-@endphp
+                $navItems = match ($role) {
+                    'admin' => [
+                        [
+                            'label' => 'Dashboard',
+                            'icon' => '▦',
+                            'route' => 'admin.dashboard',
+                            'active' => ['admin.dashboard'],
+                        ],
+                        [
+                            'label' => 'Incidents',
+                            'icon' => '📄',
+                            'route' => 'admin.incidents.index',
+                            'active' => ['admin.incidents.*'],
+                        ],
+                        [
+                            'label' => 'Tanod Alerts',
+                            'icon' => '🔔',
+                            'route' => 'admin.tanod-alerts.index',
+                            'active' => ['admin.tanod-alerts.*'],
+                        ],
+                        [
+                            'label' => 'Tanod Roster',
+                            'icon' => '👥',
+                            'route' => 'admin.tanods.index',
+                            'active' => ['admin.tanods.*'],
+                        ],
+                        [
+                            'label' => 'Tanod Tasks',
+                            'icon' => '📋',
+                            'route' => 'admin.tanod-tasks.index',
+                            'active' => ['admin.tanod-tasks.*'],
+                        ],
+                        [
+                            'label' => 'Case Management',
+                            'icon' => '📘',
+                            'route' => 'admin.cases.index',
+                            'active' => ['admin.cases.*'],
+                        ],
+                        [
+                            'label' => 'Announcements',
+                            'icon' => '📢',
+                            'route' => 'admin.announcements.index',
+                            'active' => ['admin.announcements.*'],
+                        ],
+                        [
+                            'label' => 'Emergency Mode',
+                            'icon' => '🚨',
+                            'route' => 'admin.emergency-mode.index',
+                            'active' => ['admin.emergency-mode.*'],
+                        ],
+                        [
+                            'label' => 'Map',
+                            'icon' => '🗺',
+                            'route' => 'admin.map.index',
+                            'active' => ['admin.map.*'],
+                        ],
+                        [
+                            'label' => 'Reports',
+                            'icon' => '📊',
+                            'route' => 'admin.reports.index',
+                            'active' => ['admin.reports.*'],
+                        ],
+                        [
+                            'label' => 'User Management',
+                            'icon' => '⚙',
+                            'route' => 'admin.users.index',
+                            'active' => ['admin.users.*'],
+                        ],
+                    ],
 
-<nav class="flex-1 space-y-1 overflow-y-auto px-4 py-5">
-    @foreach ($navItems as $item)
-        @continue(! Route::has($item['route']))
+                    'official', 'dao' => [
+                        [
+                            'label' => 'Dashboard',
+                            'icon' => '▦',
+                            'route' => 'official.dashboard',
+                            'active' => ['official.dashboard'],
+                        ],
+                        [
+                            'label' => 'Incidents',
+                            'icon' => '📄',
+                            'route' => 'official.incidents.index',
+                            'active' => ['official.incidents.*'],
+                        ],
+                    ],
 
-        @php
-            $isActive = collect($item['active'])
-                ->contains(fn ($pattern) => request()->routeIs($pattern));
-        @endphp
+                    'tanod' => [
+                        [
+                            'label' => 'Dashboard',
+                            'icon' => '▦',
+                            'route' => 'tanod.dashboard',
+                            'active' => ['tanod.dashboard'],
+                        ],
+                        [
+                            'label' => 'Tanod Tasks',
+                            'icon' => '📋',
+                            'route' => 'tanod.tanod-tasks.index',
+                            'active' => ['tanod.tanod-tasks.*'],
+                        ],
+                        [
+                            'label' => 'Tanod Alerts',
+                            'icon' => '🔔',
+                            'route' => 'tanod.tanod-alerts.index',
+                            'active' => ['tanod.tanod-alerts.*'],
+                        ],
+                        [
+                            'label' => 'Assigned Incidents',
+                            'icon' => '📄',
+                            'route' => 'tanod.incidents.index',
+                            'active' => ['tanod.incidents.*'],
+                        ],
+                    ],
 
-        <a href="{{ route($item['route']) }}"
-           class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
-           {{ $isActive
-                ? 'bg-blue-600 font-semibold text-white'
-                : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-            <span>{{ $item['icon'] }}</span>
-            <span>{{ $item['label'] }}</span>
-        </a>
-    @endforeach
-</nav>
+                    'resident' => [
+                        [
+                            'label' => 'Dashboard',
+                            'icon' => '▦',
+                            'route' => 'resident.dashboard',
+                            'active' => ['resident.dashboard'],
+                        ],
+                        [
+                            'label' => 'Report Incident',
+                            'icon' => '➕',
+                            'route' => 'resident.incidents.create',
+                            'active' => ['resident.incidents.create'],
+                        ],
+                        [
+                            'label' => 'My Reports',
+                            'icon' => '📄',
+                            'route' => 'resident.incidents.index',
+                            'active' => ['resident.incidents.index', 'resident.incidents.show'],
+                        ],
+                    ],
 
-            <div class="border-t border-blue-900 px-6 py-5">
-                <p class="text-sm font-semibold">{{ auth()->user()->name }}</p>
-                <p class="text-xs text-blue-200">{{ ucfirst(auth()->user()->role) }}</p>
+                    default => [
+                        [
+                            'label' => 'Dashboard',
+                            'icon' => '▦',
+                            'route' => 'dashboard',
+                            'active' => ['dashboard'],
+                        ],
+                    ],
+                };
+            @endphp
 
-                <form method="POST" action="{{ route('logout') }}" class="mt-4">
-                    @csrf
+            <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-5">
+                @foreach ($navItems as $item)
+                    @continue(! Route::has($item['route']))
 
-                    <button type="submit" class="text-sm text-blue-200 hover:text-white">
-                        Logout
-                    </button>
-                </form>
+                    @php
+                        $isActive = collect($item['active'])
+                            ->contains(fn ($pattern) => request()->routeIs($pattern));
+                    @endphp
+
+                    <a href="{{ route($item['route']) }}"
+                       class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
+                       {{ $isActive
+                            ? 'bg-blue-600 font-semibold text-white'
+                            : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
+                        <span>{{ $item['icon'] }}</span>
+                        <span>{{ $item['label'] }}</span>
+                    </a>
+                @endforeach
+            </nav>
+
+            <div class="shrink-0 border-t border-blue-900 px-4 py-4">
+                <details class="relative group">
+                    <summary class="flex cursor-pointer list-none items-center gap-3 rounded-2xl px-2 py-2 hover:bg-blue-900">
+                        <div class="relative h-10 w-10 shrink-0">
+                            @if ($authPhotoUrl)
+                                <img src="{{ $authPhotoUrl }}"
+                                     alt="{{ $authUser->name }} profile photo"
+                                     class="h-10 w-10 rounded-full border border-blue-800 object-cover shadow-sm"
+                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+
+                                <div class="hidden h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                                    {{ $authInitial }}
+                                </div>
+                            @else
+                                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                                    {{ $authInitial }}
+                                </div>
+                            @endif
+                        </div>
+
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-semibold text-white">
+                                {{ $authUser?->name ?? 'User' }}
+                            </p>
+                            <p class="truncate text-xs text-blue-200">
+                                {{ ucfirst($authUser?->role ?? 'User') }}
+                            </p>
+                        </div>
+
+                        <span class="text-sm text-blue-200 group-open:rotate-180">⌃</span>
+                    </summary>
+
+                    <div class="absolute bottom-full left-0 right-0 z-50 mb-3 overflow-hidden rounded-2xl border border-blue-900 bg-blue-950 shadow-2xl">
+                        <div class="border-b border-blue-900 px-4 py-4">
+                            <div class="flex items-center gap-3">
+                                <div class="relative h-11 w-11 shrink-0">
+                                    @if ($authPhotoUrl)
+                                        <img src="{{ $authPhotoUrl }}"
+                                             alt="{{ $authUser->name }} profile photo"
+                                             class="h-11 w-11 rounded-full border border-blue-800 object-cover shadow-sm"
+                                             onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+
+                                        <div class="hidden h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                                            {{ $authInitial }}
+                                        </div>
+                                    @else
+                                        <div class="flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                                            {{ $authInitial }}
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-bold text-white">
+                                        {{ $authUser?->name ?? 'User' }}
+                                    </p>
+                                    <p class="truncate text-xs text-blue-200">
+                                        {{ ucfirst($authUser?->role ?? 'User') }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="py-2">
+                            <a href="{{ $authProfileUrl }}"
+                               class="flex items-center gap-3 px-4 py-3 text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white">
+                                <span>👤</span>
+                                <span>Profile</span>
+                            </a>
+
+                        </div>
+
+                        <div class="border-t border-blue-900 py-2">
+                            <form method="POST" action="{{ route('logout') }}" class="m-0">
+                                <input type="hidden" name="_token" value="{{ csrf_token() }}">
+
+                                <button type="submit"
+                                        class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white">
+                                    <span>↪</span>
+                                    <span>Logout</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </details>
             </div>
         </aside>
 
@@ -208,8 +297,6 @@
             <header class="sticky top-0 z-20 flex h-16 items-center justify-end border-b border-slate-200 bg-white px-8">
                 <div class="flex items-center gap-4">
                     @php
-                        $authUser = auth()->user();
-
                         $importantNotificationTypes = [
                             'incident',
                             'dispatch',
@@ -233,16 +320,6 @@
                         $unreadNotificationCount = 0;
                         $notificationUrl = '#';
                         $latestUnreadNotifications = collect();
-                        $authPhotoPath = $authUser && \Illuminate\Support\Facades\Schema::hasColumn('users', 'profile_photo_path')
-                            ? ($authUser->profile_photo_path ?? null)
-                            : null;
-                        $authPhotoUrl = $authPhotoPath && Route::has('users.profile-photo')
-                            ? route('users.profile-photo', $authUser)
-                            : null;
-                        $authInitial = strtoupper(mb_substr($authUser?->name ?? 'U', 0, 1));
-                        $authProfileEditUrl = $authUser && $authUser->role === 'admin' && Route::has('admin.users.edit')
-                            ? route('admin.users.edit', $authUser)
-                            : null;
 
                         if ($authUser) {
                             $notificationQuery = \App\Models\UserNotification::query()
@@ -384,32 +461,6 @@
                             </div>
                         </div>
                     </details>
-
-                    <a href="{{ $authProfileEditUrl ?? '#' }}"
-                       class="flex items-center gap-3 rounded-xl px-2 py-1 {{ $authProfileEditUrl ? 'hover:bg-slate-100' : 'cursor-default' }}"
-                       title="{{ $authProfileEditUrl ? 'Edit my profile' : 'Profile' }}">
-                        <div class="relative h-10 w-10 shrink-0">
-                            @if ($authPhotoUrl)
-                                <img src="{{ $authPhotoUrl }}"
-                                     alt="{{ $authUser->name }} profile photo"
-                                     class="h-10 w-10 rounded-full border border-slate-200 object-cover shadow-sm"
-                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
-
-                                <div class="hidden h-10 w-10 items-center justify-center rounded-full bg-blue-950 text-sm font-bold text-white">
-                                    {{ $authInitial }}
-                                </div>
-                            @else
-                                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-950 text-sm font-bold text-white">
-                                    {{ $authInitial }}
-                                </div>
-                            @endif
-                        </div>
-
-                        <div>
-                            <p class="text-sm font-semibold text-slate-900">{{ auth()->user()->name }}</p>
-                            <p class="text-xs text-slate-500">{{ ucfirst(auth()->user()->role) }}</p>
-                        </div>
-                    </a>
                 </div>
             </header>
 
