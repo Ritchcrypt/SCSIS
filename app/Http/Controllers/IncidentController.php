@@ -16,11 +16,31 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class IncidentController extends Controller
 {
+    public function destroy(Request $request, Incident $incident): RedirectResponse
+{
+    $user = $request->user();
+
+    if (! $user || $user->role !== 'admin') {
+        abort(403, 'Only admin can delete incidents.');
+    }
+
+    DB::transaction(function () use ($incident) {
+        $this->deleteIncidentRelatedFiles((int) $incident->id);
+        $this->deleteIncidentRelatedRows((int) $incident->id);
+
+        $incident->delete();
+    });
+
+    return redirect()
+        ->route('admin.incidents.index')
+        ->with('success', 'Incident deleted successfully.');
+}
     public function index(Request $request): View
     {
         $user = $request->user();
@@ -52,7 +72,8 @@ class IncidentController extends Controller
 
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery
-                        ->where('incident_code', 'like', "%{$search}%")
+    ->where('incident_title', 'like', "%{$search}%")
+    ->orWhere('incident_description', 'like', "%{$search}%")
                         ->orWhere('incident_title', 'like', "%{$search}%")
                         ->orWhere('incident_description', 'like', "%{$search}%")
                         ->orWhereHas('barangay', function ($barangayQuery) use ($search) {
@@ -190,14 +211,14 @@ class IncidentController extends Controller
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'evidence' => ['nullable', 'array', 'max:5'],
-            'evidence.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'evidence.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:51200'],
         ], [
             'category_id.required' => 'Please select an incident category.',
             'barangay_id.required' => 'Please select a barangay.',
             'priority.required' => 'Please select a severity level.',
             'location_address.required' => 'Please provide the incident location or landmark.',
             'evidence.*.mimes' => 'Evidence files must be JPG, JPEG, PNG, WEBP, or PDF.',
-            'evidence.*.max' => 'Each evidence file must not exceed 5MB.',
+            'evidence.*.max' => 'Each evidence file must not exceed 50MB.',
         ]);
 
         $pendingStatus = Status::query()
@@ -216,7 +237,7 @@ class IncidentController extends Controller
             $incident = new Incident();
 
             if (Schema::hasColumn('incidents', 'incident_code')) {
-                $incident->incident_code = $this->generateIncidentCode();
+               $incident->incident_code = null;
             }
 
             if (Schema::hasColumn('incidents', 'reporter_id')) {
@@ -382,7 +403,7 @@ if ($selectedCategoryName) {
             $this->notifyIncidentUsers(
                 incident: $freshIncident,
                 title: 'Incident status updated',
-                message: 'Incident ' . $freshIncident->display_code . ' status changed to ' . ($status?->status_name ?? 'Updated') . '.'
+                message: 'Incident status changed to ' . ($status?->status_name ?? 'Updated') . '.'
             );
 
             if ($newAssignedTo && (int) $oldAssignedTo !== (int) $newAssignedTo) {
@@ -390,7 +411,7 @@ if ($selectedCategoryName) {
                     incident: $freshIncident,
                     type: 'dispatch',
                     title: 'Tanod Dispatch Alert',
-                    message: 'You have been assigned to respond to incident ' . $freshIncident->display_code . ': ' . $freshIncident->display_title . '.'
+                    message: 'You have been assigned to respond to incident: ' . $freshIncident->display_title . '.'
                 );
             }
 
@@ -444,14 +465,14 @@ if ($selectedCategoryName) {
             $this->notifyIncidentUsers(
                 incident: $freshIncident,
                 title: 'Incident escalated',
-                message: 'Incident ' . $freshIncident->display_code . ' has been escalated to ' . $validated['agency'] . '.'
+                message: 'Incident has been escalated to ' . $validated['agency'] . '.'
             );
 
             $this->createTanodAlert(
                 incident: $freshIncident,
                 type: 'escalation',
                 title: 'Incident Escalated',
-                message: 'Incident ' . $freshIncident->display_code . ' has been escalated to ' . $validated['agency'] . '.'
+                message: 'Incident has been escalated to ' . $validated['agency'] . '.'
             );
         });
 
@@ -588,17 +609,108 @@ if ($selectedCategoryName) {
         'acknowledged_at' => null,
     ]);
 }
+private function deleteIncidentRelatedFiles(int $incidentId): void
+{
+    $fileTables = [
+        'evidence',
+        'incident_evidence',
+        'incident_evidences',
+        'incident_attachments',
+        'attachments',
+    ];
 
-    private function generateIncidentCode(): string
-    {
-        $datePart = now()->format('Ymd');
+    $fileColumns = [
+        'file_path',
+        'path',
+        'file_url',
+        'url',
+    ];
 
-        $todayCount = Incident::query()
-            ->whereDate('created_at', today())
-            ->count() + 1;
+    foreach ($fileTables as $table) {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'incident_id')) {
+            continue;
+        }
 
-        return 'INC-' . $datePart . '-' . str_pad((string) $todayCount, 5, '0', STR_PAD_LEFT);
+        $existingFileColumns = array_values(array_filter(
+            $fileColumns,
+            fn ($column) => Schema::hasColumn($table, $column)
+        ));
+
+        if (empty($existingFileColumns)) {
+            continue;
+        }
+
+        $records = DB::table($table)
+            ->where('incident_id', $incidentId)
+            ->get($existingFileColumns);
+
+        foreach ($records as $record) {
+            foreach ($existingFileColumns as $column) {
+                $path = $record->{$column} ?? null;
+
+                if (! $path || str_starts_with((string) $path, 'http')) {
+                    continue;
+                }
+
+                $path = str_replace('\\', '/', trim((string) $path));
+                $path = preg_replace('#^/?storage/#', '', $path);
+                $path = preg_replace('#^/?public/#', '', $path);
+                $path = ltrim($path, '/');
+
+                if (
+                    $path
+                    && ! str_contains($path, '..')
+                    && Storage::disk('public')->exists($path)
+                ) {
+                    Storage::disk('public')->delete($path);
+                }
+            }
+        }
     }
+}
+
+private function deleteIncidentRelatedRows(int $incidentId): void
+{
+    $relatedTables = [
+        'evidence',
+        'incident_evidence',
+        'incident_evidences',
+        'incident_attachments',
+        'attachments',
+        'incident_messages',
+        'incident_status_histories',
+        'incident_status_history',
+        'incident_escalations',
+        'case_records',
+    ];
+
+    foreach ($relatedTables as $table) {
+        if (Schema::hasTable($table) && Schema::hasColumn($table, 'incident_id')) {
+            DB::table($table)
+                ->where('incident_id', $incidentId)
+                ->delete();
+        }
+    }
+
+    if (Schema::hasTable('notifications') && Schema::hasColumn('notifications', 'source_id')) {
+        DB::table('notifications')
+            ->where('source_id', $incidentId)
+            ->when(Schema::hasColumn('notifications', 'type'), function ($query) {
+                $query->whereIn('type', [
+                    'incident',
+                    'incident_update',
+                    'incident_reported',
+                    'dispatch',
+                    'escalation',
+                    'emergency',
+                    'calamity',
+                    'community_problem',
+                    'resolved',
+                ]);
+            })
+            ->delete();
+    }
+}
 
     private function storeIncidentLocation(Incident $incident, array $validated): void
     {
@@ -760,16 +872,39 @@ if ($selectedCategoryName) {
 
     private function notifyIncidentCreated(Incident $incident): void
     {
-        $incident->loadMissing('category');
+        $incident->loadMissing(['category', 'reporter']);
 
         $notificationType = $this->incidentNotificationType($incident);
 
-        $adminAndOfficialIds = User::query()
-            ->whereIn('role', ['admin', 'official'])
-            ->where('id', '!=', $incident->reporter_id)
-            ->pluck('id');
+        $reporterRole = strtolower((string) ($incident->reporter?->role ?? ''));
 
-        foreach ($adminAndOfficialIds as $userId) {
+        /*
+        |--------------------------------------------------------------------------
+        | New Incident Notification Rule
+        |--------------------------------------------------------------------------
+        | Admin-created report:
+        | - Notify the admin who created it.
+        |
+        | Official-created report:
+        | - Notify the official who created it.
+        |
+        | Resident-created report:
+        | - Notify admin, official, and dao users.
+        */
+
+        if (in_array($reporterRole, ['admin', 'official', 'dao'], true)) {
+            $receiverIds = collect([$incident->reporter_id])
+                ->filter()
+                ->unique()
+                ->values();
+        } else {
+            $receiverIds = User::query()
+                ->whereIn('role', ['admin', 'official', 'dao'])
+                ->where('id', '!=', $incident->reporter_id)
+                ->pluck('id');
+        }
+
+        foreach ($receiverIds as $userId) {
             UserNotification::create([
                 'user_id' => $userId,
                 'type' => $notificationType,
@@ -779,13 +914,14 @@ if ($selectedCategoryName) {
                     'community_problem' => 'New community problem report',
                     default => 'New incident report',
                 },
-                'message' => 'A new report has been submitted: ' . $incident->display_code . '.',
+                'message' => 'A new report was submitted.',
                 'is_read' => false,
                 'read_at' => null,
+                'acknowledged_by' => null,
+                'acknowledged_at' => null,
             ]);
         }
     }
-
     private function incidentNotificationType(Incident $incident): string
     {
         $categoryName = strtolower((string) (

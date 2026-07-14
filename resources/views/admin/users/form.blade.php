@@ -43,7 +43,7 @@
             @php
                 $profilePhotoPath = $userRecord->profile_photo_path ?? null;
                 $profilePhotoUrl = $profilePhotoPath && $userRecord && Route::has('users.profile-photo')
-                    ? route('users.profile-photo', $userRecord)
+                    ? route('users.profile-photo', $userRecord) . '?v=' . optional($userRecord->updated_at)->timestamp
                     : null;
                 $profileInitial = strtoupper(mb_substr($userRecord->name ?? 'U', 0, 1));
             @endphp

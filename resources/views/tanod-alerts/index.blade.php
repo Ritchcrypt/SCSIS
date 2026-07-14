@@ -4,6 +4,19 @@
 @php
     $routePrefix = request()->routeIs('tanod.*') ? 'tanod.' : 'admin.';
 
+    $formatAppDateTime = function ($dateTime) {
+        if (! $dateTime) {
+            return null;
+        }
+
+        try {
+            return \Carbon\Carbon::parse($dateTime)
+                ->format('M d, Y h:i A');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    };
+
     $typeStyles = [
         'incident_reported' => [
             'label' => 'New Incident Report',
@@ -150,17 +163,11 @@
                     $acknowledgedName = optional($alert->user)->name;
                 }
 
-                $createdAt = $alert->created_at
-                    ? $alert->created_at->format('M d, Y h:i A')
-                    : 'No date';
+                $createdAt = $formatAppDateTime($alert->created_at) ?? 'No date';
 
-                $readAt = $alert->read_at
-                    ? $alert->read_at->format('M d, Y h:i A')
-                    : null;
+                $readAt = $formatAppDateTime($alert->read_at);
 
-                $acknowledgedAt = $alert->acknowledged_at
-                    ? $alert->acknowledged_at->format('M d, Y h:i A')
-                    : $readAt;
+                $acknowledgedAt = $formatAppDateTime($alert->acknowledged_at) ?? $readAt;
 
                 $canOpenIncident = $alert->source_id
                     && in_array($type, $incidentLinkedTypes, true)
@@ -180,23 +187,37 @@
                                     {{ $style['label'] }}
                                 </span>
 
-                                @if (! $alert->is_read)
-                                    <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
-                                        New
-                                    </span>
-                                @else
-                                    <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-                                        Read
-                                    </span>
-                                @endif
+                                @if ($alert->is_read)
+    <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+        Read
+    </span>
+@endif
                             </div>
+                                @php
+    $displayMessage = $alert->message ?? 'No alert message provided.';
 
-                            <h2 class="mt-3 text-lg font-bold text-slate-900">
-                                {{ $alert->title ?? 'Untitled Alert' }}
-                            </h2>
+    if ($type === 'incident_reported' && $alert->source_id) {
+        $relatedIncident = \App\Models\Incident::find($alert->source_id);
 
-                            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                                {{ $alert->message ?? 'No alert message provided.' }}
+        if ($relatedIncident) {
+            $reportedRaw = $relatedIncident->reported_at
+                ?? $relatedIncident->incident_datetime
+                ?? $relatedIncident->created_at;
+
+            $reportedAt = $reportedRaw
+                ? \Carbon\Carbon::parse($reportedRaw)->format('M d, Y h:i A')
+                : null;
+
+            if ($reportedAt) {
+                $displayMessage = 'A new report was submitted on ' . $reportedAt . '.';
+            }
+        }
+    }
+@endphp
+
+<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+    {{ $type === 'incident_reported' ? 'A new report was submitted.' : ($alert->message ?? 'No alert message provided.') }}
+</p>
                             </p>
 
                             <div class="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
@@ -204,13 +225,6 @@
                                     Created:
                                     <strong class="font-semibold text-slate-700">{{ $createdAt }}</strong>
                                 </span>
-
-                                @if ($alert->user)
-                                    <span>
-                                        Recipient:
-                                        <strong class="font-semibold text-slate-700">{{ $alert->user->name }}</strong>
-                                    </span>
-                                @endif
 
                                 @if ($canOpenIncident)
                                     <a href="{{ route($routePrefix . 'incidents.show', $alert->source_id) }}"

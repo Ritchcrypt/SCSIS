@@ -12,6 +12,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TanodTaskController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\RoleDashboardController;
+use App\Http\Controllers\SystemBrandingController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +53,10 @@ Route::get('/dashboard', function () {
 Route::middleware(['auth'])->get('/users/{user}/profile-photo', [UserManagementController::class, 'profilePhoto'])
     ->name('users.profile-photo');
 
+Route::middleware(['auth', 'active.user'])
+    ->get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
+    ->name('system-branding.logo');
+
 /*
 |--------------------------------------------------------------------------
 | Admin Routes
@@ -63,6 +68,12 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::get('/system-branding', [SystemBrandingController::class, 'edit'])
+            ->name('system-branding.edit');
+
+        Route::put('/system-branding', [SystemBrandingController::class, 'update'])
+            ->name('system-branding.update');
 
         Route::get('/users', [UserManagementController::class, 'index'])
             ->name('users.index');
@@ -78,6 +89,9 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::get('/users/{user}', [UserManagementController::class, 'show'])
             ->name('users.show');
+
+        Route::delete('/incidents/{incident}', [IncidentController::class, 'destroy'])
+            ->name('incidents.destroy');
 
         Route::get('/users/{user}/edit', [UserManagementController::class, 'edit'])
             ->name('users.edit');

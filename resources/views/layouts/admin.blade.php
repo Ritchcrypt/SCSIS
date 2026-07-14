@@ -12,16 +12,76 @@
 <body class="bg-slate-100 text-slate-900">
     <div class="flex min-h-screen">
         <aside class="fixed left-0 top-0 z-30 flex h-screen w-72 flex-col overflow-hidden bg-blue-950 text-white">
-            <div class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600">
-                    <span class="text-lg font-bold">🛡</span>
-                </div>
+            @php
+    $layoutAuthUser = auth()->user();
 
-                <div>
-                    <h1 class="text-lg font-bold leading-tight">SCSISystem</h1>
-                    <p class="text-sm text-blue-200">Dao, Capiz</p>
-                </div>
-            </div>
+    $systemSetting = null;
+
+    if (
+        class_exists(\App\Models\SystemSetting::class)
+        && \Illuminate\Support\Facades\Schema::hasTable('system_settings')
+    ) {
+        $systemSetting = \App\Models\SystemSetting::query()->first();
+    }
+
+    $systemName = $systemSetting?->system_name ?: 'SCSISystem';
+    $systemSubtitle = $systemSetting?->system_subtitle ?: 'Dao, Capiz';
+    $systemLogoPath = $systemSetting?->system_logo_path;
+
+    $systemLogoExists = $systemLogoPath
+        && \Illuminate\Support\Facades\Storage::disk('public')->exists($systemLogoPath);
+
+    $systemLogoUrl = $systemLogoExists && \Illuminate\Support\Facades\Route::has('system-branding.logo')
+        ? route('system-branding.logo') . '?v=' . optional($systemSetting?->updated_at)->timestamp
+        : null;
+
+    $canEditSystemBranding = $layoutAuthUser?->role === 'admin'
+        && \Illuminate\Support\Facades\Route::has('admin.system-branding.edit');
+@endphp
+
+@if ($canEditSystemBranding)
+    <a href="{{ route('admin.system-branding.edit') }}"
+       title="Edit system branding"
+       class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6 transition hover:bg-blue-900">
+        <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600">
+            @if ($systemLogoUrl)
+    <img src="{{ $systemLogoUrl }}"
+         alt="{{ $systemName }} Logo"
+         class="h-full w-full object-cover"
+         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+
+    <span class="hidden text-lg font-bold">🛡</span>
+@else
+    <span class="text-lg font-bold">🛡</span>
+@endif
+        </div>
+
+        <div class="min-w-0">
+            <h1 class="truncate text-lg font-bold leading-tight">{{ $systemName }}</h1>
+            <p class="truncate text-sm text-blue-200">{{ $systemSubtitle }}</p>
+        </div>
+    </a>
+@else
+    <div class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6">
+        <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600">
+            @if ($systemLogoUrl)
+    <img src="{{ $systemLogoUrl }}"
+         alt="{{ $systemName }} Logo"
+         class="h-full w-full object-cover"
+         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+
+    <span class="hidden text-lg font-bold">🛡</span>
+@else
+    <span class="text-lg font-bold">🛡</span>
+@endif
+        </div>
+
+        <div class="min-w-0">
+            <h1 class="truncate text-lg font-bold leading-tight">{{ $systemName }}</h1>
+            <p class="truncate text-sm text-blue-200">{{ $systemSubtitle }}</p>
+        </div>
+    </div>
+@endif
 
             @php
                 $authUser = auth()->user();
@@ -32,8 +92,8 @@
                     : null;
 
                 $authPhotoUrl = $authPhotoPath && Route::has('users.profile-photo')
-                    ? route('users.profile-photo', $authUser)
-                    : null;
+    ? route('users.profile-photo', $authUser) . '?v=' . optional($authUser?->updated_at)->timestamp
+    : null;
 
                 $authInitial = strtoupper(mb_substr($authUser?->name ?? 'U', 0, 1));
 
@@ -420,10 +480,6 @@ if ($notification->source_id && in_array($type, $incidentLinkedTypes, true)) {
                                         <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
                                             {{ $typeLabel }}
                                         </span>
-
-                                        <h3 class="mt-2 text-sm font-bold text-slate-900">
-                                            {{ $notification->title ?? 'Untitled notification' }}
-                                        </h3>
 
                                         <p class="mt-1 text-xs leading-5 text-slate-600">
                                             {{ $notification->message ?? 'No notification message provided.' }}

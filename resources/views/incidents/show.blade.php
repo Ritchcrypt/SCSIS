@@ -142,10 +142,6 @@ $currentAssigneeId = data_get($incident, 'assigned_to')
         ?? data_get($incident, 'title')
         ?? 'Untitled Incident';
 
-    $incidentCode = data_get($incident, 'display_code')
-        ?? data_get($incident, 'incident_code')
-        ?? ('INC-' . str_pad((string) data_get($incident, 'id'), 5, '0', STR_PAD_LEFT));
-
     $incidentDescription = data_get($incident, 'incident_description')
         ?? data_get($incident, 'description')
         ?? data_get($incident, 'details')
@@ -205,8 +201,12 @@ $incidentMapLongitude = $hasMapCoordinates
     ? (float) $longitude
     : 122.6858;
 
+$barangayMapSearch = $locationAddress !== 'No exact location provided'
+    ? $locationAddress
+    : ($barangayName !== '—' ? $barangayName : $incidentTitle);
+
 $barangayMapUrl = Route::has('admin.map.index')
-    ? route('admin.map.index', ['search' => $incidentCode])
+    ? route('admin.map.index', ['search' => $barangayMapSearch])
     : null;
 
     $reporterName = data_get($incident, 'reporter.name')
@@ -327,9 +327,7 @@ $agencyOptions = $agencyOptions ?? [
                 </a>
 
                 <div class="mt-4">
-                    <p class="text-sm font-bold uppercase tracking-wide text-blue-700">
-                        {{ $incidentCode }}
-                    </p>
+                    
 
                     <h1 class="mt-1 text-2xl font-bold text-slate-900">
                         {{ $incidentTitle }}
@@ -700,16 +698,6 @@ $agencyOptions = $agencyOptions ?? [
 
                         <p class="mt-1 text-sm font-semibold text-slate-900">
                             #{{ data_get($incident, 'id') }}
-                        </p>
-                    </div>
-
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Reference Code
-                        </p>
-
-                        <p class="mt-1 text-sm font-semibold text-slate-900">
-                            {{ $incidentCode }}
                         </p>
                     </div>
 

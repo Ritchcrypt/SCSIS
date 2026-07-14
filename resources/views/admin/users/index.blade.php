@@ -198,8 +198,8 @@
                             $isCurrentUser = auth()->id() && (int) auth()->id() === (int) $userRecord->id;
                             $profilePhotoPath = Schema::hasColumn('users', 'profile_photo_path') ? ($userRecord->profile_photo_path ?? null) : null;
                             $profilePhotoUrl = $profilePhotoPath && Route::has('users.profile-photo')
-                                ? route('users.profile-photo', $userRecord)
-                                : null;
+                            ? route('users.profile-photo', $userRecord) . '?v=' . optional($userRecord->updated_at)->timestamp
+                            : null;
                             $userInitial = strtoupper(mb_substr($userRecord->name ?? 'U', 0, 1));
                         @endphp
 
