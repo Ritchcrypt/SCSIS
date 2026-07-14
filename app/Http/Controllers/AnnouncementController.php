@@ -95,6 +95,18 @@ class AnnouncementController extends Controller
         try {
             $notificationType = $this->notificationType($announcement);
 
+            /*
+            |--------------------------------------------------------------------------
+            | Notification Bell Rule
+            |--------------------------------------------------------------------------
+            | Normal announcements should NOT appear in the notification bell.
+            | Only calamity, emergency, or important community-related announcements
+            | create bell notifications.
+            */
+            if (! $notificationType) {
+                return;
+            }
+
             $usersQuery = User::query()
                 ->select('id', 'role');
 
@@ -126,7 +138,7 @@ class AnnouncementController extends Controller
         }
     }
 
-    private function notificationType(Announcement $announcement): string
+    private function notificationType(Announcement $announcement): ?string
     {
         if ($announcement->activate_calamity_mode) {
             return 'calamity';
@@ -140,7 +152,14 @@ class AnnouncementController extends Controller
             return 'emergency';
         }
 
-        return 'announcement';
+        if (
+            in_array($announcement->category, ['community', 'health', 'advisory'], true)
+            && in_array($announcement->priority, ['important', 'urgent'], true)
+        ) {
+            return 'community_problem';
+        }
+
+        return null;
     }
 
     private function categories(): array

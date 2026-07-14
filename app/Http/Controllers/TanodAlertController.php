@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,15 +15,7 @@ class TanodAlertController extends Controller
     {
         $user = Auth::user();
 
-        $allowedTypes = [
-            'all',
-            'dispatch',
-            'escalation',
-            'emergency',
-            'calamity',
-            'resolved',
-            'announcement',
-        ];
+        $allowedTypes = $this->allowedTypes();
 
         $selectedType = strtolower((string) $request->query('type', 'all'));
 
@@ -30,21 +23,9 @@ class TanodAlertController extends Controller
             $selectedType = 'all';
         }
 
-        $query = UserNotification::query()
+        $query = $this->baseAlertQuery($user)
             ->with(['user', 'acknowledgedBy'])
-            ->whereIn('type', array_filter($allowedTypes, fn ($type) => $type !== 'all'))
             ->latest();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Role Filtering
-        |--------------------------------------------------------------------------
-        | Admin can see all tanod alerts.
-        | Tanod can only see alerts assigned to their own user account.
-        */
-        if ($user->role === 'tanod') {
-            $query->where('user_id', $user->id);
-        }
 
         if ($selectedType !== 'all') {
             $query->where('type', $selectedType);
@@ -52,20 +33,13 @@ class TanodAlertController extends Controller
 
         $alerts = $query->paginate(10)->withQueryString();
 
-        $totalAlerts = UserNotification::query()
-            ->whereIn('type', array_filter($allowedTypes, fn ($type) => $type !== 'all'))
-            ->when($user->role === 'tanod', fn ($q) => $q->where('user_id', $user->id))
-            ->count();
+        $totalAlerts = $this->baseAlertQuery($user)->count();
 
-        $unreadAlerts = UserNotification::query()
-            ->whereIn('type', array_filter($allowedTypes, fn ($type) => $type !== 'all'))
-            ->when($user->role === 'tanod', fn ($q) => $q->where('user_id', $user->id))
+        $unreadAlerts = $this->baseAlertQuery($user)
             ->where('is_read', false)
             ->count();
 
-        $acknowledgedAlerts = UserNotification::query()
-            ->whereIn('type', array_filter($allowedTypes, fn ($type) => $type !== 'all'))
-            ->when($user->role === 'tanod', fn ($q) => $q->where('user_id', $user->id))
+        $acknowledgedAlerts = $this->baseAlertQuery($user)
             ->whereNotNull('acknowledged_at')
             ->count();
 
@@ -77,12 +51,12 @@ class TanodAlertController extends Controller
             'acknowledgedAlerts' => $acknowledgedAlerts,
             'alertTypes' => [
                 'all' => 'All Alerts',
+                'incident_reported' => 'New Incident Reports',
+                'calamity' => 'Calamity',
+                'community_problem' => 'Community Problems',
                 'dispatch' => 'Dispatch',
                 'escalation' => 'Escalation',
                 'emergency' => 'Emergency',
-                'calamity' => 'Calamity',
-                'resolved' => 'Resolved',
-                'announcement' => 'Announcement',
             ],
         ]);
     }
@@ -91,23 +65,94 @@ class TanodAlertController extends Controller
     {
         $user = Auth::user();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Access Rule
-        |--------------------------------------------------------------------------
-        | Admin can acknowledge any alert.
-        | Tanod can acknowledge only their own alert.
-        */
-        if ($user->role === 'tanod' && (int) $notification->user_id !== (int) $user->id) {
-            abort(403, 'You are not allowed to acknowledge this alert.');
-        }
-
-        if (! in_array($user->role, ['admin', 'tanod'], true)) {
-            abort(403, 'You are not allowed to acknowledge this alert.');
-        }
+        $this->authorizeNotificationAccess($user, $notification);
 
         $notification->acknowledge($user->id);
 
         return back()->with('success', 'Alert acknowledged successfully.');
+    }
+
+    public function markAllRead(): RedirectResponse
+    {
+        $user = Auth::user();
+
+        $this->baseAlertQuery($user)
+            ->where('is_read', false)
+            ->update([
+                'is_read' => true,
+                'read_at' => now(),
+            ]);
+
+        return back()->with('success', 'All alerts marked as read.');
+    }
+
+    public function destroy(UserNotification $notification): RedirectResponse
+    {
+        $user = Auth::user();
+
+        $this->authorizeNotificationAccess($user, $notification);
+
+        $notification->delete();
+
+        return back()->with('success', 'Alert deleted successfully.');
+    }
+
+    public function destroyAll(): RedirectResponse
+    {
+        $user = Auth::user();
+
+        $deletedCount = $this->baseAlertQuery($user)->delete();
+
+        return back()->with('success', $deletedCount . ' alert notification(s) deleted successfully.');
+    }
+
+    private function authorizeNotificationAccess(?User $user, UserNotification $notification): void
+    {
+        if (! $user) {
+            abort(403, 'Unauthorized access.');
+        }
+
+        if ($user->role === 'admin') {
+            return;
+        }
+
+        if ($user->role === 'tanod' && (int) $notification->user_id === (int) $user->id) {
+            return;
+        }
+
+        abort(403, 'You are not allowed to manage this alert.');
+    }
+
+    private function baseAlertQuery(?User $user)
+    {
+        $query = UserNotification::query()
+            ->whereIn('type', $this->alertTypesOnly());
+
+        if ($user?->role === 'tanod') {
+            $query->where('user_id', $user->id);
+        }
+
+        return $query;
+    }
+
+    private function allowedTypes(): array
+    {
+        return [
+            'all',
+            'incident_reported',
+            'calamity',
+            'community_problem',
+            'dispatch',
+            'escalation',
+            'emergency',
+        ];
+    }
+
+    private function alertTypesOnly(): array
+    {
+        return array_values(array_filter(
+            $this->allowedTypes(),
+            fn ($type) => $type !== 'all'
+        ));
     }
 }

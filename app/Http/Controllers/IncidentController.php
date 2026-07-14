@@ -394,17 +394,6 @@ if ($selectedCategoryName) {
                 );
             }
 
-            $statusName = strtolower((string) ($status?->status_name ?? ''));
-
-            if ((int) $oldStatusId !== (int) $validated['status_id']
-                && in_array($statusName, ['resolved', 'closed', 'completed'], true)) {
-                $this->createTanodAlert(
-                    incident: $freshIncident,
-                    type: 'resolved',
-                    title: 'Incident Resolved',
-                    message: 'Incident ' . $freshIncident->display_code . ' has been marked as ' . ($status?->status_name ?? 'resolved') . '.'
-                );
-            }
         });
 
         return back()->with('success', 'Incident status updated successfully.');
@@ -540,8 +529,12 @@ if ($selectedCategoryName) {
         abort(403, 'Unauthorized access.');
     }
 
-    private function notifyIncidentUsers(Incident $incident, string $title, string $message): void
-    {
+    private function notifyIncidentUsers(
+        Incident $incident,
+        string $title,
+        string $message,
+        string $type = 'incident_update'
+    ): void {
         $userIds = collect([
             $incident->reporter_id,
             $incident->assignedTanod?->user_id,
@@ -553,7 +546,7 @@ if ($selectedCategoryName) {
         foreach ($userIds as $userId) {
             UserNotification::create([
                 'user_id' => $userId,
-                'type' => 'incident',
+                'type' => $type,
                 'source_id' => $incident->id,
                 'title' => $title,
                 'message' => $message,
@@ -563,27 +556,38 @@ if ($selectedCategoryName) {
     }
 
     private function createTanodAlert(Incident $incident, string $type, string $title, string $message): void
-    {
-        $incident->loadMissing('assignedTanod.user');
+{
+    $incident->loadMissing('assignedTanod.user');
 
-        $assignedTanodUser = $incident->assignedTanod?->user;
+    $assignedTanodUser = $incident->assignedTanod?->user;
 
-        if (! $assignedTanodUser) {
-            return;
-        }
-
-        UserNotification::create([
-            'user_id' => $assignedTanodUser->id,
-            'type' => $type,
-            'source_id' => $incident->id,
-            'title' => $title,
-            'message' => $message,
-            'is_read' => false,
-            'read_at' => null,
-            'acknowledged_by' => null,
-            'acknowledged_at' => null,
-        ]);
+    if (! $assignedTanodUser) {
+        return;
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Notification Safety Rule
+    |--------------------------------------------------------------------------
+    | Do not send a dispatch/escalation alert to the same user who submitted
+    | the report. This prevents "you are assigned to your own report" alerts.
+    */
+    if ((int) $assignedTanodUser->id === (int) $incident->reporter_id) {
+        return;
+    }
+
+    UserNotification::create([
+        'user_id' => $assignedTanodUser->id,
+        'type' => $type,
+        'source_id' => $incident->id,
+        'title' => $title,
+        'message' => $message,
+        'is_read' => false,
+        'read_at' => null,
+        'acknowledged_by' => null,
+        'acknowledged_at' => null,
+    ]);
+}
 
     private function generateIncidentCode(): string
     {
@@ -756,20 +760,62 @@ if ($selectedCategoryName) {
 
     private function notifyIncidentCreated(Incident $incident): void
     {
+        $incident->loadMissing('category');
+
+        $notificationType = $this->incidentNotificationType($incident);
+
         $adminAndOfficialIds = User::query()
             ->whereIn('role', ['admin', 'official'])
+            ->where('id', '!=', $incident->reporter_id)
             ->pluck('id');
 
         foreach ($adminAndOfficialIds as $userId) {
             UserNotification::create([
                 'user_id' => $userId,
-                'type' => 'incident',
+                'type' => $notificationType,
                 'source_id' => $incident->id,
-                'title' => 'New incident report',
-                'message' => 'A new incident report has been submitted: ' . $incident->display_code . '.',
+                'title' => match ($notificationType) {
+                    'calamity' => 'New calamity report',
+                    'community_problem' => 'New community problem report',
+                    default => 'New incident report',
+                },
+                'message' => 'A new report has been submitted: ' . $incident->display_code . '.',
                 'is_read' => false,
+                'read_at' => null,
             ]);
         }
+    }
+
+    private function incidentNotificationType(Incident $incident): string
+    {
+        $categoryName = strtolower((string) (
+            $incident->category?->category_name
+            ?? $incident->category?->name
+            ?? ''
+        ));
+
+        if (
+            str_contains($categoryName, 'calamity') ||
+            str_contains($categoryName, 'disaster') ||
+            str_contains($categoryName, 'flood') ||
+            str_contains($categoryName, 'fire') ||
+            str_contains($categoryName, 'earthquake') ||
+            str_contains($categoryName, 'typhoon')
+        ) {
+            return 'calamity';
+        }
+
+        if (
+            str_contains($categoryName, 'community') ||
+            str_contains($categoryName, 'barangay') ||
+            str_contains($categoryName, 'problem') ||
+            str_contains($categoryName, 'complaint') ||
+            str_contains($categoryName, 'concern')
+        ) {
+            return 'community_problem';
+        }
+
+        return 'incident_reported';
     }
 
     private function severityOptions(): array

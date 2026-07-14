@@ -166,8 +166,17 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::get('/tanod-alerts', [TanodAlertController::class, 'index'])
             ->name('tanod-alerts.index');
 
+        Route::patch('/tanod-alerts/read-all', [TanodAlertController::class, 'markAllRead'])
+            ->name('tanod-alerts.read-all');
+
+        Route::delete('/tanod-alerts/delete-all', [TanodAlertController::class, 'destroyAll'])
+            ->name('tanod-alerts.destroy-all');
+
         Route::patch('/tanod-alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
             ->name('tanod-alerts.acknowledge');
+
+        Route::delete('/tanod-alerts/{notification}', [TanodAlertController::class, 'destroy'])
+            ->name('tanod-alerts.destroy');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');
@@ -258,8 +267,17 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
         Route::get('/alerts', [TanodAlertController::class, 'index'])
             ->name('tanod-alerts.index');
 
+        Route::patch('/alerts/read-all', [TanodAlertController::class, 'markAllRead'])
+            ->name('tanod-alerts.read-all');
+
+        Route::delete('/alerts/delete-all', [TanodAlertController::class, 'destroyAll'])
+            ->name('tanod-alerts.destroy-all');
+
         Route::patch('/alerts/{notification}/acknowledge', [TanodAlertController::class, 'acknowledge'])
             ->name('tanod-alerts.acknowledge');
+
+        Route::delete('/alerts/{notification}', [TanodAlertController::class, 'destroy'])
+            ->name('tanod-alerts.destroy');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');
@@ -307,14 +325,13 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
 | Authentication / Logout
 |--------------------------------------------------------------------------
 */
-Route::match(['GET', 'POST'], '/logout', function () {
+Route::post('/logout', function () {
     Auth::logout();
-
 
     request()->session()->invalidate();
     request()->session()->regenerateToken();
 
-    return redirect()->route('home');
+    return redirect()->route('login');
 })->middleware('auth')->name('logout');
 
 if (file_exists(__DIR__ . '/auth.php')) {

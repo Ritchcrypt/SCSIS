@@ -298,24 +298,22 @@
                 <div class="flex items-center gap-4">
                     @php
                         $importantNotificationTypes = [
-                            'incident',
-                            'dispatch',
-                            'escalation',
-                            'emergency',
-                            'calamity',
-                            'resolved',
-                            'announcement',
-                        ];
+    'incident_reported',
+    'calamity',
+    'community_problem',
+    'dispatch',
+    'escalation',
+    'emergency',
+];
 
                         $notificationTypeLabels = [
-                            'incident' => 'Incident Update',
-                            'dispatch' => 'Dispatch',
-                            'escalation' => 'Escalation',
-                            'emergency' => 'Emergency',
-                            'calamity' => 'Calamity',
-                            'resolved' => 'Resolved',
-                            'announcement' => 'Announcement',
-                        ];
+    'incident_reported' => 'New Incident Report',
+    'calamity' => 'Calamity Alert',
+    'community_problem' => 'Community Problem',
+    'dispatch' => 'Dispatch',
+    'escalation' => 'Escalation',
+    'emergency' => 'Emergency',
+];
 
                         $unreadNotificationCount = 0;
                         $notificationUrl = '#';
@@ -397,19 +395,25 @@
 
                                         $incidentRoute = null;
 
-                                        if ($notification->source_id) {
-                                            $incidentRouteName = match ($authUser?->role) {
-                                                'admin' => 'admin.incidents.show',
-                                                'official' => 'official.incidents.show',
-                                                'tanod' => 'tanod.incidents.show',
-                                                'resident' => 'resident.incidents.show',
-                                                default => null,
-                                            };
+$incidentLinkedTypes = [
+    'incident_reported',
+    'dispatch',
+    'escalation',
+];
 
-                                            if ($incidentRouteName && Route::has($incidentRouteName)) {
-                                                $incidentRoute = route($incidentRouteName, $notification->source_id);
-                                            }
-                                        }
+if ($notification->source_id && in_array($type, $incidentLinkedTypes, true)) {
+    $incidentRouteName = match ($authUser?->role) {
+        'admin' => 'admin.incidents.show',
+        'official' => 'official.incidents.show',
+        'tanod' => 'tanod.incidents.show',
+        'resident' => 'resident.incidents.show',
+        default => null,
+    };
+
+    if ($incidentRouteName && Route::has($incidentRouteName)) {
+        $incidentRoute = route($incidentRouteName, $notification->source_id);
+    }
+}
                                     @endphp
 
                                     <div class="border-b border-slate-100 px-4 py-3 hover:bg-slate-50">

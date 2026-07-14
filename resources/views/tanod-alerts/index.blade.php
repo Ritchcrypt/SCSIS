@@ -5,6 +5,18 @@
     $routePrefix = request()->routeIs('tanod.*') ? 'tanod.' : 'admin.';
 
     $typeStyles = [
+        'incident_reported' => [
+            'label' => 'New Incident Report',
+            'icon' => '📄',
+            'badge' => 'bg-blue-100 text-blue-700',
+            'border' => 'border-blue-200',
+        ],
+        'community_problem' => [
+            'label' => 'Community Problem',
+            'icon' => '🏘️',
+            'badge' => 'bg-amber-100 text-amber-700',
+            'border' => 'border-amber-200',
+        ],
         'dispatch' => [
             'label' => 'Dispatch',
             'icon' => '🚓',
@@ -42,6 +54,12 @@
             'border' => 'border-slate-200',
         ],
     ];
+
+    $incidentLinkedTypes = [
+        'incident_reported',
+        'dispatch',
+        'escalation',
+    ];
 @endphp
 
 <div class="space-y-6">
@@ -53,20 +71,46 @@
             </p>
         </div>
 
-        <form method="GET" action="{{ route($routePrefix . 'tanod-alerts.index') }}" class="flex items-center gap-3">
-            <label for="type" class="text-sm font-semibold text-slate-600">Alert Type</label>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div class="flex flex-col gap-2">
+                <form method="POST" action="{{ route($routePrefix . 'tanod-alerts.read-all') }}">
+                    @csrf
+                    @method('PATCH')
 
-            <select id="type"
-                    name="type"
-                    onchange="this.form.submit()"
-                    class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                @foreach ($alertTypes as $value => $label)
-                    <option value="{{ $value }}" @selected($selectedType === $value)>
-                        {{ $label }}
-                    </option>
-                @endforeach
-            </select>
-        </form>
+                    <button type="submit"
+                            class="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700">
+                        Mark All as Read
+                    </button>
+                </form>
+
+                <form method="POST"
+                      action="{{ route($routePrefix . 'tanod-alerts.destroy-all') }}"
+                      onsubmit="return confirm('Delete all alert notifications? This will not delete incidents or reports.');">
+                    @csrf
+                    @method('DELETE')
+
+                    <button type="submit"
+                            class="w-full rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 shadow-sm hover:bg-red-50">
+                        Delete All
+                    </button>
+                </form>
+            </div>
+
+            <form method="GET" action="{{ route($routePrefix . 'tanod-alerts.index') }}" class="flex items-center gap-3">
+                <label for="type" class="text-sm font-semibold text-slate-600">Alert Type</label>
+
+                <select id="type"
+                        name="type"
+                        onchange="this.form.submit()"
+                        class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    @foreach ($alertTypes as $value => $label)
+                        <option value="{{ $value }}" @selected($selectedType === $value)>
+                            {{ $label }}
+                        </option>
+                    @endforeach
+                </select>
+            </form>
+        </div>
     </div>
 
     @if (session('success'))
@@ -117,6 +161,10 @@
                 $acknowledgedAt = $alert->acknowledged_at
                     ? $alert->acknowledged_at->format('M d, Y h:i A')
                     : $readAt;
+
+                $canOpenIncident = $alert->source_id
+                    && in_array($type, $incidentLinkedTypes, true)
+                    && Route::has($routePrefix . 'incidents.show');
             @endphp
 
             <article class="rounded-2xl border {{ $style['border'] }} bg-white p-5 shadow-sm">
@@ -164,7 +212,7 @@
                                     </span>
                                 @endif
 
-                                @if ($alert->source_id && Route::has($routePrefix . 'incidents.show'))
+                                @if ($canOpenIncident)
                                     <a href="{{ route($routePrefix . 'incidents.show', $alert->source_id) }}"
                                        class="font-semibold text-blue-700 hover:text-blue-900">
                                         Open Related Incident
@@ -196,6 +244,18 @@
                                 </button>
                             </form>
                         @endif
+
+                        <form method="POST"
+                              action="{{ route($routePrefix . 'tanod-alerts.destroy', $alert) }}"
+                              onsubmit="return confirm('Delete this alert notification? This will not delete the related incident or report.');">
+                            @csrf
+                            @method('DELETE')
+
+                            <button type="submit"
+                                    class="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50">
+                                Delete
+                            </button>
+                        </form>
                     </div>
                 </div>
             </article>
