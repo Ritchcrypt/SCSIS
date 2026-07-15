@@ -54,6 +54,10 @@ Route::middleware(['auth'])->get('/users/{user}/profile-photo', [UserManagementC
     ->name('users.profile-photo');
 
 Route::middleware(['auth', 'active.user'])
+    ->get('/incident-evidence/{evidenceId}/file', [IncidentController::class, 'showEvidenceFile'])
+    ->name('incident-evidence.file');
+
+Route::middleware(['auth', 'active.user'])
     ->get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
     ->name('system-branding.logo');
 
@@ -68,6 +72,12 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::post('/barangays/quick-store', [IncidentController::class, 'quickStoreBarangay'])
+            ->name('barangays.quick-store');
+
+        Route::delete('/barangays/{barangayId}/quick-delete', [IncidentController::class, 'quickDeleteBarangay'])
+            ->name('barangays.quick-delete');
 
         Route::get('/system-branding', [SystemBrandingController::class, 'edit'])
             ->name('system-branding.edit');

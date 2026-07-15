@@ -325,6 +325,7 @@ if ($selectedCategoryName) {
             ]);
 
             $this->notifyIncidentCreated($incident);
+            $this->createTanodTaskFromIncident($incident, $request);
         });
 
         $showRoute = match ($user->role) {
@@ -343,6 +344,54 @@ if ($selectedCategoryName) {
         return redirect()
             ->route('resident.incidents.index')
             ->with('success', 'Incident report submitted successfully.');
+    }
+
+    private function createTanodTaskFromIncident(Incident $incident, Request $request): void
+    {
+        if (
+            ! Schema::hasTable('tanod_tasks')
+            || ! Schema::hasTable('tanod_task_responses')
+            || ! Schema::hasColumn('tanod_tasks', 'incident_id')
+        ) {
+            return;
+        }
+
+        $incident->loadMissing(['category', 'barangay']);
+
+        $task = \App\Models\TanodTask::create([
+            'incident_id' => $incident->id,
+            'created_by' => $request->user()->id,
+            'title' => $incident->incident_title ?? $incident->title ?? 'Incident Response Task',
+            'description' => $incident->incident_description ?? $incident->description ?? null,
+            'location' => $incident->location_address ?? $incident->location ?? null,
+            'task_datetime' => now(),
+            'due_at' => null,
+            'priority' => match ($incident->priority ?? 'normal') {
+                'critical' => 'urgent',
+                'high' => 'high',
+                'moderate' => 'normal',
+                'low' => 'low',
+                default => 'normal',
+            },
+            'status' => 'open',
+        ]);
+
+        $tanods = Employee::query()
+            ->with('user')
+            ->tanods()
+            ->active()
+            ->get();
+
+        foreach ($tanods as $tanod) {
+            \App\Models\TanodTaskResponse::create([
+                'tanod_task_id' => $task->id,
+                'employee_id' => $tanod->id,
+                'user_id' => $tanod->user_id,
+                'response_status' => 'pending',
+                'response_note' => null,
+                'responded_at' => null,
+            ]);
+        }
     }
 
     public function updateStatus(Request $request, Incident $incident): RedirectResponse
@@ -372,9 +421,9 @@ if ($selectedCategoryName) {
         | Admin can assign or reassign responders.
         | Official and tanod can update status, but cannot change assigned responder.
         */
-        $newAssignedTo = $user->role === 'admin'
-            ? ($validated['assigned_to'] ?? null)
-            : $incident->assigned_to;
+        $newAssignedTo = $request->has('assigned_to')
+    ? ($validated['assigned_to'] ?? null)
+    : $incident->assigned_to;
 
         DB::transaction(function () use ($request, $incident, $validated, $oldAssignedTo, $oldStatusId, $newAssignedTo) {
             $incident->update([
@@ -495,7 +544,179 @@ if ($selectedCategoryName) {
 
         return back()->with('success', 'Message added successfully.');
     }
+public function quickStoreBarangay(Request $request): RedirectResponse
+{
+    $user = $request->user();
 
+    if (! $user || ! in_array($user->role, ['admin', 'official'], true)) {
+        abort(403, 'Only admin or official can add barangays.');
+    }
+
+    if (! Schema::hasTable('barangays')) {
+        return back()->with('error', 'Barangays table does not exist.');
+    }
+
+    $validated = $request->validate([
+        'barangay_name' => ['required', 'string', 'max:255'],
+    ]);
+
+    $barangayName = trim($validated['barangay_name']);
+
+    $columns = Schema::getColumnListing('barangays');
+
+    $exists = DB::table('barangays')
+        ->when(in_array('barangay_name', $columns, true), function ($query) use ($barangayName) {
+            $query->whereRaw('LOWER(barangay_name) = ?', [strtolower($barangayName)]);
+        })
+        ->when(! in_array('barangay_name', $columns, true) && in_array('name', $columns, true), function ($query) use ($barangayName) {
+            $query->whereRaw('LOWER(name) = ?', [strtolower($barangayName)]);
+        })
+        ->exists();
+
+    if ($exists) {
+        return back()->with('error', 'Barangay already exists.');
+    }
+
+    $data = [];
+
+    if (in_array('barangay_name', $columns, true)) {
+        $data['barangay_name'] = $barangayName;
+    }
+
+    if (in_array('name', $columns, true)) {
+        $data['name'] = $barangayName;
+    }
+
+    if (in_array('created_at', $columns, true)) {
+        $data['created_at'] = now();
+    }
+
+    if (in_array('updated_at', $columns, true)) {
+        $data['updated_at'] = now();
+    }
+
+    DB::table('barangays')->insert($data);
+
+    return back()->with('success', 'Barangay added successfully.');
+}
+
+public function quickDeleteBarangay(Request $request, int $barangayId): RedirectResponse
+{
+    $user = $request->user();
+
+    if (! $user || ! in_array($user->role, ['admin', 'official'], true)) {
+        abort(403, 'Only admin or official can remove barangays.');
+    }
+
+    if (! Schema::hasTable('barangays')) {
+        return back()->with('error', 'Barangays table does not exist.');
+    }
+
+    if (
+        Schema::hasTable('incidents')
+        && Schema::hasColumn('incidents', 'barangay_id')
+        && DB::table('incidents')->where('barangay_id', $barangayId)->exists()
+    ) {
+        return back()->with('error', 'This barangay cannot be removed because incidents are already linked to it.');
+    }
+
+    DB::table('barangays')
+        ->where('id', $barangayId)
+        ->delete();
+
+    return back()->with('success', 'Barangay removed successfully.');
+}
+
+public function showEvidenceFile(Request $request, int $evidenceId)
+{
+    $evidenceTables = [
+        'evidence',
+        'incident_evidence',
+        'incident_evidences',
+        'incident_attachments',
+        'attachments',
+    ];
+
+    $evidenceRecord = null;
+
+    foreach ($evidenceTables as $table) {
+        if (
+            ! Schema::hasTable($table)
+            || ! Schema::hasColumn($table, 'id')
+            || ! Schema::hasColumn($table, 'incident_id')
+        ) {
+            continue;
+        }
+
+        $record = DB::table($table)
+            ->where('id', $evidenceId)
+            ->first();
+
+        if ($record) {
+            $evidenceRecord = $record;
+            break;
+        }
+    }
+
+    if (! $evidenceRecord) {
+        abort(404, 'Evidence record not found.');
+    }
+
+    $incident = Incident::find((int) $evidenceRecord->incident_id);
+
+    if (! $incident) {
+        abort(404, 'Related incident not found.');
+    }
+
+    $this->authorizeIncidentAccess($request, $incident);
+
+    $filePath = $evidenceRecord->file_path
+        ?? $evidenceRecord->path
+        ?? $evidenceRecord->file_url
+        ?? $evidenceRecord->url
+        ?? null;
+
+    if (! $filePath || str_starts_with((string) $filePath, 'http')) {
+        abort(404, 'Evidence file path is invalid.');
+    }
+
+    $cleanFilePath = str_replace('\\', '/', trim((string) $filePath));
+    $cleanFilePath = preg_replace('#^/?storage/#', '', $cleanFilePath);
+    $cleanFilePath = preg_replace('#^/?public/#', '', $cleanFilePath);
+    $cleanFilePath = ltrim($cleanFilePath, '/');
+
+    if (
+        ! $cleanFilePath
+        || str_contains($cleanFilePath, '..')
+        || ! Storage::disk('public')->exists($cleanFilePath)
+    ) {
+        abort(404, 'Evidence file not found in storage.');
+    }
+
+    $absolutePath = Storage::disk('public')->path($cleanFilePath);
+
+    if (! is_file($absolutePath)) {
+        abort(404, 'Evidence file is missing from disk.');
+    }
+
+    $mimeType = $evidenceRecord->mime_type ?? null;
+
+    if (! $mimeType) {
+        $detectedMimeType = @mime_content_type($absolutePath);
+        $mimeType = $detectedMimeType ?: 'application/octet-stream';
+    }
+
+    $fileName = $evidenceRecord->file_name
+        ?? $evidenceRecord->name
+        ?? basename($cleanFilePath);
+
+    $fileName = str_replace('"', '', (string) $fileName);
+
+    return response()->file($absolutePath, [
+        'Content-Type' => (string) $mimeType,
+        'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+    ]);
+}
     private function authorizeIncidentAccess(Request $request, Incident $incident): void
     {
         $user = $request->user();

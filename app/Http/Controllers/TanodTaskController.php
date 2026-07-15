@@ -10,6 +10,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use App\Models\Incident;
+use App\Models\Status;
+use App\Models\User;
+use App\Models\UserNotification;
+use Illuminate\Support\Facades\Schema;
 
 class TanodTaskController extends Controller
 {
@@ -181,15 +186,220 @@ public function respond(Request $request, TanodTaskResponse $response): Redirect
         'response_note' => ['nullable', 'string', 'max:1000'],
     ]);
 
-    $response->update([
-        'response_status' => $validated['response_status'],
-        'response_note' => $validated['response_note'] ?? null,
-        'responded_at' => now(),
-    ]);
+    DB::transaction(function () use ($request, $response, $employee, $validated) {
+        $oldResponseStatus = $response->response_status;
+
+        $response->update([
+            'response_status' => $validated['response_status'],
+            'response_note' => $validated['response_note'] ?? null,
+            'responded_at' => now(),
+        ]);
+
+        $response->refresh();
+        $response->load('task');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phase D / E
+        |--------------------------------------------------------------------------
+        | Only run notification and status-history logic when the response status
+        | actually changes. This prevents duplicate notifications if the tanod
+        | submits the same response again.
+        */
+
+        if ($oldResponseStatus !== $validated['response_status']) {
+            $this->syncIncidentAfterTanodTaskResponse(
+                request: $request,
+                task: $response->task,
+                employee: $employee,
+                responseStatus: $validated['response_status'],
+                responseNote: $validated['response_note'] ?? null
+            );
+
+            $this->notifyAdminsAboutTanodTaskResponse(
+                task: $response->task,
+                employee: $employee,
+                responseStatus: $validated['response_status']
+            );
+        }
+    });
 
     return back()->with('success', 'Task response submitted successfully.');
 }
 
+private function syncIncidentAfterTanodTaskResponse(
+    Request $request,
+    TanodTask $task,
+    Employee $employee,
+    string $responseStatus,
+    ?string $responseNote = null
+): void {
+    $incident = $this->findIncidentFromTanodTask($task);
+
+    if (! $incident) {
+        return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accepted Response
+    |--------------------------------------------------------------------------
+    | When a tanod accepts, the backend assignment is updated here.
+    | The Incidents View no longer manually assigns responders.
+    */
+
+    if ($responseStatus === 'accepted') {
+        $updates = [];
+
+        if (Schema::hasColumn('incidents', 'assigned_to')) {
+            $updates['assigned_to'] = $employee->id;
+        }
+
+        $respondingStatus = Status::query()
+            ->whereRaw('LOWER(status_name) IN (?, ?, ?)', [
+                'responding',
+                'in progress',
+                'in_progress',
+            ])
+            ->first();
+
+        if ($respondingStatus && Schema::hasColumn('incidents', 'status_id')) {
+            $updates['status_id'] = $respondingStatus->id;
+        }
+
+        if (! empty($updates)) {
+            $incident->forceFill($updates)->save();
+        }
+
+        $this->createIncidentStatusHistoryRecord(
+            incident: $incident,
+            updatedBy: $request->user()->id,
+            statusId: $respondingStatus?->id ?? $incident->status_id,
+            remarks: 'Tanod accepted the response task.'
+                . ($responseNote ? ' Note: ' . $responseNote : '')
+        );
+
+        return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Declined Response
+    |--------------------------------------------------------------------------
+    | Decline does not clear assigned_to. It only logs the decision.
+    */
+
+    if ($responseStatus === 'declined') {
+        $this->createIncidentStatusHistoryRecord(
+            incident: $incident,
+            updatedBy: $request->user()->id,
+            statusId: $incident->status_id,
+            remarks: 'Tanod declined the response task.'
+                . ($responseNote ? ' Note: ' . $responseNote : '')
+        );
+    }
+}
+
+private function notifyAdminsAboutTanodTaskResponse(
+    TanodTask $task,
+    Employee $employee,
+    string $responseStatus
+): void {
+    $incident = $this->findIncidentFromTanodTask($task);
+
+    $tanodName = $employee->user?->name
+        ?? $employee->full_name
+        ?? $employee->name
+        ?? 'A tanod';
+
+    $statusText = $responseStatus === 'accepted'
+        ? 'accepted'
+        : 'declined';
+
+    $title = $responseStatus === 'accepted'
+        ? 'Tanod task accepted'
+        : 'Tanod task declined';
+
+    $message = $tanodName . ' ' . $statusText . ' the response task: ' . $task->title . '.';
+
+    $receiverIds = User::query()
+        ->whereIn('role', ['admin', 'official', 'dao'])
+        ->pluck('id');
+
+    foreach ($receiverIds as $userId) {
+        UserNotification::create([
+            'user_id' => $userId,
+            'type' => 'dispatch',
+            'source_id' => $incident?->id,
+            'title' => $title,
+            'message' => $message,
+            'is_read' => false,
+            'read_at' => null,
+        ]);
+    }
+}
+
+private function findIncidentFromTanodTask(TanodTask $task): ?Incident
+{
+    if (! Schema::hasColumn('tanod_tasks', 'incident_id')) {
+        return null;
+    }
+
+    $incidentId = data_get($task, 'incident_id');
+
+    if (! $incidentId) {
+        return null;
+    }
+
+    return Incident::find((int) $incidentId);
+}
+
+private function createIncidentStatusHistoryRecord(
+    Incident $incident,
+    int $updatedBy,
+    ?int $statusId,
+    string $remarks
+): void {
+    if (! Schema::hasTable('incident_status_histories')) {
+        return;
+    }
+
+    $columns = Schema::getColumnListing('incident_status_histories');
+
+    $historyData = [];
+
+    if (in_array('incident_id', $columns, true)) {
+        $historyData['incident_id'] = $incident->id;
+    }
+
+    if (in_array('status_id', $columns, true) && $statusId) {
+        $historyData['status_id'] = $statusId;
+    }
+
+    if (in_array('updated_by', $columns, true)) {
+        $historyData['updated_by'] = $updatedBy;
+    }
+
+    if (in_array('remarks', $columns, true)) {
+        $historyData['remarks'] = $remarks;
+    }
+
+    if (in_array('status_changed_at', $columns, true)) {
+        $historyData['status_changed_at'] = now();
+    }
+
+    if (in_array('created_at', $columns, true)) {
+        $historyData['created_at'] = now();
+    }
+
+    if (in_array('updated_at', $columns, true)) {
+        $historyData['updated_at'] = now();
+    }
+
+    if (! empty($historyData)) {
+        DB::table('incident_status_histories')->insert($historyData);
+    }
+}
 private function getTanodEmployee(Request $request): Employee
 {
     $user = $request->user();

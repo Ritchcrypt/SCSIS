@@ -339,22 +339,6 @@ $agencyOptions = $agencyOptions ?? [
                 </div>
             </div>
 
-            <div class="flex flex-wrap gap-2">
-                @if ($createCaseUrl)
-                    <a href="{{ $createCaseUrl }}"
-                       class="inline-flex items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800">
-                        + Create Case
-                    </a>
-                @endif
-
-                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $severityBadgeClass($severityLabel) }}">
-                    {{ ucfirst((string) $severityLabel) }}
-                </span>
-
-                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $statusBadgeClass($statusName) }}">
-                    {{ ucfirst(str_replace('_', ' ', (string) $statusName)) }}
-                </span>
-            </div>
         </div>
     </div>
 
@@ -419,16 +403,6 @@ $agencyOptions = $agencyOptions ?? [
                             <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $severityBadgeClass($severityLabel) }}">
                                 {{ ucfirst((string) $severityLabel) }}
                             </span>
-                        </p>
-                    </div>
-
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Assigned Responder
-                        </p>
-
-                        <p class="mt-1 text-sm font-semibold text-slate-900">
-                            {{ $assignedName }}
                         </p>
                     </div>
 
@@ -561,31 +535,31 @@ $agencyOptions = $agencyOptions ?? [
                     @if (count($evidences))
                         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             @foreach ($evidences as $evidence)
-                                @php
-                                    $filePath = data_get($evidence, 'file_path')
-                                        ?? data_get($evidence, 'path')
-                                        ?? data_get($evidence, 'url')
-                                        ?? data_get($evidence, 'file_url');
+@php
+    $evidenceId = data_get($evidence, 'id');
 
-                                    $fileName = data_get($evidence, 'file_name')
-                                        ?? data_get($evidence, 'name')
-                                        ?? basename((string) $filePath);
+    $filePath = data_get($evidence, 'file_path')
+        ?? data_get($evidence, 'path')
+        ?? data_get($evidence, 'url')
+        ?? data_get($evidence, 'file_url');
 
-                                    $fileType = strtolower((string) (
-                                        data_get($evidence, 'file_type')
-                                        ?? data_get($evidence, 'mime_type')
-                                        ?? pathinfo((string) $filePath, PATHINFO_EXTENSION)
-                                    ));
+    $fileName = data_get($evidence, 'file_name')
+        ?? data_get($evidence, 'name')
+        ?? basename((string) $filePath);
 
-                                    $isImage = str_contains($fileType, 'image')
-                                        || in_array($fileType, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true);
+    $fileType = strtolower((string) (
+        data_get($evidence, 'file_type')
+        ?? data_get($evidence, 'mime_type')
+        ?? pathinfo((string) $filePath, PATHINFO_EXTENSION)
+    ));
 
-                                    if ($filePath && !str_starts_with((string) $filePath, 'http')) {
-                                        $fileUrl = \Illuminate\Support\Facades\Storage::url($filePath);
-                                    } else {
-                                        $fileUrl = $filePath;
-                                    }
-                                @endphp
+    $isImage = str_contains($fileType, 'image')
+        || in_array($fileType, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true);
+
+    $fileUrl = $evidenceId && Route::has('incident-evidence.file')
+        ? route('incident-evidence.file', $evidenceId)
+        : null;
+@endphp
 
                                 <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                                     @if ($fileUrl && $isImage)
@@ -882,68 +856,6 @@ $agencyOptions = $agencyOptions ?? [
                             @enderror
                         </div>
 
-                        @if ($canAssignResponder)
-                            <div>
-                                <label for="assigned_to" class="mb-2 block text-sm font-semibold text-slate-700">
-                                    Assigned Responder
-                                </label>
-
-                                <select
-                                    id="assigned_to"
-                                    name="assigned_to"
-                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                >
-                                    <option value="">Not Assigned</option>
-
-                                    @foreach ($responders as $responder)
-                                        @php
-                                            $responderId = data_get($responder, 'id');
-
-                                            $responderName = data_get($responder, 'user.name')
-                                                ?? data_get($responder, 'full_name')
-                                                ?? data_get($responder, 'name')
-                                                ?? ('Tanod #' . $responderId);
-
-                                            $responderRole = data_get($responder, 'position')
-                                                ?? data_get($responder, 'employee_type')
-                                                ?? data_get($responder, 'user.role')
-                                                ?? 'tanod';
-                                        @endphp
-
-                                        <option value="{{ $responderId }}" @selected((string) $currentAssigneeId === (string) $responderId)>
-                                            {{ $responderName }} — {{ ucfirst((string) $responderRole) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-
-                                @error('assigned_to')
-                                    <p class="mt-2 text-sm font-medium text-red-600">
-                                        {{ $message }}
-                                    </p>
-                                @enderror
-                            </div>
-                        @endif
-
-                        <div>
-                            <label for="remarks" class="mb-2 block text-sm font-semibold text-slate-700">
-                                Remarks
-                            </label>
-
-                            <textarea
-                                id="remarks"
-                                name="remarks"
-                                rows="4"
-                                placeholder="Add update notes, response details, or reason for status change..."
-                                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            >{{ old('remarks') }}</textarea>
-
-                            @error('remarks')
-                                <p class="mt-2 text-sm font-medium text-red-600">
-                                    {{ $message }}
-                                </p>
-                            @enderror
-                        </div>
-
                         <button
                             type="submit"
                             class="inline-flex w-full items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -1116,112 +1028,6 @@ $agencyOptions = $agencyOptions ?? [
             </div>
 
 
-            {{-- Incident Messages --}}
-            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-6 py-4">
-                    <h2 class="text-base font-bold text-slate-900">
-                        Incident Messages
-                    </h2>
-
-                    <p class="mt-1 text-sm text-slate-500">
-                        Internal conversation and updates related to this report.
-                    </p>
-                </div>
-
-                <div class="space-y-5 p-6">
-                    @if (count($messages))
-                        <div class="space-y-4">
-                            @foreach ($messages as $incidentMessage)
-                                @php
-                                    $messageUser = data_get($incidentMessage, 'user.name')
-                                        ?? data_get($incidentMessage, 'sender.name')
-                                        ?? 'User';
-
-                                    $messageBody = data_get($incidentMessage, 'message')
-                                        ?? data_get($incidentMessage, 'body')
-                                        ?? data_get($incidentMessage, 'content')
-                                        ?? '';
-
-                                    $messageRawDate = data_get($incidentMessage, 'created_at');
-
-                                    try {
-                                        $messageDate = $messageRawDate
-                                            ? \Carbon\Carbon::parse($messageRawDate)->format('M d, Y h:i A')
-                                            : '—';
-                                    } catch (\Throwable $e) {
-                                        $messageDate = '—';
-                                    }
-                                @endphp
-
-                                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                        <p class="text-sm font-bold text-slate-900">
-                                            {{ $messageUser }}
-                                        </p>
-
-                                        <p class="text-xs font-medium text-slate-500">
-                                            {{ $messageDate }}
-                                        </p>
-                                    </div>
-
-                                    <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
-                                        {{ $messageBody }}
-                                    </p>
-                                </div>
-                            @endforeach
-                        </div>
-                    @else
-                        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-                            <div class="text-3xl">
-                                💬
-                            </div>
-
-                            <h3 class="mt-3 text-sm font-bold text-slate-900">
-                                No messages yet
-                            </h3>
-
-                            <p class="mt-1 text-sm text-slate-500">
-                                Messages and coordination notes will appear here.
-                            </p>
-                        </div>
-                    @endif
-
-                    @if ($messageUrl && auth()->check())
-                        <form method="POST" action="{{ $messageUrl }}" class="space-y-4 border-t border-slate-200 pt-5">
-                            @csrf
-
-                            <div>
-                                <label for="message" class="mb-2 block text-sm font-semibold text-slate-700">
-                                    Add Message
-                                </label>
-
-                                <textarea
-                                    id="message"
-                                    name="message"
-                                    rows="4"
-                                    required
-                                    placeholder="Write a coordination note or update..."
-                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                                >{{ old('message') }}</textarea>
-
-                                @error('message')
-                                    <p class="mt-2 text-sm font-medium text-red-600">
-                                        {{ $message }}
-                                    </p>
-                                @enderror
-                            </div>
-
-                            <button
-                                type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                            >
-                                Add Message
-                            </button>
-                        </form>
-                    @endif
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 

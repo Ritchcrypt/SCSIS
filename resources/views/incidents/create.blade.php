@@ -203,7 +203,6 @@
                 </div>
 
                 {{-- Location --}}
-{{-- Location --}}
 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div class="border-b border-slate-200 px-6 py-4">
         <h2 class="text-base font-bold text-slate-900">
@@ -211,15 +210,37 @@
         </h2>
 
         <p class="mt-1 text-sm text-slate-500">
-            Provide the barangay, exact landmark, and pin the location on the map.
+            Provide the barangay, exact landmark, and search or pin the location on the map.
         </p>
     </div>
 
     <div class="space-y-5 p-6">
         <div>
-            <label for="barangay_id" class="mb-2 block text-sm font-semibold text-slate-700">
-                Barangay
-            </label>
+            <div class="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <label for="barangay_id" class="block text-sm font-semibold text-slate-700">
+                    Barangay
+                </label>
+
+                @if (in_array($role, ['admin', 'official'], true))
+                    <div class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onclick="document.getElementById('addBarangayPanel').classList.toggle('hidden')"
+                            class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                        >
+                            + Add Barangay
+                        </button>
+
+                        <button
+                            type="button"
+                            onclick="document.getElementById('removeBarangayPanel').classList.toggle('hidden')"
+                            class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100"
+                        >
+                            Remove Barangay
+                        </button>
+                    </div>
+                @endif
+            </div>
 
             <select
                 id="barangay_id"
@@ -241,6 +262,56 @@
             @enderror
         </div>
 
+        @if (in_array($role, ['admin', 'official'], true))
+            <div id="addBarangayPanel" class="hidden rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <div class="flex flex-col gap-3 md:flex-row">
+        <input
+            id="quick_barangay_name"
+            type="text"
+            placeholder="Enter barangay name"
+            class="flex-1 rounded-xl border border-blue-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        >
+
+        <button
+            type="button"
+            onclick="submitQuickBarangayForm()"
+            class="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-800"
+        >
+            Save Barangay
+        </button>
+    </div>
+</div>
+
+            <div id="removeBarangayPanel" class="hidden rounded-xl border border-red-200 bg-red-50 p-4">
+    <div class="flex flex-col gap-3 md:flex-row">
+        <select
+            id="delete_barangay_id"
+            class="flex-1 rounded-xl border border-red-200 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+        >
+            <option value="">Select barangay to remove</option>
+
+            @foreach ($barangays as $barangay)
+                <option value="{{ $barangay->id }}">
+                    {{ $barangay->barangay_name ?? $barangay->name ?? 'Barangay' }}
+                </option>
+            @endforeach
+        </select>
+
+        <button
+            type="button"
+            onclick="submitQuickDeleteBarangayForm()"
+            class="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700"
+        >
+            Remove
+        </button>
+    </div>
+
+    <p class="mt-2 text-xs text-red-700">
+        Barangays already used by incidents cannot be removed.
+    </p>
+</div>
+        @endif
+
         <div>
             <label for="location_address" class="mb-2 block text-sm font-semibold text-slate-700">
                 Exact Location / Landmark
@@ -261,6 +332,33 @@
         </div>
 
         <div>
+            <label for="mapSearchInput" class="mb-2 block text-sm font-semibold text-slate-700">
+                Search Location on Map
+            </label>
+
+            <div class="flex flex-col gap-3 md:flex-row">
+                <input
+                    id="mapSearchInput"
+                    type="text"
+                    placeholder="Search place, road, landmark, or barangay..."
+                    class="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+
+                <button
+                    type="button"
+                    onclick="searchIncidentMapLocation()"
+                    class="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-800"
+                >
+                    Search Map
+                </button>
+            </div>
+
+            <p id="mapSearchStatus" class="mt-2 text-xs text-slate-500">
+                Search results will automatically move the map pin.
+            </p>
+        </div>
+
+        <div>
             <div class="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                     <p class="text-sm font-semibold text-slate-700">
@@ -268,7 +366,7 @@
                     </p>
 
                     <p class="mt-1 text-xs text-slate-500">
-                        Click the map to automatically fill latitude and longitude.
+                        Click the map or search above to save the incident location.
                     </p>
                 </div>
 
@@ -284,47 +382,16 @@
             <div id="incidentCreateMap" class="h-[360px] w-full rounded-2xl border border-slate-200"></div>
         </div>
 
-        <div class="grid gap-5 md:grid-cols-2">
-            <div>
-                <label for="latitude" class="mb-2 block text-sm font-semibold text-slate-700">
-                    Latitude <span class="font-normal text-slate-400">(auto-filled by map)</span>
-                </label>
+        <input id="latitude" type="hidden" name="latitude" value="{{ old('latitude') }}">
+        <input id="longitude" type="hidden" name="longitude" value="{{ old('longitude') }}">
 
-                <input
-                    id="latitude"
-                    type="text"
-                    name="latitude"
-                    value="{{ old('latitude') }}"
-                    readonly
-                    placeholder="Click the map"
-                    class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                >
+        @error('latitude')
+            <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+        @enderror
 
-                @error('latitude')
-                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-
-            <div>
-                <label for="longitude" class="mb-2 block text-sm font-semibold text-slate-700">
-                    Longitude <span class="font-normal text-slate-400">(auto-filled by map)</span>
-                </label>
-
-                <input
-                    id="longitude"
-                    type="text"
-                    name="longitude"
-                    value="{{ old('longitude') }}"
-                    readonly
-                    placeholder="Click the map"
-                    class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                >
-
-                @error('longitude')
-                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-        </div>
+        @error('longitude')
+            <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+        @enderror
     </div>
 </div>
 
@@ -356,7 +423,7 @@
                             >
 
                             <p class="mt-2 text-xs text-slate-500">
-                                Maximum 5 files. JPG, PNG, WEBP, or PDF only. Max 5MB each.
+                                Maximum 5 files. JPG, PNG, WEBP, or PDF only. Max 50MB each.
                             </p>
 
                             @error('evidence')
@@ -441,6 +508,27 @@
             </div>
         </div>
     </form>
+    @if (in_array($role, ['admin', 'official'], true))
+    <form
+        id="quickAddBarangayForm"
+        method="POST"
+        action="{{ route($routePrefix . 'barangays.quick-store') }}"
+        class="hidden"
+    >
+        @csrf
+        <input type="hidden" id="quick_barangay_name_hidden" name="barangay_name">
+    </form>
+
+    <form
+        id="quickRemoveBarangayForm"
+        method="POST"
+        action="#"
+        class="hidden"
+    >
+        @csrf
+        @method('DELETE')
+    </form>
+@endif
 </div>
 
 <link rel="stylesheet"
@@ -463,8 +551,13 @@
 
     let incidentCreateMarker = null;
 
-    const oldLatitude = document.getElementById('latitude').value;
-    const oldLongitude = document.getElementById('longitude').value;
+    const latitudeInput = document.getElementById('latitude');
+    const longitudeInput = document.getElementById('longitude');
+    const mapSearchInput = document.getElementById('mapSearchInput');
+    const mapSearchStatus = document.getElementById('mapSearchStatus');
+
+    const oldLatitude = latitudeInput.value;
+    const oldLongitude = longitudeInput.value;
 
     function createIncidentPickerIcon() {
         return L.divIcon({
@@ -476,41 +569,132 @@
         });
     }
 
-    function placeIncidentMapPin(latitude, longitude) {
+    function placeIncidentMapPin(latitude, longitude, label = 'Selected incident location') {
         if (incidentCreateMarker) {
             incidentCreateMap.removeLayer(incidentCreateMarker);
         }
+
+        latitudeInput.value = Number(latitude).toFixed(7);
+        longitudeInput.value = Number(longitude).toFixed(7);
 
         incidentCreateMarker = L.marker([latitude, longitude], {
             icon: createIncidentPickerIcon(),
         }).addTo(incidentCreateMap);
 
-        incidentCreateMarker.bindPopup('Selected incident location').openPopup();
+        incidentCreateMarker.bindPopup(label).openPopup();
     }
 
     function clearIncidentMapPin() {
-        document.getElementById('latitude').value = '';
-        document.getElementById('longitude').value = '';
+        latitudeInput.value = '';
+        longitudeInput.value = '';
 
         if (incidentCreateMarker) {
             incidentCreateMap.removeLayer(incidentCreateMarker);
             incidentCreateMarker = null;
         }
+
+        mapSearchStatus.textContent = 'Map pin cleared.';
+        mapSearchStatus.className = 'mt-2 text-xs text-slate-500';
+    }
+
+    async function searchIncidentMapLocation() {
+        const query = mapSearchInput.value.trim();
+
+        if (! query) {
+            mapSearchStatus.textContent = 'Type a place, road, landmark, or barangay first.';
+            mapSearchStatus.className = 'mt-2 text-xs text-red-600';
+            return;
+        }
+
+        mapSearchStatus.textContent = 'Searching map location...';
+        mapSearchStatus.className = 'mt-2 text-xs text-slate-500';
+
+        try {
+            const searchQuery = encodeURIComponent(query + ', Dao, Capiz, Philippines');
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${searchQuery}`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            const results = await response.json();
+
+            if (! results.length) {
+                mapSearchStatus.textContent = 'No map result found. Try a nearby landmark or barangay name.';
+                mapSearchStatus.className = 'mt-2 text-xs text-red-600';
+                return;
+            }
+
+            const result = results[0];
+            const latitude = parseFloat(result.lat);
+            const longitude = parseFloat(result.lon);
+
+            incidentCreateMap.setView([latitude, longitude], 17);
+            placeIncidentMapPin(latitude, longitude, result.display_name || 'Searched location');
+
+            mapSearchStatus.textContent = 'Location found and pin was placed.';
+            mapSearchStatus.className = 'mt-2 text-xs text-green-600';
+        } catch (error) {
+            mapSearchStatus.textContent = 'Map search failed. Check your internet connection and try again.';
+            mapSearchStatus.className = 'mt-2 text-xs text-red-600';
+        }
+    }
+
+    if (mapSearchInput) {
+        mapSearchInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                searchIncidentMapLocation();
+            }
+        });
     }
 
     incidentCreateMap.on('click', function (event) {
-        const latitude = event.latlng.lat.toFixed(7);
-        const longitude = event.latlng.lng.toFixed(7);
-
-        document.getElementById('latitude').value = latitude;
-        document.getElementById('longitude').value = longitude;
+        const latitude = event.latlng.lat;
+        const longitude = event.latlng.lng;
 
         placeIncidentMapPin(latitude, longitude);
+        mapSearchStatus.textContent = 'Map pin placed manually.';
+        mapSearchStatus.className = 'mt-2 text-xs text-green-600';
     });
 
     if (oldLatitude && oldLongitude) {
         placeIncidentMapPin(oldLatitude, oldLongitude);
         incidentCreateMap.setView([oldLatitude, oldLongitude], 16);
     }
+
+    function submitQuickBarangayForm() {
+    const barangayNameInput = document.getElementById('quick_barangay_name');
+    const hiddenBarangayName = document.getElementById('quick_barangay_name_hidden');
+    const form = document.getElementById('quickAddBarangayForm');
+
+    const barangayName = barangayNameInput.value.trim();
+
+    if (! barangayName) {
+        alert('Enter a barangay name first.');
+        return;
+    }
+
+    hiddenBarangayName.value = barangayName;
+    form.submit();
+}
+
+function submitQuickDeleteBarangayForm() {
+    const barangayId = document.getElementById('delete_barangay_id').value;
+    const form = document.getElementById('quickRemoveBarangayForm');
+
+    if (! barangayId) {
+        alert('Select a barangay to remove first.');
+        return;
+    }
+
+    if (! confirm('Remove this barangay? This cannot remove barangays already linked to incidents.')) {
+        return;
+    }
+
+    const baseUrl = "{{ url('/admin/barangays') }}";
+    form.action = `${baseUrl}/${barangayId}/quick-delete`;
+    form.submit();
+}
 </script>
 @endsection

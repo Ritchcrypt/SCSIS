@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class TanodTask extends Model
 {
     protected $fillable = [
+        'incident_id',
         'created_by',
         'title',
         'description',
