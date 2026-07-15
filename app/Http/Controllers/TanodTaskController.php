@@ -118,6 +118,25 @@ class TanodTaskController extends Controller
         ]);
     }
 
+public function destroy(TanodTask $tanodTask): RedirectResponse
+{
+    DB::transaction(function () use ($tanodTask) {
+        if (method_exists($tanodTask, 'responses')) {
+            $tanodTask->responses()->delete();
+        } else {
+            DB::table('tanod_task_responses')
+                ->where('tanod_task_id', $tanodTask->id)
+                ->delete();
+        }
+
+        $tanodTask->delete();
+    });
+
+    return redirect()
+        ->route('admin.tanod-tasks.index')
+        ->with('success', 'Tanod task deleted successfully.');
+}
+
     public function close(Request $request, TanodTask $tanodTask): RedirectResponse
     {
         $this->authorizeAdmin($request);

@@ -84,38 +84,41 @@
             </p>
         </div>
 
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start">
-            <div class="flex flex-col gap-2">
-                <form method="POST" action="{{ route($routePrefix . 'tanod-alerts.read-all') }}">
-                    @csrf
-                    @method('PATCH')
+        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <form method="POST" action="{{ route($routePrefix . 'tanod-alerts.read-all') }}">
+                @csrf
+                @method('PATCH')
 
-                    <button type="submit"
-                            class="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700">
-                        Mark All as Read
-                    </button>
-                </form>
+                <button type="submit"
+                        title="Mark all as read"
+                        aria-label="Mark all as read"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75 9 17.25 19.5 6.75" />
+                    </svg>
+                </button>
+            </form>
 
-                <form method="POST"
-                      action="{{ route($routePrefix . 'tanod-alerts.destroy-all') }}"
-                      onsubmit="return confirm('Delete all alert notifications? This will not delete incidents or reports.');">
-                    @csrf
-                    @method('DELETE')
+            <form method="POST"
+                  action="{{ route($routePrefix . 'tanod-alerts.destroy-all') }}"
+                  onsubmit="return confirm('Delete all alert notifications? This will not delete incidents or reports.');">
+                @csrf
+                @method('DELETE')
 
-                    <button type="submit"
-                            class="w-full rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 shadow-sm hover:bg-red-50">
-                        Delete All
-                    </button>
-                </form>
-            </div>
+                <button type="submit"
+        title="Delete alert"
+        aria-label="Delete alert"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 bg-white text-lg hover:bg-red-50">
+    <span class="leading-none">🗑️</span>
+</button>
+            </form>
 
-            <form method="GET" action="{{ route($routePrefix . 'tanod-alerts.index') }}" class="flex items-center gap-3">
-                <label for="type" class="text-sm font-semibold text-slate-600">Alert Type</label>
-
+            <form method="GET" action="{{ route($routePrefix . 'tanod-alerts.index') }}">
                 <select id="type"
                         name="type"
                         onchange="this.form.submit()"
-                        class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                        aria-label="Filter alerts by type"
+                        class="min-w-52 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                     @foreach ($alertTypes as $value => $label)
                         <option value="{{ $value }}" @selected($selectedType === $value)>
                             {{ $label }}
@@ -188,36 +191,14 @@
                                 </span>
 
                                 @if ($alert->is_read)
-    <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
-        Read
-    </span>
-@endif
+                                    <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                                        Read
+                                    </span>
+                                @endif
                             </div>
-                                @php
-    $displayMessage = $alert->message ?? 'No alert message provided.';
 
-    if ($type === 'incident_reported' && $alert->source_id) {
-        $relatedIncident = \App\Models\Incident::find($alert->source_id);
-
-        if ($relatedIncident) {
-            $reportedRaw = $relatedIncident->reported_at
-                ?? $relatedIncident->incident_datetime
-                ?? $relatedIncident->created_at;
-
-            $reportedAt = $reportedRaw
-                ? \Carbon\Carbon::parse($reportedRaw)->format('M d, Y h:i A')
-                : null;
-
-            if ($reportedAt) {
-                $displayMessage = 'A new report was submitted on ' . $reportedAt . '.';
-            }
-        }
-    }
-@endphp
-
-<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-    {{ $type === 'incident_reported' ? 'A new report was submitted.' : ($alert->message ?? 'No alert message provided.') }}
-</p>
+                            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                                {{ $type === 'incident_reported' ? 'A new report was submitted.' : ($alert->message ?? 'No alert message provided.') }}
                             </p>
 
                             <div class="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
@@ -261,14 +242,16 @@
 
                         <form method="POST"
                               action="{{ route($routePrefix . 'tanod-alerts.destroy', $alert) }}"
-                              onsubmit="return confirm('Delete this alert notification? This will not delete the related incident or report.');">
+                              onsubmit="return confirm('Delete this alert notification?');">
                             @csrf
                             @method('DELETE')
 
                             <button type="submit"
-                                    class="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50">
-                                Delete
-                            </button>
+        title="Delete all alerts"
+        aria-label="Delete all alerts"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 bg-white text-lg shadow-sm hover:bg-red-50">
+    <span class="leading-none">🗑️</span>
+</button>
                         </form>
                     </div>
                 </div>

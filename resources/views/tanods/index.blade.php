@@ -50,7 +50,7 @@
             <input type="text"
                    name="search"
                    value="{{ request('search') }}"
-                   placeholder="Search by name or badge..."
+                   placeholder="Search by name, contact, purok, shift, or status..."
                    class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
         </div>
     </form>
@@ -94,7 +94,7 @@
                                         </p>
 
                                         <p class="text-xs text-slate-500">
-                                            Badge: {{ $tanod->badge_number }}
+                                            
                                         </p>
 
                                         @if ($tanod->contact_number)
@@ -125,7 +125,6 @@
                                         onclick="openEditTanodModal(this)"
                                         data-update-url="{{ route('admin.tanods.update', $tanod) }}"
                                         data-full-name="{{ e($user?->name) }}"
-                                        data-badge-number="{{ e($tanod->badge_number) }}"
                                         data-contact-number="{{ e($tanod->contact_number) }}"
                                         data-email="{{ e($user?->email) }}"
                                         data-purok-assignment="{{ e($tanod->purok_assignment) }}"
@@ -146,10 +145,25 @@
                                     @method('DELETE')
 
                                     <button type="submit"
-                                            class="text-red-600 hover:text-red-800"
-                                            title="Delete tanod">
-                                        🗑
-                                    </button>
+        title="Delete tanod"
+        aria-label="Delete tanod"
+        style="
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #fca5a5;
+            border-radius: 10px;
+            background: #fff7f7;
+            color: #64748b;
+            font-size: 17px;
+            line-height: 1;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            cursor: pointer;
+        ">
+    🗑️
+</button>
                                 </form>
                             </td>
                         </tr>
@@ -200,12 +214,6 @@
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Full Name *</label>
                     <input type="text" name="full_name" required placeholder="Full name"
-                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                </div>
-
-                <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Badge Number *</label>
-                    <input type="text" name="badge_number" required placeholder="T-001"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
@@ -306,12 +314,6 @@
                 </div>
 
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Badge Number *</label>
-                    <input id="edit_badge_number" type="text" name="badge_number" required
-                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                </div>
-
-                <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Contact Number</label>
                     <input id="edit_contact_number" type="text" name="contact_number"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
@@ -400,7 +402,6 @@
         form.action = button.dataset.updateUrl;
 
         setFieldValue('edit_full_name', button.dataset.fullName);
-        setFieldValue('edit_badge_number', button.dataset.badgeNumber);
         setFieldValue('edit_contact_number', button.dataset.contactNumber);
         setFieldValue('edit_email', button.dataset.email);
         setFieldValue('edit_purok_assignment', button.dataset.purokAssignment);

@@ -156,7 +156,7 @@ class AnnouncementController extends Controller
             in_array($announcement->category, ['community', 'health', 'advisory'], true)
             && in_array($announcement->priority, ['important', 'urgent'], true)
         ) {
-            return 'community_problem';
+            return 'community';
         }
 
         return null;

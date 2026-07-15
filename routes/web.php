@@ -121,6 +121,9 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])
             ->name('users.destroy');
 
+        Route::delete('/tanod-tasks/{tanodTask}', [TanodTaskController::class, 'destroy'])
+            ->name('tanod-tasks.destroy');
+
         Route::get('/tanod-tasks', [TanodTaskController::class, 'index'])
             ->name('tanod-tasks.index');
 

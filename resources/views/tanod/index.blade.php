@@ -50,7 +50,7 @@
             <input type="text"
                    name="search"
                    value="{{ request('search') }}"
-                   placeholder="Search by name or badge..."
+                   placeholder="Search by name, contact, purok, shift, or status..."
                    class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
         </div>
     </form>
@@ -93,9 +93,6 @@
                                             {{ $user?->name ?: 'Unnamed Tanod' }}
                                         </p>
 
-                                        <p class="text-xs text-slate-500">
-                                            Badge: {{ $tanod->badge_number }}
-                                        </p>
 
                                         @if ($tanod->contact_number)
                                             <p class="text-xs text-slate-500">
@@ -125,7 +122,6 @@
                                         onclick="openEditTanodModal(this)"
                                         data-update-url="{{ route('admin.tanods.update', $tanod) }}"
                                         data-full-name="{{ e($user?->name) }}"
-                                        data-badge-number="{{ e($tanod->badge_number) }}"
                                         data-contact-number="{{ e($tanod->contact_number) }}"
                                         data-email="{{ e($user?->email) }}"
                                         data-purok-assignment="{{ e($tanod->purok_assignment) }}"
@@ -139,18 +135,31 @@
                                 </button>
 
                                 <form method="POST"
-                                      action="{{ route('admin.tanods.destroy', $tanod) }}"
-                                      class="inline"
-                                      onsubmit="return confirm('Delete this tanod member? This will also remove the linked user account.');">
-                                    @csrf
-                                    @method('DELETE')
+      action="{{ route('admin.tanods.destroy', $tanod) }}"
+      class="inline"
+      onsubmit="return confirm('Delete this tanod member? This will also remove the linked user account.');">
+    @csrf
+    @method('DELETE')
 
-                                    <button type="submit"
-                                            class="text-red-600 hover:text-red-800"
-                                            title="Delete tanod">
-                                        🗑
-                                    </button>
-                                </form>
+    <button type="submit"
+            title="Delete tanod"
+            aria-label="Delete tanod"
+            class="inline-flex items-center justify-center shadow-sm transition"
+            style="
+                width: 40px;
+                height: 40px;
+                border: 1px solid #fecaca;
+                border-radius: 10px;
+                background: #ffffff;
+                color: #64748b;
+                font-size: 17px;
+                line-height: 1;
+            "
+            onmouseover="this.style.background='#fff7f7'; this.style.borderColor='#fca5a5';"
+            onmouseout="this.style.background='#ffffff'; this.style.borderColor='#fecaca';">
+        <span style="display:block; line-height:1;">🗑️</span>
+    </button>
+</form>
                             </td>
                         </tr>
                     @empty
@@ -203,11 +212,6 @@
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
-                <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Badge Number *</label>
-                    <input type="text" name="badge_number" required placeholder="T-001"
-                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Contact Number</label>
@@ -305,11 +309,6 @@
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
-                <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Badge Number *</label>
-                    <input id="edit_badge_number" type="text" name="badge_number" required
-                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Contact Number</label>
@@ -400,7 +399,6 @@
         form.action = button.dataset.updateUrl;
 
         setFieldValue('edit_full_name', button.dataset.fullName);
-        setFieldValue('edit_badge_number', button.dataset.badgeNumber);
         setFieldValue('edit_contact_number', button.dataset.contactNumber);
         setFieldValue('edit_email', button.dataset.email);
         setFieldValue('edit_purok_assignment', button.dataset.purokAssignment);

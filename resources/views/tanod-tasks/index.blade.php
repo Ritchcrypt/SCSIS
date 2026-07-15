@@ -158,10 +158,26 @@
                             </td>
 
                             <td class="px-5 py-4 text-right align-top">
-                                <a href="{{ route('admin.tanod-tasks.show', $task) }}"
-                                   class="inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
-                                    View
-                                </a>
+                                <div class="flex items-center justify-end gap-3">
+    <a href="{{ route('admin.tanod-tasks.show', $task) }}"
+       class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+       title="View task">
+        👁
+    </a>
+
+    <form method="POST"
+          action="{{ route('admin.tanod-tasks.destroy', $task) }}"
+          onsubmit="return confirm('Delete this tanod task? This will also remove its tanod responses.');">
+        @csrf
+        @method('DELETE')
+
+        <button type="submit"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                title="Delete task">
+            🗑
+        </button>
+    </form>
+</div>
                             </td>
                         </tr>
                     @empty

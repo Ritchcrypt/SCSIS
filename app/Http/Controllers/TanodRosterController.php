@@ -24,8 +24,7 @@ class TanodRosterController extends Controller
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery
-                        ->where('badge_number', 'like', "%{$search}%")
-                        ->orWhere('contact_number', 'like', "%{$search}%")
+                        ->where('contact_number', 'like', "%{$search}%")
                         ->orWhere('purok_assignment', 'like', "%{$search}%")
                         ->orWhere('shift', 'like', "%{$search}%")
                         ->orWhere('status', 'like', "%{$search}%")
@@ -57,7 +56,6 @@ class TanodRosterController extends Controller
     {
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
-            'badge_number' => ['required', 'string', 'max:50', 'unique:tanod_profiles,badge_number'],
             'contact_number' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'purok_assignment' => ['nullable', 'string', 'max:100'],
@@ -69,7 +67,7 @@ class TanodRosterController extends Controller
 
         DB::transaction(function () use ($validated) {
             $email = $validated['email']
-                ?: $this->generateFallbackEmail($validated['badge_number']);
+                ?: $this->generateFallbackEmail($validated['full_name']);
 
             $user = User::create([
                 'name' => $validated['full_name'],
@@ -90,7 +88,6 @@ class TanodRosterController extends Controller
             TanodProfile::create([
                 'user_id' => $user->id,
                 'employee_id' => $employee->id,
-                'badge_number' => $validated['badge_number'],
                 'contact_number' => $validated['contact_number'] ?? null,
                 'purok_assignment' => $validated['purok_assignment'] ?? null,
                 'date_appointed' => $validated['date_appointed'] ?? null,
@@ -109,12 +106,6 @@ class TanodRosterController extends Controller
     {
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
-            'badge_number' => [
-                'required',
-                'string',
-                'max:50',
-                Rule::unique('tanod_profiles', 'badge_number')->ignore($tanod->id),
-            ],
             'contact_number' => ['nullable', 'string', 'max:50'],
             'email' => [
                 'nullable',
@@ -135,8 +126,7 @@ class TanodRosterController extends Controller
             if ($user) {
                 $user->update([
                     'name' => $validated['full_name'],
-                    'email' => $validated['email']
-                        ?: ($user->email ?: $this->generateFallbackEmail($validated['badge_number'])),
+                    'email' => $validated['email'] ?: $user->email,
                 ]);
             }
 
@@ -149,7 +139,6 @@ class TanodRosterController extends Controller
             }
 
             $tanod->update([
-                'badge_number' => $validated['badge_number'],
                 'contact_number' => $validated['contact_number'] ?? null,
                 'purok_assignment' => $validated['purok_assignment'] ?? null,
                 'date_appointed' => $validated['date_appointed'] ?? null,
@@ -205,11 +194,12 @@ class TanodRosterController extends Controller
         ];
     }
 
-    private function generateFallbackEmail(string $badgeNumber): string
+    private function generateFallbackEmail(string $fullName): string
     {
-        $cleanBadge = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $badgeNumber));
+        $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $fullName));
+        $cleanName = $cleanName ?: 'tanod';
 
-        return $cleanBadge . '@tanod.local';
+        return $cleanName . time() . '@tanod.local';
     }
 
     private function defaultBarangayId(): ?int
