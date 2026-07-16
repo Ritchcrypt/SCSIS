@@ -25,7 +25,7 @@
             'border' => 'border-blue-200',
         ],
         'community_problem' => [
-            'label' => 'Community Problem',
+            'label' => 'Community',
             'icon' => '🏘️',
             'badge' => 'bg-amber-100 text-amber-700',
             'border' => 'border-amber-200',
@@ -100,8 +100,7 @@
             </form>
 
             <form method="POST"
-                  action="{{ route($routePrefix . 'tanod-alerts.destroy-all') }}"
-                  onsubmit="return confirm('Delete all alert notifications? This will not delete incidents or reports.');">
+      action="{{ route($routePrefix . 'tanod-alerts.destroy-all') }}">
                 @csrf
                 @method('DELETE')
 
@@ -241,8 +240,7 @@
                         @endif
 
                         <form method="POST"
-                              action="{{ route($routePrefix . 'tanod-alerts.destroy', $alert) }}"
-                              onsubmit="return confirm('Delete this alert notification?');">
+      action="{{ route($routePrefix . 'tanod-alerts.destroy', $alert) }}">
                             @csrf
                             @method('DELETE')
 

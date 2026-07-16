@@ -138,9 +138,8 @@
                                 </button>
 
                                 <form method="POST"
-                                      action="{{ route('admin.tanods.destroy', $tanod) }}"
-                                      class="inline"
-                                      onsubmit="return confirm('Delete this tanod member? This will also remove the linked user account.');">
+      action="{{ route('admin.tanods.destroy', $tanod) }}"
+      class="inline">
                                     @csrf
                                     @method('DELETE')
 

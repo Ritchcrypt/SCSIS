@@ -703,12 +703,6 @@ $agencyOptions = $agencyOptions ?? [
                     </p>
                 </div>
 
-                @if ($createCaseUrl)
-                    <a href="{{ $createCaseUrl }}"
-                       class="shrink-0 rounded-xl bg-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-blue-800">
-                        + Case
-                    </a>
-                @endif
             </div>
         </div>
 
@@ -793,10 +787,11 @@ $agencyOptions = $agencyOptions ?? [
 
                     @if ($createCaseUrl)
                         <a href="{{ $createCaseUrl }}"
-                           class="mt-4 inline-flex items-center justify-center rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                           class="mt-4 inline-flex rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
                             + Create Case
                         </a>
                     @endif
+
                 </div>
             @endif
         </div>

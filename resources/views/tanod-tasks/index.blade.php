@@ -166,8 +166,7 @@
     </a>
 
     <form method="POST"
-          action="{{ route('admin.tanod-tasks.destroy', $task) }}"
-          onsubmit="return confirm('Delete this tanod task? This will also remove its tanod responses.');">
+      action="{{ route('admin.tanod-tasks.destroy', $task) }}">
         @csrf
         @method('DELETE')
 

@@ -135,16 +135,17 @@
                                 </button>
 
                                 <form method="POST"
-                                      action="{{ route('admin.cases.destroy', $case) }}"
-                                      class="inline"
-                                      onsubmit="return confirm('Delete this case record? This action cannot be undone.');">
+      action="{{ route('admin.cases.destroy', $case) }}"
+      class="inline">
                                     @csrf
                                     @method('DELETE')
 
                                     <button type="submit"
-                                            class="text-red-600 hover:text-red-800"
-                                            title="Delete case">
-                                        🗑
+                                            title="Delete case"
+                                            aria-label="Delete case"
+                                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-white text-lg shadow-sm transition hover:bg-red-50"
+                                            style="border-color: #fca5a5;">
+                                        <span class="leading-none">🗑️</span>
                                     </button>
                                 </form>
                             </td>

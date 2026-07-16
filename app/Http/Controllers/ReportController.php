@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Announcement;
 use App\Models\CaseRecord;
-use App\Models\EmergencyAgencyLog;
 use App\Models\Employee;
 use App\Models\Incident;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -73,9 +72,7 @@ class ReportController extends Controller
 
         $casesFiled = $this->countTableByDate('case_records', $startDate, $endDate);
         $announcements = $this->countTableByDate('announcements', $startDate, $endDate);
-        $emergencyLogs = $this->countTableByDate('emergency_agency_logs', $startDate, $endDate);
-
-        $currentUser = Auth::user();
+$currentUser = Auth::user();
 
         return [
             'period' => $period,
@@ -90,7 +87,6 @@ class ReportController extends Controller
             'resolvedIncidents' => $resolvedIncidents,
             'casesFiled' => $casesFiled,
             'announcements' => $announcements,
-            'emergencyLogs' => $emergencyLogs,
 
             'records' => $this->recordsBreakdown($startDate, $endDate),
             'statusSummary' => $this->statusSummary($startDate, $endDate),
@@ -160,24 +156,6 @@ class ReportController extends Controller
                     'type' => ucfirst(str_replace('_', ' ', (string) ($announcement->category ?? 'announcement'))),
                     'datetime' => optional($announcement->created_at)->format('M d, Y h:i A') ?? '-',
                     'sort_date' => optional($announcement->created_at)->timestamp ?? 0,
-                ];
-            }
-        }
-
-        if (class_exists(EmergencyAgencyLog::class) && Schema::hasTable('emergency_agency_logs')) {
-            $logs = EmergencyAgencyLog::query()
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->latest()
-                ->limit(50)
-                ->get();
-
-            foreach ($logs as $log) {
-                $records[] = [
-                    'category' => 'Emergency',
-                    'title' => ($log->agency_name ?? 'Emergency agency') . ' contacted',
-                    'type' => ucfirst(str_replace('_', ' ', (string) ($log->status ?? 'contacted'))),
-                    'datetime' => optional($log->created_at)->format('M d, Y h:i A') ?? '-',
-                    'sort_date' => optional($log->created_at)->timestamp ?? 0,
                 ];
             }
         }

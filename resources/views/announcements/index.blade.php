@@ -160,16 +160,38 @@
                         </form>
 
                         <form method="POST"
-                              action="{{ route('admin.announcements.destroy', $announcement) }}"
-                              onsubmit="return confirm('Delete this announcement? This action cannot be undone.');">
+      action="{{ route('admin.announcements.destroy', $announcement) }}">
                             @csrf
                             @method('DELETE')
 
                             <button type="submit"
-                                    class="text-lg text-red-600 hover:text-red-800"
-                                    title="Delete announcement">
-                                🗑
-                            </button>
+        title="Delete announcement"
+        aria-label="Delete announcement"
+        style="
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+            border: 1px solid #fca5a5;
+            border-radius: 10px;
+            background-color: #fff7f7;
+            font-size: 17px;
+            line-height: 1;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            cursor: pointer;
+        "
+        onmouseover="
+            this.style.backgroundColor='#fff1f1';
+            this.style.borderColor='#fb923c';
+        "
+        onmouseout="
+            this.style.backgroundColor='#fff7f7';
+            this.style.borderColor='#fca5a5';
+        ">
+    <span style="display:block; line-height:1;">🗑️</span>
+</button>
                         </form>
                     </div>
                 </div>

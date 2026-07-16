@@ -7,7 +7,7 @@
     </div>
 
     <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="rounded-2xl border border-blue-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-blue-500 hover:shadow-lg">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                 📄
             </div>
@@ -16,7 +16,7 @@
             <p class="mt-2 text-sm font-medium text-slate-600">Total Incidents</p>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="rounded-2xl border border-amber-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
                 🕒
             </div>
@@ -25,7 +25,7 @@
             <p class="mt-2 text-sm font-medium text-slate-600">Active Cases</p>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="rounded-2xl border border-emerald-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600">
                 ✅
             </div>
@@ -34,7 +34,7 @@
             <p class="mt-2 text-sm font-medium text-slate-600">Resolved</p>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="rounded-2xl border border-red-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
                 ⚠️
             </div>
@@ -43,7 +43,7 @@
             <p class="mt-2 text-sm font-medium text-slate-600">Critical</p>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="rounded-2xl border border-violet-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-blue-950">
                 👥
             </div>
@@ -54,7 +54,7 @@
     </section>
 
     <section class="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="rounded-2xl border border-sky-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sky-500 hover:shadow-lg">
             <div class="mb-6 flex items-start justify-between">
                 <div>
                     <h2 class="text-xl font-bold text-slate-900">Weather & Disaster Feed</h2>
@@ -84,7 +84,7 @@
             </p>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="rounded-2xl border border-orange-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-orange-500 hover:shadow-lg">
             <div class="mb-6 flex items-center justify-between">
                 <h2 class="text-xl font-bold text-slate-900">Recent Incident Activity</h2>
                 <span class="text-sm text-slate-400">Latest records</span>

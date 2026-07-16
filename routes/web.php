@@ -151,9 +151,6 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::get('/map', [BarangayMapController::class, 'index'])
             ->name('map.index');
 
-        Route::patch('/map/incidents/{incident}/location', [BarangayMapController::class, 'updateLocation'])
-            ->name('map.incidents.location');
-
         Route::get('/tanods', [TanodRosterController::class, 'index'])
             ->name('tanods.index');
 
@@ -168,15 +165,6 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::get('/emergency-mode', [EmergencyModeController::class, 'index'])
             ->name('emergency-mode.index');
-
-        Route::post('/emergency-mode/notify', [EmergencyModeController::class, 'notify'])
-            ->name('emergency-mode.notify');
-
-        Route::patch('/emergency-mode/{emergencyAgencyLog}/status', [EmergencyModeController::class, 'updateStatus'])
-            ->name('emergency-mode.update-status');
-
-        Route::delete('/emergency-mode/{emergencyAgencyLog}', [EmergencyModeController::class, 'destroy'])
-            ->name('emergency-mode.destroy');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->name('announcements.index');

@@ -191,6 +191,9 @@
             <table class="min-w-full border-collapse">
                 <thead class="sticky top-0 z-10 bg-slate-50">
                     <tr class="border-b border-slate-200">
+                        <th class="min-w-[110px] whitespace-nowrap px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-700">
+    ID No.
+</th>
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-700">
                             Incident
                         </th>
@@ -276,7 +279,13 @@
                         @endphp
 
                         <tr class="border-b border-slate-200 hover:bg-slate-50">
-                            <td class="px-5 py-4 align-top">
+    <td class="min-w-[110px] whitespace-nowrap px-6 py-4 align-top">
+    <span class="text-sm font-bold text-slate-700">
+        #{{ $incident->id }}
+    </span>
+</td>
+
+    <td class="px-5 py-4 align-top">
                                 <p class="font-semibold text-slate-900">
                                     {{ $incidentTitle }}
                                 </p>
@@ -337,8 +346,7 @@
 
                                     @if ($deleteUrl)
                                         <form method="POST"
-                                              action="{{ $deleteUrl }}"
-                                              onsubmit="return confirm('Delete this incident permanently? This cannot be undone.');">
+      action="{{ $deleteUrl }}">
                                             @csrf
                                             @method('DELETE')
 
@@ -354,7 +362,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-5 py-12 text-center">
+                            <td colspan="7" class="px-5 py-12 text-center">
                                 <p class="text-sm font-semibold text-slate-700">
                                     No incidents found.
                                 </p>
