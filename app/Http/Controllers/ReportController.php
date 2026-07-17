@@ -99,7 +99,7 @@ $currentUser = Auth::user();
     private function incidentBaseQuery(Carbon $startDate, Carbon $endDate)
     {
         return Incident::query()
-            ->with(['barangay', 'category', 'currentStatus', 'assignedTanod.user'])
+            ->with(['barangay', 'category', 'currentStatus'])
             ->whereBetween('created_at', [$startDate, $endDate]);
     }
 
@@ -119,6 +119,17 @@ $currentUser = Auth::user();
                 'category' => 'Incident',
                 'title' => ($incident->incident_code ?? 'INC-' . $incident->id) . ' - ' . ($incident->incident_title ?? $incident->title ?? 'Untitled Incident'),
                 'type' => $incident->category?->category_name ?? $incident->category?->name ?? 'Uncategorized',
+                'status' => $incident->currentStatus?->status_name
+                    ?? $incident->currentStatus?->name
+                    ?? 'Pending',
+                'severity' => ucfirst((string) (
+                    $incident->priority
+                    ?? $incident->severity
+                    ?? 'Low'
+                )),
+                'barangay' => $incident->barangay?->barangay_name
+                    ?? $incident->barangay?->name
+                    ?? 'Unknown barangay',
                 'datetime' => optional($incident->created_at)->format('M d, Y h:i A') ?? '-',
                 'sort_date' => optional($incident->created_at)->timestamp ?? 0,
             ];
@@ -136,6 +147,9 @@ $currentUser = Auth::user();
                     'category' => 'Case',
                     'title' => 'Case No. ' . ($case->case_number ?? $case->id) . ' - ' . ($case->title ?? $case->case_title ?? 'Barangay case record'),
                     'type' => ucfirst(str_replace('_', ' ', (string) ($case->case_type ?? 'case'))),
+                    'status' => '—',
+                    'severity' => '—',
+                    'barangay' => '—',
                     'datetime' => optional($case->created_at)->format('M d, Y h:i A') ?? '-',
                     'sort_date' => optional($case->created_at)->timestamp ?? 0,
                 ];
@@ -154,6 +168,9 @@ $currentUser = Auth::user();
                     'category' => 'Announcement',
                     'title' => $announcement->title ?? 'Announcement',
                     'type' => ucfirst(str_replace('_', ' ', (string) ($announcement->category ?? 'announcement'))),
+                    'status' => '—',
+                    'severity' => '—',
+                    'barangay' => '—',
                     'datetime' => optional($announcement->created_at)->format('M d, Y h:i A') ?? '-',
                     'sort_date' => optional($announcement->created_at)->timestamp ?? 0,
                 ];
@@ -229,9 +246,27 @@ $currentUser = Auth::user();
 
     private function tanodResponseSummary(Carbon $startDate, Carbon $endDate)
     {
-        if (! Schema::hasTable('employees')) {
+        if (
+            ! Schema::hasTable('employees')
+            || ! Schema::hasTable('tanod_tasks')
+            || ! Schema::hasTable('tanod_task_responses')
+            || ! Schema::hasColumn('tanod_task_responses', 'employee_id')
+            || ! Schema::hasColumn('tanod_task_responses', 'tanod_task_id')
+            || ! Schema::hasColumn('tanod_task_responses', 'response_status')
+        ) {
             return collect();
         }
+
+        $taskDateColumn = Schema::hasColumn('tanod_tasks', 'created_at')
+            ? 'tasks.created_at'
+            : null;
+
+        $responseDateColumn = Schema::hasColumn('tanod_task_responses', 'created_at')
+            ? 'responses.created_at'
+            : null;
+
+        $hasRespondedAt = Schema::hasColumn('tanod_task_responses', 'responded_at');
+        $hasUpdatedAt = Schema::hasColumn('tanod_task_responses', 'updated_at');
 
         return Employee::query()
             ->with('user')
@@ -240,42 +275,101 @@ $currentUser = Auth::user();
             })
             ->orderBy('id')
             ->get()
-            ->map(function ($employee) use ($startDate, $endDate) {
-                $assignedQuery = Incident::query()
-                    ->where('assigned_to', $employee->id)
-                    ->whereBetween('created_at', [$startDate, $endDate]);
+            ->map(function ($employee) use (
+                $startDate,
+                $endDate,
+                $taskDateColumn,
+                $responseDateColumn,
+                $hasRespondedAt,
+                $hasUpdatedAt
+            ) {
+                $responsesQuery = DB::table('tanod_task_responses as responses')
+                    ->join(
+                        'tanod_tasks as tasks',
+                        'tasks.id',
+                        '=',
+                        'responses.tanod_task_id'
+                    )
+                    ->where('responses.employee_id', $employee->id);
 
-                $assigned = (clone $assignedQuery)->count();
+                if ($taskDateColumn) {
+                    $responsesQuery->whereBetween(
+                        $taskDateColumn,
+                        [$startDate, $endDate]
+                    );
+                } elseif ($responseDateColumn) {
+                    $responsesQuery->whereBetween(
+                        $responseDateColumn,
+                        [$startDate, $endDate]
+                    );
+                }
 
-                $resolved = (clone $assignedQuery)
-                    ->whereHas('currentStatus', function ($query) {
-                        $query->whereIn(DB::raw('LOWER(status_name)'), [
-                            'resolved',
-                            'closed',
-                            'completed',
-                        ]);
+                $totalTasks = (clone $responsesQuery)->count();
+
+                $accepted = (clone $responsesQuery)
+                    ->whereRaw(
+                        "LOWER(COALESCE(responses.response_status, 'pending')) = ?",
+                        ['accepted']
+                    )
+                    ->count();
+
+                $declined = (clone $responsesQuery)
+                    ->whereRaw(
+                        "LOWER(COALESCE(responses.response_status, 'pending')) = ?",
+                        ['declined']
+                    )
+                    ->count();
+
+                $pending = (clone $responsesQuery)
+                    ->where(function ($query) {
+                        $query->whereNull('responses.response_status')
+                            ->orWhereRaw(
+                                "LOWER(responses.response_status) = ?",
+                                ['pending']
+                            );
                     })
                     ->count();
 
-                $pending = max($assigned - $resolved, 0);
+                $responded = $accepted + $declined;
 
-                $lastIncident = (clone $assignedQuery)
-                    ->latest('updated_at')
-                    ->first();
+                $responseRate = $totalTasks > 0
+                    ? round(($responded / $totalTasks) * 100)
+                    : 0;
+
+                $lastResponseValue = null;
+
+                if ($hasRespondedAt) {
+                    $lastResponseValue = (clone $responsesQuery)
+                        ->whereNotNull('responses.responded_at')
+                        ->max('responses.responded_at');
+                }
+
+                if (! $lastResponseValue && $hasUpdatedAt) {
+                    $lastResponseValue = (clone $responsesQuery)
+                        ->max('responses.updated_at');
+                }
+
+                try {
+                    $lastResponse = $lastResponseValue
+                        ? Carbon::parse($lastResponseValue)->format('M d, Y h:i A')
+                        : 'No response yet';
+                } catch (\Throwable $e) {
+                    $lastResponse = 'No response yet';
+                }
 
                 return [
-                    'name' => $employee->user?->name ?? 'Tanod #' . $employee->id,
-                    'badge' => $employee->badge_number ?? '—',
-                    'assigned' => $assigned,
-                    'resolved' => $resolved,
+                    'name' => $employee->user?->name
+                        ?? 'Tanod #' . $employee->id,
+                    'total_tasks' => $totalTasks,
+                    'accepted' => $accepted,
+                    'declined' => $declined,
                     'pending' => $pending,
-                    'last_update' => $lastIncident?->updated_at
-                        ? $lastIncident->updated_at->format('M d, Y h:i A')
-                        : 'No activity',
+                    'response_rate' => $responseRate,
+                    'last_response' => $lastResponse,
                 ];
             })
             ->filter(function ($row) {
-                return $row['assigned'] > 0 || $row['resolved'] > 0 || $row['pending'] > 0;
+                return $row['total_tasks'] > 0;
             })
             ->values();
     }

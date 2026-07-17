@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', 'Reports & Analytics | DaoSystem')
+@section('title', 'Reports | DaoSystem')
 
 @section('content')
 <div class="space-y-6">
@@ -8,7 +8,7 @@
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">
-                Reports & Analytics
+                Reports
             </h1>
 
             <p class="mt-1 text-sm text-slate-500">
@@ -47,7 +47,7 @@
     </div>
 
     {{-- Summary Cards --}}
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                 Total Incidents
@@ -88,15 +88,6 @@
             </p>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Emergency Logs
-            </p>
-
-            <p class="mt-3 text-3xl font-bold text-red-600">
-                {{ $emergencyLogs }}
-            </p>
-        </div>
     </div>
 
     {{-- Records Breakdown --}}
@@ -108,7 +99,7 @@
             </h2>
 
             <p class="mt-1 text-sm text-slate-500">
-                Incidents, cases, announcements, and emergency logs recorded within the selected period.
+                Incidents, cases, and announcements recorded within the selected period.
             </p>
         </div>
 
@@ -125,34 +116,50 @@
 
     <div class="overflow-x-auto p-6">
         @if (count($records))
-            <table class="min-w-full text-left text-sm">
+            <table class="w-full table-fixed text-sm">
+                <colgroup>
+                    <col class="w-[13%]">
+                    <col class="w-[25%]">
+                    <col class="w-[12%]">
+                    <col class="w-[18%]">
+                    <col class="w-[15%]">
+                    <col class="w-[17%]">
+                </colgroup>
                 <thead>
                     <tr class="border-b border-slate-200 text-xs font-bold uppercase tracking-wide text-slate-500">
-                        <th class="px-3 py-3">Category</th>
-                        <th class="px-3 py-3">Title / Details</th>
-                        <th class="px-3 py-3">Type</th>
-                        <th class="px-3 py-3">Date & Time</th>
+                        <th class="px-3 py-3 text-center">Category</th>
+                        <th class="px-3 py-3 text-center">Details</th>
+                        <th class="px-3 py-3 text-center">Severity</th>
+                        <th class="px-3 py-3 text-center">Barangay Areas</th>
+                        <th class="px-3 py-3 text-center">Incident Status</th>
+                        <th class="px-3 py-3 text-center">Date & Time</th>
                     </tr>
                 </thead>
 
                 <tbody class="divide-y divide-slate-100">
                     @foreach ($records as $index => $record)
                         <tr class="{{ $index >= 5 ? 'extra-record-row hidden' : '' }}">
-                            <td class="px-3 py-3">
-                                <span class="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                                    {{ $record['category'] }}
-                                </span>
+                            <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                {{ $record['category'] }}
                             </td>
 
-                            <td class="px-3 py-3 font-semibold text-slate-900">
+                            <td class="px-3 py-3 text-center font-normal text-slate-900">
                                 {{ $record['title'] }}
                             </td>
 
-                            <td class="px-3 py-3 text-slate-600">
-                                {{ $record['type'] }}
+                            <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                {{ $record['severity'] ?? '—' }}
                             </td>
 
-                            <td class="px-3 py-3 text-slate-600">
+                            <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                {{ $record['barangay'] ?? '—' }}
+                            </td>
+
+                            <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                {{ $record['status'] ?? '—' }}
+                            </td>
+
+                            <td class="px-3 py-3 text-center font-normal text-slate-900">
                                 {{ $record['datetime'] }}
                             </td>
                         </tr>
@@ -179,99 +186,6 @@
     </div>
 </div>
 
-    {{-- Simple Analytics --}}
-    <div class="grid gap-6 xl:grid-cols-3">
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-200 px-6 py-4">
-                <h2 class="text-base font-bold text-slate-900">
-                    Incident Status
-                </h2>
-            </div>
-
-            <div class="p-6">
-                @if (count($statusSummary))
-                    <div class="space-y-3">
-                        @foreach ($statusSummary as $item)
-                            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                <span class="text-sm font-semibold text-slate-700">
-                                    {{ $item['label'] }}
-                                </span>
-
-                                <span class="text-sm font-bold text-slate-900">
-                                    {{ $item['total'] }}
-                                </span>
-                            </div>
-                        @endforeach
-                    </div>
-                @else
-                    <p class="text-sm text-slate-500">
-                        No status data available.
-                    </p>
-                @endif
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-200 px-6 py-4">
-                <h2 class="text-base font-bold text-slate-900">
-                    Severity
-                </h2>
-            </div>
-
-            <div class="p-6">
-                @if (count($severitySummary))
-                    <div class="space-y-3">
-                        @foreach ($severitySummary as $item)
-                            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                <span class="text-sm font-semibold text-slate-700">
-                                    {{ $item['label'] }}
-                                </span>
-
-                                <span class="text-sm font-bold text-slate-900">
-                                    {{ $item['total'] }}
-                                </span>
-                            </div>
-                        @endforeach
-                    </div>
-                @else
-                    <p class="text-sm text-slate-500">
-                        No severity data available.
-                    </p>
-                @endif
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-200 px-6 py-4">
-                <h2 class="text-base font-bold text-slate-900">
-                    Barangay Areas
-                </h2>
-            </div>
-
-            <div class="p-6">
-                @if (count($barangaySummary))
-                    <div class="space-y-3">
-                        @foreach ($barangaySummary as $item)
-                            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                <span class="text-sm font-semibold text-slate-700">
-                                    {{ $item['label'] }}
-                                </span>
-
-                                <span class="text-sm font-bold text-slate-900">
-                                    {{ $item['total'] }}
-                                </span>
-                            </div>
-                        @endforeach
-                    </div>
-                @else
-                    <p class="text-sm text-slate-500">
-                        No barangay data available.
-                    </p>
-                @endif
-            </div>
-        </div>
-    </div>
-
     {{-- Tanod Response Summary --}}
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="border-b border-slate-200 px-6 py-4">
@@ -280,7 +194,7 @@
             </h2>
 
             <p class="mt-1 text-sm text-slate-500">
-                Workload and response status based on assigned incident records.
+                Acceptance and decline activity from Tanod Tasks within the selected period.
             </p>
         </div>
 
@@ -290,39 +204,44 @@
                     <thead>
                         <tr class="border-b border-slate-200 text-xs font-bold uppercase tracking-wide text-slate-500">
                             <th class="px-3 py-3">Tanod</th>
-                            <th class="px-3 py-3">Badge</th>
-                            <th class="px-3 py-3">Assigned</th>
-                            <th class="px-3 py-3">Resolved</th>
-                            <th class="px-3 py-3">Pending</th>
-                            <th class="px-3 py-3">Last Update</th>
+                            <th class="px-3 py-3 text-center">Total Tasks</th>
+                            <th class="px-3 py-3 text-center">Accepted</th>
+                            <th class="px-3 py-3 text-center">Declined</th>
+                            <th class="px-3 py-3 text-center">Pending</th>
+                            <th class="px-3 py-3 text-center">Response Rate</th>
+                            <th class="px-3 py-3">Last Response</th>
                         </tr>
                     </thead>
 
                     <tbody class="divide-y divide-slate-100">
                         @foreach ($tanodSummary as $tanod)
                             <tr>
-                                <td class="px-3 py-3 font-semibold text-slate-900">
+                                <td class="px-3 py-3 font-normal text-slate-900">
                                     {{ $tanod['name'] }}
                                 </td>
 
-                                <td class="px-3 py-3 text-slate-600">
-                                    {{ $tanod['badge'] }}
+                                <td class="px-3 py-3 text-center text-slate-900">
+                                    {{ $tanod['total_tasks'] }}
                                 </td>
 
-                                <td class="px-3 py-3 text-slate-600">
-                                    {{ $tanod['assigned'] }}
+                                <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                    {{ $tanod['accepted'] }}
                                 </td>
 
-                                <td class="px-3 py-3 text-slate-600">
-                                    {{ $tanod['resolved'] }}
+                                <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                    {{ $tanod['declined'] }}
                                 </td>
 
-                                <td class="px-3 py-3 text-slate-600">
+                                <td class="px-3 py-3 text-center font-normal text-slate-900">
                                     {{ $tanod['pending'] }}
                                 </td>
 
-                                <td class="px-3 py-3 text-slate-600">
-                                    {{ $tanod['last_update'] }}
+                                <td class="px-3 py-3 text-center text-slate-900">
+                                    {{ $tanod['response_rate'] }}%
+                                </td>
+
+                                <td class="px-3 py-3 font-normal text-slate-900">
+                                    {{ $tanod['last_response'] }}
                                 </td>
                             </tr>
                         @endforeach
@@ -331,11 +250,11 @@
             @else
                 <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                     <h3 class="text-sm font-bold text-slate-900">
-                        No tanod assignments in this period
+                        No tanod task responses in this period
                     </h3>
 
                     <p class="mt-1 text-sm text-slate-500">
-                        Tanod response data will appear once incidents are assigned.
+                        Response data will appear when tanods accept or decline tasks.
                     </p>
                 </div>
             @endif
