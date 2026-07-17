@@ -5,13 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>DaoSystem Admin</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
 <body class="bg-slate-100 text-slate-900">
     <div class="flex min-h-screen">
-        <aside class="fixed left-0 top-0 z-30 flex h-screen w-72 flex-col overflow-hidden bg-blue-950 text-white">
+        <aside id="adminSidebar"
+               class="fixed left-0 top-0 z-30 flex h-screen w-72 translate-x-0 flex-col overflow-hidden bg-blue-950 text-white transition-transform duration-300 ease-in-out">
             @php
     $layoutAuthUser = auth()->user();
 
@@ -353,8 +355,28 @@
             </div>
         </aside>
 
-        <div class="min-h-screen flex-1 pl-72">
-            <header class="sticky top-0 z-20 flex h-16 items-center justify-end border-b border-slate-200 bg-white px-8">
+        <div id="adminMainContent"
+             class="min-h-screen flex-1 pl-72 transition-[padding] duration-300 ease-in-out">
+            <header class="sticky top-0 z-[100] isolate flex h-16 items-center justify-between border-b border-slate-200 bg-white px-8 shadow-sm">
+                <button id="sidebarToggleButton"
+                        type="button"
+                        aria-label="Toggle sidebar"
+                        aria-controls="adminSidebar"
+                        aria-expanded="true"
+                        title="Open or close sidebar"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         viewBox="0 0 24 24"
+                         fill="none"
+                         stroke="currentColor"
+                         stroke-width="2"
+                         class="h-6 w-6"
+                         aria-hidden="true">
+                        <path stroke-linecap="round"
+                              d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+
                 <div class="flex items-center gap-4">
                     @php
                         $importantNotificationTypes = [
@@ -424,7 +446,7 @@
                         }
                     @endphp
 
-                    <details class="relative">
+                    <details class="relative z-[110]">
                         <summary class="relative inline-flex cursor-pointer list-none items-center justify-center">
                             <span class="text-xl">🔔</span>
 
@@ -434,8 +456,14 @@
                                 </span>
                             @endif
                         </summary>
+                        
+<div id="notificationBackdrop"
+     class="fixed bottom-0 left-72 right-0 top-16 z-[100] bg-slate-950/20 backdrop-blur-[1px] transition-[left] duration-300 ease-in-out"
+     onclick="this.closest('details').removeAttribute('open')"
+     aria-hidden="true">
+</div>
 
-                        <div class="absolute right-0 top-9 z-50 w-96 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                        <div class="fixed right-8 top-[4.5rem] z-[120] flex w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/10">
                             <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                                 <div>
                                     <p class="text-sm font-bold text-slate-900">Unread Notifications</p>
@@ -447,7 +475,7 @@
                                 </span>
                             </div>
 
-                            <div class="max-h-96 overflow-y-auto">
+                            <div class="max-h-[calc(100vh-13rem)] overflow-y-auto">
                                 @forelse ($latestUnreadNotifications as $notification)
                                     @php
                                         $type = strtolower($notification->type ?? 'incident');
@@ -529,5 +557,68 @@ if ($notification->source_id && in_array($type, $incidentLinkedTypes, true)) {
             </main>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const sidebar = document.getElementById('adminSidebar');
+            const mainContent = document.getElementById('adminMainContent');
+            const toggleButton = document.getElementById('sidebarToggleButton');
+            const notificationBackdrop = document.getElementById('notificationBackdrop');
+            const storageKey = 'tabangnow.admin.sidebar-collapsed';
+
+            if (!sidebar || !mainContent || !toggleButton) {
+                return;
+            }
+
+            function applySidebarState(isCollapsed) {
+                sidebar.classList.toggle('-translate-x-full', isCollapsed);
+                sidebar.classList.toggle('translate-x-0', !isCollapsed);
+
+                mainContent.classList.toggle('pl-0', isCollapsed);
+                mainContent.classList.toggle('pl-72', !isCollapsed);
+
+                if (notificationBackdrop) {
+                    notificationBackdrop.classList.toggle('left-0', isCollapsed);
+                    notificationBackdrop.classList.toggle('left-72', !isCollapsed);
+                }
+
+                toggleButton.setAttribute(
+                    'aria-expanded',
+                    isCollapsed ? 'false' : 'true'
+                );
+
+                toggleButton.title = isCollapsed
+                    ? 'Open sidebar'
+                    : 'Close sidebar';
+            }
+
+            let isCollapsed = false;
+
+            try {
+                isCollapsed = localStorage.getItem(storageKey) === '1';
+            } catch (error) {
+                isCollapsed = false;
+            }
+
+            applySidebarState(isCollapsed);
+
+            toggleButton.addEventListener('click', function () {
+                const nextCollapsedState = !sidebar.classList.contains(
+                    '-translate-x-full'
+                );
+
+                applySidebarState(nextCollapsedState);
+
+                try {
+                    localStorage.setItem(
+                        storageKey,
+                        nextCollapsedState ? '1' : '0'
+                    );
+                } catch (error) {
+                    console.warn('Unable to save sidebar state.', error);
+                }
+            });
+        });
+    </script>
 </body>
 </html>

@@ -13,8 +13,14 @@ use App\Http\Controllers\TanodTaskController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\RoleDashboardController;
 use App\Http\Controllers\SystemBrandingController;
+use App\Http\Controllers\PresenceController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth', 'active.user'])->group(function () {
+    Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])
+        ->name('presence.heartbeat');
+});
 
 Route::get('/', function () {
     if (Auth::check()) {
@@ -72,6 +78,9 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::get('/presence/users', [PresenceController::class, 'users'])
+            ->name('users.presence');
 
         Route::post('/barangays/quick-store', [IncidentController::class, 'quickStoreBarangay'])
             ->name('barangays.quick-store');

@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', ($userRecord ? 'Edit User' : 'Add User') . ' | DaoSystem')
+@section('title', ($userRecord ? 'Edit User' : 'Add User') . ' | TabangNow')
 
 @section('content')
 @php
@@ -26,6 +26,25 @@
     @if ($errors->any())
         <div class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
             Please check the form and try again.
+        </div>
+    @endif
+
+    @if (session('success'))
+        <div class="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-medium text-green-700">
+            {{ session('success') }}
+        </div>
+    @endif
+
+    @if (session('error'))
+        <div class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    @if (session('temporary_password'))
+        <div class="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-medium text-blue-800">
+            Temporary password for <strong>{{ session('temporary_password_user') }}</strong>:
+            <span class="font-mono font-bold">{{ session('temporary_password') }}</span>
         </div>
     @endif
 
@@ -147,42 +166,21 @@
                 </div>
 
                 <div>
-                    <label for="barangay_id" class="mb-2 block text-sm font-semibold text-slate-700">
-                        Barangay
+                    <label for="address" class="mb-2 block text-sm font-semibold text-slate-700">
+                        Address
                     </label>
 
-                    <select id="barangay_id"
-                            name="barangay_id"
-                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                        <option value="">No barangay selected</option>
+                    <input id="address"
+                           type="text"
+                           name="address"
+                           value="{{ old('address', $userRecord->address ?? '') }}"
+                           placeholder="Enter complete address"
+                           class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
-                        @foreach ($barangays as $barangay)
-                            <option value="{{ $barangay->id }}"
-                                @selected((string) old('barangay_id', $userRecord->barangay_id ?? '') === (string) $barangay->id)>
-                                {{ $barangay->barangay_name ?? $barangay->name }}
-                            </option>
-                        @endforeach
-                    </select>
-
-                    @error('barangay_id')
+                    @error('address')
                         <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
-            </div>
-
-            <div>
-                <label for="address" class="mb-2 block text-sm font-semibold text-slate-700">
-                    Address
-                </label>
-
-                <textarea id="address"
-                          name="address"
-                          rows="3"
-                          class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">{{ old('address', $userRecord->address ?? '') }}</textarea>
-
-                @error('address')
-                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                @enderror
             </div>
 
             <div class="grid gap-5 md:grid-cols-2">
@@ -255,10 +253,6 @@
                 </div>
             @endif
 
-            <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
-                Staff accounts such as admin, official, and tanod are created by admin only. Public sign-up should be for residents only.
-            </div>
-
             <div class="flex justify-end gap-3">
                 <a href="{{ route('admin.users.index') }}"
                    class="inline-flex rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -271,6 +265,34 @@
                 </button>
             </div>
         </form>
+
+        @if ($isEdit)
+            <div class="border-t border-slate-200 px-6 py-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <form method="POST"
+                          action="{{ route('admin.users.reset-password', $userRecord) }}">
+                        @csrf
+                        @method('PATCH')
+
+                        <button type="submit"
+                                class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
+                            Reset Password
+                        </button>
+                    </form>
+
+                    <form method="POST"
+                          action="{{ route('admin.users.destroy', $userRecord) }}">
+                        @csrf
+                        @method('DELETE')
+
+                        <button type="submit"
+                                class="inline-flex w-full items-center justify-center rounded-xl border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto">
+                            Permanent Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        @endif
     </div>
 </div>
 @endsection

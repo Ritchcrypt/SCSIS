@@ -6,6 +6,7 @@ use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -16,6 +17,9 @@ use Illuminate\View\View;
 
 class UserManagementController extends Controller
 {
+    private const DELETED_USER_EMAIL = 'deleted-user@tabangnow.local';
+    private const ONLINE_WINDOW_MINUTES = 2;
+
     public function index(Request $request): View
     {
         $this->authorizeAdmin($request);
@@ -74,9 +78,9 @@ $users = $this->filteredUsersQuery($request)
                 $user->profile_photo_path = $profilePhotoPath;
             }
 
-            if (Schema::hasColumn('users', 'contact_number')) {
-                $user->contact_number = $validated['contact_number'] ?? null;
-            }
+            $user->contact_number = $this->normalizeContactNumber(
+                $validated['contact_number'] ?? null
+            );
 
             if (Schema::hasColumn('users', 'barangay_id')) {
                 $user->barangay_id = $validated['barangay_id'] ?? null;
@@ -91,6 +95,7 @@ $users = $this->filteredUsersQuery($request)
             }
 
             $user->save();
+            $user->refresh();
 
             $this->syncEmployeeProfile($user);
         });
@@ -103,6 +108,8 @@ $users = $this->filteredUsersQuery($request)
     public function show(Request $request, User $user): View
     {
         $this->authorizeAdmin($request);
+
+        $user->refresh();
 
         $employee = Schema::hasTable('employees')
             ? Employee::query()->where('user_id', $user->id)->first()
@@ -140,6 +147,8 @@ $users = $this->filteredUsersQuery($request)
     {
         $this->authorizeAdmin($request);
 
+        $user->refresh();
+
         return view('admin.users.form', [
             'userRecord' => $user,
             'barangays' => $this->barangays(),
@@ -165,9 +174,9 @@ $users = $this->filteredUsersQuery($request)
                 $user->profile_photo_path = $newProfilePhotoPath;
             }
 
-            if (Schema::hasColumn('users', 'contact_number')) {
-                $user->contact_number = $validated['contact_number'] ?? null;
-            }
+            $user->contact_number = $this->normalizeContactNumber(
+                $validated['contact_number'] ?? null
+            );
 
             if (Schema::hasColumn('users', 'barangay_id')) {
                 $user->barangay_id = $validated['barangay_id'] ?? null;
@@ -182,6 +191,7 @@ $users = $this->filteredUsersQuery($request)
             }
 
             $user->save();
+            $user->refresh();
 
             $this->syncEmployeeProfile($user);
         });
@@ -249,22 +259,47 @@ $users = $this->filteredUsersQuery($request)
     {
         $this->authorizeAdmin($request);
 
-        if ((int) $request->user()->id === (int) $user->id) {
-            return back()->with('error', 'You cannot permanently delete your own account.');
+        if (strtolower((string) $user->email) === self::DELETED_USER_EMAIL) {
+            return redirect()->route('admin.users.index');
         }
 
-        $blockingRecords = $this->deleteBlockingRecords($user);
-
-        if (! empty($blockingRecords)) {
-            return back()->with(
-                'error',
-                'This user cannot be permanently deleted because they are connected to system records: ' . implode(', ', $blockingRecords) . '. Deactivate the account instead.'
-            );
-        }
-
+        $deletingCurrentUser = (int) $request->user()->id === (int) $user->id;
         $userName = $user->name;
+        $profilePhotoPath = $this->normalizeProfilePhotoPath(
+            $user->profile_photo_path ?? null
+        );
 
-        $user->delete();
+        DB::transaction(function () use ($user) {
+            $deletedUserId = $this->deletedUserId();
+            $employeeIds = $this->employeeIdsForUser((int) $user->id);
+
+            $this->reassignHistoricalUserReferences(
+                (int) $user->id,
+                $deletedUserId
+            );
+
+            $this->removeAccountSpecificRecords(
+                $user,
+                $employeeIds
+            );
+
+            $user->delete();
+        });
+
+        if (
+            $profilePhotoPath
+            && Storage::disk('public')->exists($profilePhotoPath)
+        ) {
+            Storage::disk('public')->delete($profilePhotoPath);
+        }
+
+        if ($deletingCurrentUser) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect('/');
+        }
 
         return redirect()
             ->route('admin.users.index')
@@ -292,7 +327,7 @@ $users = $this->filteredUsersQuery($request)
                 'Contact Number',
                 'Barangay',
                 'Role',
-                'Status',
+                'Presence',
                 'Joined Date',
             ]);
 
@@ -305,7 +340,7 @@ $users = $this->filteredUsersQuery($request)
                     $user->contact_number ?? '',
                     $barangay->barangay_name ?? $barangay->name ?? '',
                     ucfirst((string) $user->role),
-                    $this->isUserActive($user) ? 'Active' : 'Inactive',
+                    $this->isUserOnline($user) ? 'Online' : 'Offline',
                     optional($user->created_at)->format('Y-m-d H:i:s'),
                 ]);
             }
@@ -319,6 +354,7 @@ $users = $this->filteredUsersQuery($request)
     private function filteredUsersQuery(Request $request)
     {
         return User::query()
+            ->where('email', '!=', self::DELETED_USER_EMAIL)
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->string('search')->toString();
 
@@ -339,9 +375,26 @@ $users = $this->filteredUsersQuery($request)
             ->when($request->filled('role') && $request->role !== 'all', function ($query) use ($request) {
                 $query->where('role', $request->query('role'));
             })
-            ->when($request->filled('status') && $request->status !== 'all' && Schema::hasColumn('users', 'is_active'), function ($query) use ($request) {
-                $query->where('is_active', $request->query('status') === 'active');
-            })
+            ->when(
+                $request->filled('status')
+                && $request->status !== 'all'
+                && Schema::hasColumn('users', 'last_seen_at'),
+                function ($query) use ($request) {
+                    $onlineThreshold = now()->subMinutes(self::ONLINE_WINDOW_MINUTES);
+
+                    if ($request->query('status') === 'online') {
+                        $query->whereNotNull('last_seen_at')
+                            ->where('last_seen_at', '>=', $onlineThreshold);
+                    }
+
+                    if ($request->query('status') === 'offline') {
+                        $query->where(function ($offlineQuery) use ($onlineThreshold) {
+                            $offlineQuery->whereNull('last_seen_at')
+                                ->orWhere('last_seen_at', '<', $onlineThreshold);
+                        });
+                    }
+                }
+            )
             ->when($request->filled('date') && $request->date !== 'all', function ($query) use ($request) {
                 match ($request->query('date')) {
                     'today' => $query->whereDate('created_at', today()),
@@ -371,7 +424,7 @@ $users = $this->filteredUsersQuery($request)
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user?->id),
             ],
-            'contact_number' => ['nullable', 'string', 'max:30'],
+            'contact_number' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+()\-\s]*$/'],
             'barangay_id' => $barangayRule,
             'address' => ['nullable', 'string', 'max:1000'],
             'role' => ['required', Rule::in(array_keys($this->roles()))],
@@ -387,6 +440,17 @@ $users = $this->filteredUsersQuery($request)
         }
 
         return $validated;
+    }
+
+    private function normalizeContactNumber(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $contactNumber = trim((string) $value);
+
+        return $contactNumber !== '' ? $contactNumber : null;
     }
 
     private function storeProfilePhoto(Request $request): ?string
@@ -473,83 +537,233 @@ $users = $this->filteredUsersQuery($request)
         $employee->forceFill($data)->save();
     }
 
-    private function deleteBlockingRecords(User $user): array
+    private function deletedUserId(): int
     {
-        $blocks = [];
+        $existingId = User::query()
+            ->where('email', self::DELETED_USER_EMAIL)
+            ->value('id');
 
-        $recordChecks = [
-            ['incidents', 'reporter_id', 'reported incidents'],
-            ['incidents', 'resident_id', 'resident incident records'],
-            ['incident_messages', 'user_id', 'incident messages'],
-            ['incident_status_histories', 'updated_by', 'incident status history'],
-            ['notifications', 'user_id', 'notifications'],
-            ['tanod_task_responses', 'user_id', 'tanod task responses'],
-            ['case_records', 'created_by', 'case records created'],
-            ['case_records', 'creator_id', 'case records created'],
-            ['announcements', 'created_by', 'announcements created'],
-            ['emergency_agency_logs', 'contacted_by', 'emergency logs'],
-            ['activity_logs', 'actor_id', 'activity logs as actor'],
-            ['activity_logs', 'target_user_id', 'activity logs as target'],
-            ['employees', 'user_id', 'employee/staff profile'],
-            ['tanod_profiles', 'user_id', 'tanod profile'],
+        if ($existingId) {
+            return (int) $existingId;
+        }
+
+        $deletedUser = new User();
+        $deletedUser->name = 'Deleted User';
+        $deletedUser->email = self::DELETED_USER_EMAIL;
+        $deletedUser->password = Hash::make(Str::random(64));
+        $deletedUser->role = 'resident';
+
+        if (Schema::hasColumn('users', 'is_active')) {
+            $deletedUser->is_active = false;
+        }
+
+        if (Schema::hasColumn('users', 'contact_number')) {
+            $deletedUser->contact_number = null;
+        }
+
+        if (Schema::hasColumn('users', 'barangay_id')) {
+            $deletedUser->barangay_id = null;
+        }
+
+        if (Schema::hasColumn('users', 'address')) {
+            $deletedUser->address = null;
+        }
+
+        if (Schema::hasColumn('users', 'profile_photo_path')) {
+            $deletedUser->profile_photo_path = null;
+        }
+
+        $deletedUser->save();
+
+        return (int) $deletedUser->id;
+    }
+
+    private function employeeIdsForUser(int $userId)
+    {
+        if (
+            ! Schema::hasTable('employees')
+            || ! Schema::hasColumn('employees', 'user_id')
+        ) {
+            return collect();
+        }
+
+        return DB::table('employees')
+            ->where('user_id', $userId)
+            ->pluck('id');
+    }
+
+    private function reassignHistoricalUserReferences(
+        int $oldUserId,
+        int $deletedUserId
+    ): void {
+        $references = [
+            ['incidents', 'reporter_id'],
+            ['incidents', 'resident_id'],
+            ['incident_messages', 'user_id'],
+            ['incident_status_histories', 'updated_by'],
+            ['case_records', 'created_by'],
+            ['case_records', 'creator_id'],
+            ['case_status_histories', 'updated_by'],
+            ['case_messages', 'user_id'],
+            ['announcements', 'created_by'],
+            ['tanod_tasks', 'created_by'],
+            ['tanod_tasks', 'updated_by'],
+            ['emergency_agency_logs', 'contacted_by'],
+            ['activity_logs', 'actor_id'],
+            ['activity_logs', 'target_user_id'],
+            ['evidence', 'uploaded_by'],
+            ['incident_evidence', 'uploaded_by'],
+            ['incident_evidences', 'uploaded_by'],
+            ['incident_attachments', 'uploaded_by'],
         ];
 
-        foreach ($recordChecks as [$table, $column, $label]) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+        foreach ($references as [$table, $column]) {
+            if (
+                ! Schema::hasTable($table)
+                || ! Schema::hasColumn($table, $column)
+            ) {
                 continue;
             }
 
-            $count = DB::table($table)
+            DB::table($table)
+                ->where($column, $oldUserId)
+                ->update([$column => $deletedUserId]);
+        }
+    }
+
+    private function removeAccountSpecificRecords(
+        User $user,
+        $employeeIds
+    ): void {
+        $userDeleteReferences = [
+            ['notifications', 'user_id'],
+            ['tanod_task_responses', 'user_id'],
+            ['tanod_profiles', 'user_id'],
+        ];
+
+        foreach ($userDeleteReferences as [$table, $column]) {
+            if (
+                ! Schema::hasTable($table)
+                || ! Schema::hasColumn($table, $column)
+            ) {
+                continue;
+            }
+
+            DB::table($table)
                 ->where($column, $user->id)
-                ->count();
-
-            if ($count > 0) {
-                $blocks[] = "{$label} ({$count})";
-            }
+                ->delete();
         }
 
-        if (Schema::hasTable('employees') && Schema::hasColumn('employees', 'user_id')) {
-            $employeeIds = DB::table('employees')
+        if (
+            Schema::hasTable('personal_access_tokens')
+            && Schema::hasColumn('personal_access_tokens', 'tokenable_id')
+            && Schema::hasColumn('personal_access_tokens', 'tokenable_type')
+        ) {
+            DB::table('personal_access_tokens')
+                ->where('tokenable_id', $user->id)
+                ->where('tokenable_type', User::class)
+                ->delete();
+        }
+
+        if (
+            Schema::hasTable('sessions')
+            && Schema::hasColumn('sessions', 'user_id')
+        ) {
+            DB::table('sessions')
                 ->where('user_id', $user->id)
-                ->pluck('id');
+                ->delete();
+        }
 
-            if ($employeeIds->isNotEmpty()) {
-                $employeeRecordChecks = [
-                    ['incidents', 'assigned_to', 'assigned incidents'],
-                    ['tanod_task_responses', 'employee_id', 'tanod task responses as employee'],
-                ];
-
-                foreach ($employeeRecordChecks as [$table, $column, $label]) {
-                    if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
-                        continue;
-                    }
-
-                    $count = DB::table($table)
-                        ->whereIn($column, $employeeIds)
-                        ->count();
-
-                    if ($count > 0) {
-                        $blocks[] = "{$label} ({$count})";
-                    }
-                }
+        foreach (['password_reset_tokens', 'password_resets'] as $table) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn($table, 'email')
+            ) {
+                DB::table($table)
+                    ->where('email', $user->email)
+                    ->delete();
             }
         }
 
-        return array_values(array_unique($blocks));
+        if (
+            Schema::hasTable('model_has_roles')
+            && Schema::hasColumn('model_has_roles', 'model_id')
+        ) {
+            $roleQuery = DB::table('model_has_roles')
+                ->where('model_id', $user->id);
+
+            if (Schema::hasColumn('model_has_roles', 'model_type')) {
+                $roleQuery->where('model_type', User::class);
+            }
+
+            $roleQuery->delete();
+        }
+
+        if ($employeeIds->isEmpty()) {
+            return;
+        }
+
+        if (
+            Schema::hasTable('incidents')
+            && Schema::hasColumn('incidents', 'assigned_to')
+        ) {
+            DB::table('incidents')
+                ->whereIn('assigned_to', $employeeIds)
+                ->update(['assigned_to' => null]);
+        }
+
+        if (
+            Schema::hasTable('tanod_task_responses')
+            && Schema::hasColumn('tanod_task_responses', 'employee_id')
+        ) {
+            DB::table('tanod_task_responses')
+                ->whereIn('employee_id', $employeeIds)
+                ->delete();
+        }
+
+        if (
+            Schema::hasTable('tanod_profiles')
+            && Schema::hasColumn('tanod_profiles', 'employee_id')
+        ) {
+            DB::table('tanod_profiles')
+                ->whereIn('employee_id', $employeeIds)
+                ->delete();
+        }
+
+        if (
+            Schema::hasTable('employees')
+            && Schema::hasColumn('employees', 'id')
+        ) {
+            DB::table('employees')
+                ->whereIn('id', $employeeIds)
+                ->delete();
+        }
     }
 
     private function summary(): array
     {
+        $users = User::query()
+            ->where('email', '!=', self::DELETED_USER_EMAIL);
+
+        $onlineThreshold = now()->subMinutes(self::ONLINE_WINDOW_MINUTES);
+
+        $online = Schema::hasColumn('users', 'last_seen_at')
+            ? (clone $users)
+                ->whereNotNull('last_seen_at')
+                ->where('last_seen_at', '>=', $onlineThreshold)
+                ->count()
+            : 0;
+
         return [
-            'total' => User::count(),
-            'active' => Schema::hasColumn('users', 'is_active')
-                ? User::where('is_active', true)->count()
-                : User::count(),
-            'inactive' => Schema::hasColumn('users', 'is_active')
-                ? User::where('is_active', false)->count()
-                : 0,
-            'staff' => User::whereIn('role', ['admin', 'official', 'tanod'])->count(),
-            'residents' => User::where('role', 'resident')->count(),
+            'total' => (clone $users)->count(),
+            'online' => $online,
+            'offline' => (clone $users)->count() - $online,
+            'staff' => (clone $users)
+                ->whereIn('role', ['admin', 'official', 'tanod'])
+                ->count(),
+            'residents' => (clone $users)
+                ->where('role', 'resident')
+                ->count(),
         ];
     }
 
@@ -590,8 +804,8 @@ $users = $this->filteredUsersQuery($request)
     private function statusOptions(): array
     {
         return [
-            'active' => 'Active',
-            'inactive' => 'Inactive',
+            'online' => 'Online',
+            'offline' => 'Offline',
         ];
     }
 
@@ -603,6 +817,25 @@ $users = $this->filteredUsersQuery($request)
             'month' => 'This Month',
             'year' => 'This Year',
         ];
+    }
+
+    private function isUserOnline(User $user): bool
+    {
+        if (
+            ! Schema::hasColumn('users', 'last_seen_at')
+            || ! $user->last_seen_at
+        ) {
+            return false;
+        }
+
+        try {
+            return \Carbon\Carbon::parse($user->last_seen_at)
+                ->greaterThanOrEqualTo(
+                    now()->subMinutes(self::ONLINE_WINDOW_MINUTES)
+                );
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function isUserActive(User $user): bool

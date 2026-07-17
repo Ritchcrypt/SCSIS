@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', 'User Management | DaoSystem')
+@section('title', 'User Management | TabangNow')
 
 @section('content')
 <div class="space-y-6">
@@ -38,25 +38,12 @@
         </div>
     @endif
 
-    @if (session('error'))
-        <div class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
-            {{ session('error') }}
-        </div>
-    @endif
-
     @if (session('temporary_password'))
         <div class="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-medium text-blue-800">
             Temporary password for <strong>{{ session('temporary_password_user') }}</strong>:
             <span class="font-mono font-bold">{{ session('temporary_password') }}</span>
         </div>
     @endif
-
-    <div class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
-        <p class="font-bold">Permanent Delete Safety Rule</p>
-        <p class="mt-1 leading-6">
-            Permanent delete is only for accounts with no connected system records. If the user is connected to incidents, task responses, notifications, employee/tanod records, or other audit records, deletion will be blocked. Use <strong>Deactivate</strong> instead for real accounts.
-        </p>
-    </div>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -65,13 +52,13 @@
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Active</p>
-            <p class="mt-3 text-3xl font-bold text-green-600">{{ $summary['active'] }}</p>
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Online</p>
+            <p class="mt-3 text-3xl font-bold text-green-600">{{ $summary['online'] }}</p>
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Inactive</p>
-            <p class="mt-3 text-3xl font-bold text-slate-500">{{ $summary['inactive'] }}</p>
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Offline</p>
+            <p class="mt-3 text-3xl font-bold text-slate-500">{{ $summary['offline'] }}</p>
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -114,7 +101,7 @@
             <div class="xl:col-span-2">
                 <select name="status"
                         class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                    <option value="all">All Status</option>
+                    <option value="all">All Presence</option>
 
                     @foreach ($statusOptions as $value => $label)
                         <option value="{{ $value }}" @selected(request('status') === $value)>
@@ -152,7 +139,7 @@
     </div>
 
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div class="max-h-[620px] overflow-auto">
+    <div id="userManagementTableScroll" class="max-h-[620px] overflow-auto">
         <table class="min-w-full divide-y divide-slate-200">
             <thead class="sticky top-0 z-20 bg-blue-950 shadow-sm">
                     <tr>
@@ -169,7 +156,7 @@
                         </th>
 
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
-                            Barangay
+                            Address
                         </th>
 
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
@@ -177,7 +164,7 @@
                         </th>
 
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
-                            Status
+                            Presence
                         </th>
 
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
@@ -190,12 +177,22 @@
                     </tr>
                 </thead>
 
-                <tbody class="divide-y divide-slate-100 bg-white">
+                <tbody class="divide-y-2 divide-slate-200 bg-white">
                     @forelse ($users as $userRecord)
                         @php
-                            $barangay = $barangays->firstWhere('id', $userRecord->barangay_id ?? null);
-                            $isActive = ! Schema::hasColumn('users', 'is_active') || (bool) $userRecord->is_active;
-                            $isCurrentUser = auth()->id() && (int) auth()->id() === (int) $userRecord->id;
+                            $isOnline = false;
+
+                            if (
+                                Schema::hasColumn('users', 'last_seen_at')
+                                && $userRecord->last_seen_at
+                            ) {
+                                try {
+                                    $isOnline = \Carbon\Carbon::parse($userRecord->last_seen_at)
+                                        ->greaterThanOrEqualTo(now()->subMinutes(2));
+                                } catch (\Throwable $e) {
+                                    $isOnline = false;
+                                }
+                            }
                             $profilePhotoPath = Schema::hasColumn('users', 'profile_photo_path') ? ($userRecord->profile_photo_path ?? null) : null;
                             $profilePhotoUrl = $profilePhotoPath && Route::has('users.profile-photo')
                             ? route('users.profile-photo', $userRecord) . '?v=' . optional($userRecord->updated_at)->timestamp
@@ -203,7 +200,7 @@
                             $userInitial = strtoupper(mb_substr($userRecord->name ?? 'U', 0, 1));
                         @endphp
 
-                        <tr class="hover:bg-slate-50">
+                        <tr class="border-b-2 border-slate-200 transition hover:bg-slate-50 last:border-b-0">
                             <td class="px-5 py-4">
                                 <div class="flex items-center gap-3">
                                     <div class="relative h-10 w-10 shrink-0">
@@ -236,15 +233,24 @@
                             </td>
 
                             <td class="px-5 py-4 text-sm text-slate-700">
-                                {{ $userRecord->email }}
+                                {{ filled($userRecord->email)
+                                    ? $userRecord->email
+                                    : '—' }}
                             </td>
 
                             <td class="px-5 py-4 text-sm text-slate-700">
-                                {{ $userRecord->contact_number ?? '—' }}
+                                {{ filled($userRecord->contact_number)
+                                    ? $userRecord->contact_number
+                                    : '—' }}
                             </td>
 
-                            <td class="px-5 py-4 text-sm text-slate-700">
-                                {{ $barangay->barangay_name ?? $barangay->name ?? '—' }}
+                            <td class="max-w-[220px] px-5 py-4 text-sm text-slate-700">
+                                <span class="block truncate"
+                                      title="{{ filled($userRecord->address) ? $userRecord->address : '—' }}">
+                                    {{ filled($userRecord->address)
+                                        ? $userRecord->address
+                                        : '—' }}
+                                </span>
                             </td>
 
                             <td class="px-5 py-4">
@@ -254,13 +260,15 @@
                             </td>
 
                             <td class="px-5 py-4">
-                                @if ($isActive)
-                                    <span class="inline-flex rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
-                                        Active
+                                @if ($isOnline)
+                                    <span class="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
+                                        <span class="h-2 w-2 rounded-full bg-green-500"></span>
+                                        Online
                                     </span>
                                 @else
-                                    <span class="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                                        Inactive
+                                    <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                                        <span class="h-2 w-2 rounded-full bg-slate-400"></span>
+                                        Offline
                                     </span>
                                 @endif
                             </td>
@@ -270,70 +278,46 @@
                             </td>
 
                             <td class="px-5 py-4">
-                                <div class="flex flex-wrap justify-end gap-2">
+                                <div class="flex items-center justify-end gap-2">
                                     <a href="{{ route('admin.users.show', $userRecord) }}"
-                                       class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                                        View
+                                       data-user-management-return
+                                       title="View user"
+                                       aria-label="View user"
+                                       class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 hover:text-slate-900">
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                             viewBox="0 0 24 24"
+                                             fill="none"
+                                             stroke="currentColor"
+                                             stroke-width="1.8"
+                                             class="h-5 w-5"
+                                             aria-hidden="true">
+                                            <path stroke-linecap="round"
+                                                  stroke-linejoin="round"
+                                                  d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z" />
+                                            <circle cx="12" cy="12" r="2.75" />
+                                        </svg>
                                     </a>
 
                                     <a href="{{ route('admin.users.edit', $userRecord) }}"
-                                       class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">
-                                        Edit
+                                       data-user-management-return
+                                       title="Edit user"
+                                       aria-label="Edit user"
+                                       class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 hover:text-blue-800">
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                             viewBox="0 0 24 24"
+                                             fill="none"
+                                             stroke="currentColor"
+                                             stroke-width="1.8"
+                                             class="h-5 w-5"
+                                             aria-hidden="true">
+                                            <path stroke-linecap="round"
+                                                  stroke-linejoin="round"
+                                                  d="M16.862 3.487a2.25 2.25 0 0 1 3.182 3.182L8.25 18.463 3.75 19.5l1.037-4.5L16.862 3.487Z" />
+                                            <path stroke-linecap="round"
+                                                  stroke-linejoin="round"
+                                                  d="m15.75 4.5 3.75 3.75" />
+                                        </svg>
                                     </a>
-
-                                    <form method="POST" action="{{ route('admin.users.reset-password', $userRecord) }}">
-                                        @csrf
-                                        @method('PATCH')
-
-                                        <button type="submit"
-                                                onclick="return confirm('Reset password for this user?')"
-                                                class="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-bold text-yellow-700 hover:bg-yellow-100">
-                                            Reset
-                                        </button>
-                                    </form>
-
-                                    @if ($isActive)
-                                        <form method="POST" action="{{ route('admin.users.deactivate', $userRecord) }}">
-                                            @csrf
-                                            @method('PATCH')
-
-                                            <button type="submit"
-                                                    onclick="return confirm('Deactivate this user?')"
-                                                    class="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">
-                                                Deactivate
-                                            </button>
-                                        </form>
-                                    @else
-                                        <form method="POST" action="{{ route('admin.users.activate', $userRecord) }}">
-                                            @csrf
-                                            @method('PATCH')
-
-                                            <button type="submit"
-                                                    class="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-bold text-green-700 hover:bg-green-100">
-                                                Activate
-                                            </button>
-                                        </form>
-                                    @endif
-
-                                    @if ($isCurrentUser)
-                                        <button type="button"
-                                                disabled
-                                                title="You cannot permanently delete your own account."
-                                                class="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-400">
-                                            Delete Locked
-                                        </button>
-                                    @else
-                                        <form method="POST" action="{{ route('admin.users.destroy', $userRecord) }}">
-                                            @csrf
-                                            @method('DELETE')
-
-                                            <button type="submit"
-                                                    onclick="return confirm('Permanent delete will run safety checks first. If this user has incidents, tasks, notifications, employee/tanod records, messages, or logs, deletion will be blocked and you should deactivate instead. Continue?')"
-                                                    class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100">
-                                                Permanent Delete
-                                            </button>
-                                        </form>
-                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -448,4 +432,82 @@
 </div>
     </div>
 </div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const storagePrefix = 'tabangnow.user-management.';
+    const pendingKey = storagePrefix + 'return-pending';
+    const urlKey = storagePrefix + 'return-url';
+    const windowScrollKey = storagePrefix + 'window-scroll-y';
+    const tableScrollKey = storagePrefix + 'table-scroll-y';
+
+    const tableScroll = document.getElementById('userManagementTableScroll');
+    const navigationLinks = document.querySelectorAll('[data-user-management-return]');
+
+    function rememberUserManagementPosition() {
+        try {
+            sessionStorage.setItem(pendingKey, '1');
+            sessionStorage.setItem(urlKey, window.location.href);
+            sessionStorage.setItem(windowScrollKey, String(window.scrollY || 0));
+            sessionStorage.setItem(
+                tableScrollKey,
+                String(tableScroll ? tableScroll.scrollTop : 0)
+            );
+        } catch (error) {
+            console.warn('Unable to save User Management position.', error);
+        }
+    }
+
+    navigationLinks.forEach(function (link) {
+        link.addEventListener('click', rememberUserManagementPosition);
+    });
+
+    try {
+        if (sessionStorage.getItem(pendingKey) !== '1') {
+            return;
+        }
+
+        const savedUrl = sessionStorage.getItem(urlKey);
+
+        if (savedUrl && new URL(savedUrl).href !== window.location.href) {
+            window.location.replace(savedUrl);
+            return;
+        }
+
+        const savedWindowScroll = Number(
+            sessionStorage.getItem(windowScrollKey) || 0
+        );
+        const savedTableScroll = Number(
+            sessionStorage.getItem(tableScrollKey) || 0
+        );
+
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
+
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                window.scrollTo({
+                    top: savedWindowScroll,
+                    left: 0,
+                    behavior: 'auto'
+                });
+
+                if (tableScroll) {
+                    tableScroll.scrollTop = savedTableScroll;
+                }
+
+                sessionStorage.removeItem(pendingKey);
+                sessionStorage.removeItem(urlKey);
+                sessionStorage.removeItem(windowScrollKey);
+                sessionStorage.removeItem(tableScrollKey);
+            });
+        });
+    } catch (error) {
+        console.warn('Unable to restore User Management position.', error);
+    }
+});
+</script>
+
 @endsection
