@@ -95,39 +95,51 @@ class AnnouncementController extends Controller
         try {
             $notificationType = $this->notificationType($announcement);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Notification Bell Rule
-            |--------------------------------------------------------------------------
-            | Normal announcements should NOT appear in the notification bell.
-            | Only calamity, emergency, or important community-related announcements
-            | create bell notifications.
-            */
-            if (! $notificationType) {
-                return;
+            $usersQuery = User::query()
+                ->select(['id', 'role']);
+
+            switch ($announcement->audience) {
+                case 'tanod':
+                    $usersQuery->where('role', 'tanod');
+                    break;
+
+                case 'residents':
+                    $usersQuery->where('role', 'resident');
+                    break;
+
+                case 'admin':
+                    $usersQuery->where('role', 'admin');
+                    break;
+
+                case 'everyone':
+                    $usersQuery->whereIn('role', [
+                        'admin',
+                        'official',
+                        'tanod',
+                        'resident',
+                    ]);
+                    break;
+
+                default:
+                    return;
             }
 
-            $usersQuery = User::query()
-                ->select('id', 'role');
-
-            match ($announcement->audience) {
-                'tanod' => $usersQuery->where('role', 'tanod'),
-                'residents' => $usersQuery->where('role', 'resident'),
-                'admin' => $usersQuery->where('role', 'admin'),
-                default => null,
-            };
-
-            $usersQuery->chunkById(100, function ($users) use ($announcement, $notificationType) {
+            $usersQuery->chunkById(100, function ($users) use ($announcement, $notificationType): void {
                 foreach ($users as $user) {
-                    UserNotification::create([
-                        'user_id' => $user->id,
-                        'type' => $notificationType,
-                        'source_id' => $announcement->id,
-                        'title' => $announcement->title,
-                        'message' => $announcement->content,
-                        'is_read' => false,
-                        'read_at' => null,
-                    ]);
+                    UserNotification::firstOrCreate(
+                        [
+                            'user_id' => $user->id,
+                            'type' => $notificationType,
+                            'source_id' => $announcement->id,
+                        ],
+                        [
+                            'title' => $announcement->title,
+                            'message' => $announcement->content,
+                            'is_read' => false,
+                            'read_at' => null,
+                            'acknowledged_at' => null,
+                        ]
+                    );
                 }
             });
         } catch (\Throwable $e) {
@@ -138,7 +150,7 @@ class AnnouncementController extends Controller
         }
     }
 
-    private function notificationType(Announcement $announcement): ?string
+    private function notificationType(Announcement $announcement): string
     {
         if ($announcement->activate_calamity_mode) {
             return 'calamity';
@@ -152,14 +164,7 @@ class AnnouncementController extends Controller
             return 'emergency';
         }
 
-        if (
-            in_array($announcement->category, ['community', 'health', 'advisory'], true)
-            && in_array($announcement->priority, ['important', 'urgent'], true)
-        ) {
-            return 'community';
-        }
-
-        return null;
+        return 'announcement';
     }
 
     private function categories(): array

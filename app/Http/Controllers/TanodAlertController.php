@@ -51,12 +51,15 @@ class TanodAlertController extends Controller
             'acknowledgedAlerts' => $acknowledgedAlerts,
             'alertTypes' => [
                 'all' => 'All Alerts',
+                'announcement' => 'Announcements',
                 'incident_reported' => 'New Incident Reports',
                 'calamity' => 'Calamity',
                 'community_problem' => 'Community Problems',
+                'community' => 'Community',
                 'dispatch' => 'Dispatch',
                 'escalation' => 'Escalation',
                 'emergency' => 'Emergency',
+                'resolved' => 'Resolved',
             ],
         ]);
     }
@@ -112,11 +115,7 @@ class TanodAlertController extends Controller
             abort(403, 'Unauthorized access.');
         }
 
-        if ($user->role === 'admin') {
-            return;
-        }
-
-        if ($user->role === 'tanod' && (int) $notification->user_id === (int) $user->id) {
+        if ((int) $notification->user_id === (int) $user->id) {
             return;
         }
 
@@ -125,26 +124,28 @@ class TanodAlertController extends Controller
 
     private function baseAlertQuery(?User $user)
     {
-        $query = UserNotification::query()
-            ->whereIn('type', $this->alertTypesOnly());
-
-        if ($user?->role === 'tanod') {
-            $query->where('user_id', $user->id);
+        if (! $user) {
+            abort(403, 'Unauthorized access.');
         }
 
-        return $query;
+        return UserNotification::query()
+            ->where('user_id', $user->id)
+            ->whereIn('type', $this->alertTypesOnly());
     }
 
     private function allowedTypes(): array
     {
         return [
             'all',
+            'announcement',
             'incident_reported',
             'calamity',
             'community_problem',
+            'community',
             'dispatch',
             'escalation',
             'emergency',
+            'resolved',
         ];
     }
 

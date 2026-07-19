@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>DaoSystem Admin</title>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>TabangNow System</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -296,7 +295,6 @@
                             </p>
                         </div>
 
-                        <span class="text-sm text-blue-200 group-open:rotate-180">⌃</span>
                     </summary>
 
                     <div class="absolute bottom-full left-0 right-0 z-50 mb-3 overflow-hidden rounded-2xl border border-blue-900 bg-blue-950 shadow-2xl">
@@ -341,14 +339,14 @@
 
                         <div class="border-t border-blue-900 py-2">
                             <form method="POST" action="{{ route('logout') }}" class="m-0">
-                                <input type="hidden" name="_token" value="{{ csrf_token() }}">
+    @csrf
 
-                                <button type="submit"
-                                        class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white">
-                                    <span>↪</span>
-                                    <span>Logout</span>
-                                </button>
-                            </form>
+    <button type="submit"
+            class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white">
+        <span>↪</span>
+        <span>Logout</span>
+    </button>
+</form>
                         </div>
                     </div>
                 </details>
@@ -379,72 +377,68 @@
 
                 <div class="flex items-center gap-4">
                     @php
-                        $importantNotificationTypes = [
-    'incident_reported',
-    'calamity',
-    'community_problem',
-    'dispatch',
-    'escalation',
-    'emergency',
-];
+    $importantNotificationTypes = [
+        'announcement',
+        'incident_reported',
+        'calamity',
+        'community_problem',
+        'community',
+        'dispatch',
+        'escalation',
+        'emergency',
+        'resolved',
+    ];
 
-                        $notificationTypeLabels = [
-    'incident_reported' => 'New Incident Report',
-    'calamity' => 'Calamity Alert',
-    'community_problem' => 'Community Problem',
-    'dispatch' => 'Dispatch',
-    'escalation' => 'Escalation',
-    'emergency' => 'Emergency',
-];
+    $notificationTypeLabels = [
+        'announcement' => 'Announcement',
+        'incident_reported' => 'New Incident Report',
+        'calamity' => 'Calamity Alert',
+        'community_problem' => 'Community Problem',
+        'community' => 'Community',
+        'dispatch' => 'Dispatch',
+        'escalation' => 'Escalation',
+        'emergency' => 'Emergency',
+        'resolved' => 'Resolved',
+    ];
 
-                        $unreadNotificationCount = 0;
-                        $notificationUrl = '#';
-                        $latestUnreadNotifications = collect();
+    $unreadNotificationCount = 0;
+    $notificationUrl = '#';
+    $latestUnreadNotifications = collect();
 
-                        if ($authUser) {
-                            $notificationQuery = \App\Models\UserNotification::query()
-                                ->where('is_read', false)
-                                ->whereIn('type', $importantNotificationTypes);
+    if ($authUser) {
+        $notificationQuery = \App\Models\UserNotification::query()
+            ->where('user_id', $authUser->id)
+            ->where('is_read', false)
+            ->whereIn('type', $importantNotificationTypes);
 
-                            /*
-                            |--------------------------------------------------------------------------
-                            | Notification Visibility Rule
-                            |--------------------------------------------------------------------------
-                            | Admin sees all important unread system notifications.
-                            | Other roles only see unread notifications assigned to their account.
-                            */
-                            if ($authUser->role !== 'admin') {
-                                $notificationQuery->where('user_id', $authUser->id);
-                            }
+        $unreadNotificationCount = (clone $notificationQuery)->count();
 
-                            $unreadNotificationCount = (clone $notificationQuery)->count();
+        $latestUnreadNotifications = (clone $notificationQuery)
+            ->latest()
+            ->limit(6)
+            ->get();
 
-                            $latestUnreadNotifications = (clone $notificationQuery)
-                                ->latest()
-                                ->limit(6)
-                                ->get();
+        $notificationUrl = match ($authUser->role) {
+            'admin' => Route::has('admin.tanod-alerts.index')
+                ? route('admin.tanod-alerts.index')
+                : '#',
 
-                            $notificationUrl = match ($authUser->role) {
-                                'admin' => Route::has('admin.tanod-alerts.index')
-                                    ? route('admin.tanod-alerts.index')
-                                    : '#',
+            'tanod' => Route::has('tanod.tanod-alerts.index')
+                ? route('tanod.tanod-alerts.index')
+                : '#',
 
-                                'tanod' => Route::has('tanod.tanod-alerts.index')
-                                    ? route('tanod.tanod-alerts.index')
-                                    : '#',
+            'official' => Route::has('official.incidents.index')
+                ? route('official.incidents.index')
+                : '#',
 
-                                'official' => Route::has('official.incidents.index')
-                                    ? route('official.incidents.index')
-                                    : '#',
+            'resident' => Route::has('resident.incidents.index')
+                ? route('resident.incidents.index')
+                : '#',
 
-                                'resident' => Route::has('resident.incidents.index')
-                                    ? route('resident.incidents.index')
-                                    : '#',
-
-                                default => '#',
-                            };
-                        }
-                    @endphp
+            default => '#',
+        };
+    }
+@endphp
 
                     <details class="relative z-[110]">
                         <summary class="relative inline-flex cursor-pointer list-none items-center justify-center">

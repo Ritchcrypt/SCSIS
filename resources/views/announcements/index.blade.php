@@ -149,15 +149,6 @@
                     </div>
 
                     <div class="flex shrink-0 items-center gap-3">
-                        <form method="POST" action="{{ route('admin.announcements.toggle', $announcement) }}">
-                            @csrf
-                            @method('PATCH')
-
-                            <button type="submit"
-                                    class="text-sm font-semibold text-slate-700 hover:text-blue-700">
-                                {{ $announcement->is_active ? 'Deactivate' : 'Activate' }}
-                            </button>
-                        </form>
 
                         <form method="POST"
       action="{{ route('admin.announcements.destroy', $announcement) }}">
