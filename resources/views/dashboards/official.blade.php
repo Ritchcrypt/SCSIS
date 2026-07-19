@@ -1,232 +1,260 @@
 @extends('layouts.admin')
 
-@section('title', 'Official Dashboard | DaoSystem')
-
 @section('content')
 @php
-    $summary = $summary ?? [];
+    $totalIncidents = (int) ($summary['total_incidents'] ?? 0);
+    $pendingIncidents = (int) ($summary['pending_incidents'] ?? 0);
+    $activeIncidents = (int) ($summary['active_incidents'] ?? 0);
+    $resolvedIncidents = (int) ($summary['resolved_incidents'] ?? 0);
+    $latestRecordsCount = $latestIncidents?->count() ?? 0;
 
-    $totalIncidents = $summary['total_incidents'] ?? 0;
-    $pendingIncidents = $summary['pending_incidents'] ?? 0;
-    $activeIncidents = $summary['active_incidents'] ?? 0;
-    $resolvedIncidents = $summary['resolved_incidents'] ?? 0;
+    $watchCount = $pendingIncidents + $activeIncidents;
 
-    $latestIncidents = $latestIncidents ?? collect();
-
-    $incidentIndexUrl = Route::has('official.incidents.index')
-        ? route('official.incidents.index')
-        : '#';
-
-    $statusBadgeClass = function ($status) {
-        $status = strtolower((string) $status);
-
-        return match ($status) {
-            'pending', 'reported' => 'bg-yellow-100 text-yellow-700 border-yellow-200',
-            'active', 'responding', 'in progress', 'in_progress', 'dispatched' => 'bg-blue-100 text-blue-700 border-blue-200',
-            'escalated' => 'bg-red-100 text-red-700 border-red-200',
-            'resolved', 'closed', 'completed' => 'bg-green-100 text-green-700 border-green-200',
-            default => 'bg-slate-100 text-slate-700 border-slate-200',
-        };
-    };
-
-    $priorityBadgeClass = function ($priority) {
-        $priority = strtolower((string) $priority);
-
-        return match ($priority) {
-            'critical' => 'bg-red-100 text-red-700 border-red-200',
-            'high' => 'bg-orange-100 text-orange-700 border-orange-200',
-            'moderate', 'medium' => 'bg-yellow-100 text-yellow-700 border-yellow-200',
-            'low' => 'bg-green-100 text-green-700 border-green-200',
-            default => 'bg-slate-100 text-slate-700 border-slate-200',
-        };
-    };
+    if ($activeIncidents > 0) {
+        $watchLabel = 'Watch';
+        $watchTitle = 'Active Monitoring';
+        $watchDetails = $pendingIncidents . ' pending · ' . $activeIncidents . ' active';
+        $watchAdvisory = 'Advisory: Barangay officials should monitor active and pending incidents, coordinate updates, and verify response progress throughout the day.';
+    } elseif ($pendingIncidents > 0) {
+        $watchLabel = 'Observe';
+        $watchTitle = 'Pending Review';
+        $watchDetails = $pendingIncidents . ' pending · ' . $activeIncidents . ' active';
+        $watchAdvisory = 'Advisory: Pending reports need review. Officials should verify details and update case status when action is taken.';
+    } else {
+        $watchLabel = 'Stable';
+        $watchTitle = 'No Active Alerts';
+        $watchDetails = $resolvedIncidents . ' resolved records';
+        $watchAdvisory = 'Advisory: No active incident load is currently detected. Continue routine monitoring and keep records updated.';
+    }
 @endphp
 
-<div class="space-y-6">
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-                <p class="text-sm font-medium uppercase tracking-wide text-blue-700">
-                    Official Dashboard
-                </p>
+<div class="mb-8">
+    <h1 class="text-3xl font-bold tracking-tight text-slate-900">
+        Official Dashboard
+    </h1>
 
-                <h1 class="mt-1 text-2xl font-bold text-slate-900">
-                    Incident Monitoring Overview
-                </h1>
+    <p class="mt-1 text-slate-600">
+        Dao, Capiz — Community Safety Overview
+    </p>
+</div>
 
-                <p class="mt-2 max-w-3xl text-sm text-slate-600">
-                    Monitor submitted incident reports, track active cases, and review latest barangay safety updates.
-                </p>
-            </div>
-
-            <a href="{{ $incidentIndexUrl }}"
-               class="inline-flex items-center justify-center rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-800">
-                View Incidents
-            </a>
+<section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
+    <div class="rounded-2xl border border-blue-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-blue-500 hover:shadow-lg">
+        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            📄
         </div>
+
+        <p class="text-4xl font-bold text-slate-900">
+            {{ $totalIncidents }}
+        </p>
+
+        <p class="mt-2 text-sm font-medium text-slate-600">
+            Total Incidents
+        </p>
     </div>
 
-    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-sm font-semibold text-slate-500">Total Incidents</p>
-            <p class="mt-3 text-3xl font-bold text-slate-900">{{ $totalIncidents }}</p>
-            <p class="mt-2 text-xs text-slate-500">All incident reports in the system</p>
+    <div class="rounded-2xl border border-amber-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg">
+        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
+            🕒
         </div>
 
-        <div class="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm">
-            <p class="text-sm font-semibold text-yellow-700">Pending</p>
-            <p class="mt-3 text-3xl font-bold text-yellow-900">{{ $pendingIncidents }}</p>
-            <p class="mt-2 text-xs text-yellow-700">Reports waiting for action</p>
-        </div>
+        <p class="text-4xl font-bold text-slate-900">
+            {{ $pendingIncidents }}
+        </p>
 
-        <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-            <p class="text-sm font-semibold text-blue-700">Active</p>
-            <p class="mt-3 text-3xl font-bold text-blue-900">{{ $activeIncidents }}</p>
-            <p class="mt-2 text-xs text-blue-700">Ongoing, dispatched, or escalated incidents</p>
-        </div>
-
-        <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
-            <p class="text-sm font-semibold text-green-700">Resolved</p>
-            <p class="mt-3 text-3xl font-bold text-green-900">{{ $resolvedIncidents }}</p>
-            <p class="mt-2 text-xs text-green-700">Closed or completed incident reports</p>
-        </div>
+        <p class="mt-2 text-sm font-medium text-slate-600">
+            Pending Incidents
+        </p>
     </div>
 
-    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="flex flex-col gap-3 border-b border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="rounded-2xl border border-orange-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-orange-500 hover:shadow-lg">
+        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+            ⚡
+        </div>
+
+        <p class="text-4xl font-bold text-slate-900">
+            {{ $activeIncidents }}
+        </p>
+
+        <p class="mt-2 text-sm font-medium text-slate-600">
+            Active Incidents
+        </p>
+    </div>
+
+    <div class="rounded-2xl border border-emerald-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg">
+        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600">
+            ✅
+        </div>
+
+        <p class="text-4xl font-bold text-slate-900">
+            {{ $resolvedIncidents }}
+        </p>
+
+        <p class="mt-2 text-sm font-medium text-slate-600">
+            Resolved
+        </p>
+    </div>
+
+    <div class="rounded-2xl border border-violet-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg">
+        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-blue-950">
+            📌
+        </div>
+
+        <p class="text-4xl font-bold text-slate-900">
+            {{ $latestRecordsCount }}
+        </p>
+
+        <p class="mt-2 text-sm font-medium text-slate-600">
+            Latest Records
+        </p>
+    </div>
+</section>
+
+<section class="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
+    <div class="rounded-2xl border border-sky-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sky-500 hover:shadow-lg">
+        <div class="mb-6 flex items-start justify-between">
             <div>
-                <h2 class="text-base font-bold text-slate-900">
-                    Latest Incidents
+                <h2 class="text-xl font-bold text-slate-900">
+                    Weather & Disaster Feed
                 </h2>
 
-                <p class="mt-1 text-sm text-slate-500">
-                    Recent incident reports submitted to the system.
+                <p class="text-sm text-slate-500">
+                    Dao, Capiz
                 </p>
             </div>
 
-            <a href="{{ $incidentIndexUrl }}"
-               class="text-sm font-bold text-blue-700 hover:text-blue-900">
-                Open Full List →
-            </a>
+            <span class="rounded-full bg-yellow-100 px-4 py-1 text-sm font-semibold text-yellow-700">
+                {{ $watchLabel }}
+            </span>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-slate-50">
-                    <tr>
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Incident
-                        </th>
+        <div class="mb-5 flex items-center gap-6">
+            <p class="text-5xl font-bold text-slate-900">
+                {{ $watchCount }}
+            </p>
 
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Type
-                        </th>
+            <div>
+                <p class="text-lg font-bold text-slate-900">
+                    {{ $watchTitle }}
+                </p>
 
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Priority
-                        </th>
+                <p class="text-sm text-slate-500">
+                    {{ $watchDetails }}
+                </p>
+            </div>
+        </div>
 
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Status
-                        </th>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">
+            {{ $watchAdvisory }}
+        </div>
 
-                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Date
-                        </th>
+        <p class="mt-5 text-sm text-slate-500">
+            Last updated: {{ now()->format('h:i:s A') }}
+        </p>
+    </div>
 
-                        <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
-                            Action
-                        </th>
-                    </tr>
-                </thead>
+    <div class="rounded-2xl border border-orange-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-orange-500 hover:shadow-lg">
+        <div class="mb-6 flex items-center justify-between">
+            <h2 class="text-xl font-bold text-slate-900">
+                Recent Incident Activity
+            </h2>
 
-                <tbody class="divide-y divide-slate-100 bg-white">
-                    @forelse ($latestIncidents as $incident)
-                        @php
-                            $incidentCode = $incident->incident_code ?? ('INC-' . str_pad((string) $incident->id, 5, '0', STR_PAD_LEFT));
-                            $incidentTitle = $incident->incident_title ?? 'Untitled Incident';
-                            $categoryName = $incident->category_name ?? 'Uncategorized';
-                            $priority = $incident->priority ?? 'low';
-                            $statusName = $incident->status_name ?? 'Pending';
+            <span class="text-sm text-slate-400">
+                Latest records
+            </span>
+        </div>
 
-                            $reportedRaw = $incident->incident_datetime
-                                ?? $incident->reported_at
-                                ?? $incident->created_at
-                                ?? null;
+        <div class="max-h-96 space-y-5 overflow-y-auto pr-2">
+            @forelse ($latestIncidents as $incident)
+                @php
+                    $incidentTitle = $incident->incident_title
+                        ?? $incident->title
+                        ?? $incident->incident_code
+                        ?? 'Untitled Incident';
 
-                            try {
-                                $reportedDate = $reportedRaw
-                                    ? \Carbon\Carbon::parse($reportedRaw)->format('M d, Y h:i A')
-                                    : '—';
-                            } catch (\Throwable $e) {
-                                $reportedDate = '—';
-                            }
+                    $categoryName = $incident->category_name
+                        ?? 'Uncategorized';
 
-                            $showUrl = Route::has('official.incidents.show')
-                                ? route('official.incidents.show', $incident->id)
-                                : '#';
-                        @endphp
+                    $statusName = $incident->status_name
+                        ?? 'Pending';
 
-                        <tr class="hover:bg-slate-50">
-                            <td class="px-5 py-4">
-                                <p class="text-xs font-bold uppercase tracking-wide text-blue-700">
-                                    {{ $incidentCode }}
-                                </p>
+                    $normalizedStatus = strtolower(str_replace(' ', '_', (string) $statusName));
 
-                                <p class="mt-1 max-w-xs truncate text-sm font-semibold text-slate-900">
-                                    {{ $incidentTitle }}
-                                </p>
-                            </td>
+                    $priority = strtolower((string) (
+                        $incident->priority
+                        ?? 'low'
+                    ));
 
-                            <td class="px-5 py-4 text-sm font-medium text-slate-700">
-                                {{ $categoryName }}
-                            </td>
+                    $reportedRaw = $incident->reported_at
+                        ?? $incident->incident_datetime
+                        ?? $incident->created_at;
 
-                            <td class="px-5 py-4">
-                                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $priorityBadgeClass($priority) }}">
-                                    {{ ucfirst((string) $priority) }}
-                                </span>
-                            </td>
+                    try {
+                        $reportedAgo = $reportedRaw
+                            ? \Carbon\Carbon::parse($reportedRaw)->diffForHumans()
+                            : 'Unknown time';
+                    } catch (\Throwable $e) {
+                        $reportedAgo = 'Unknown time';
+                    }
+                @endphp
 
-                            <td class="px-5 py-4">
-                                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $statusBadgeClass($statusName) }}">
-                                    {{ ucfirst(str_replace('_', ' ', (string) $statusName)) }}
-                                </span>
-                            </td>
+                <div class="border-b border-slate-100 pb-4 last:border-0">
+                    <div class="flex items-start gap-4">
+                        <div class="mt-1 h-3 w-3 rounded-full
+                            @if ($priority === 'critical') bg-red-500
+                            @elseif ($priority === 'high') bg-orange-500
+                            @elseif ($priority === 'moderate' || $priority === 'medium') bg-yellow-400
+                            @else bg-green-500
+                            @endif
+                        "></div>
 
-                            <td class="px-5 py-4 text-sm text-slate-600">
-                                {{ $reportedDate }}
-                            </td>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-semibold text-slate-900">
+                                        {{ $incidentTitle }}
+                                    </p>
 
-                            <td class="px-5 py-4 text-right">
-                                <a href="{{ $showUrl }}"
-                                   class="inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
-                                    View
-                                </a>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" class="px-5 py-14 text-center">
-                                <div class="mx-auto max-w-md">
-                                    <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-2xl">
-                                        📄
-                                    </div>
-
-                                    <h3 class="mt-4 text-base font-bold text-slate-900">
-                                        No incidents yet
-                                    </h3>
-
-                                    <p class="mt-2 text-sm text-slate-500">
-                                        New incident reports will appear here once submitted.
+                                    <p class="mt-1 text-sm text-slate-500">
+                                        {{ $categoryName }}
+                                        ·
+                                        <span class="font-semibold
+                                            @if ($normalizedStatus === 'escalated') text-red-600
+                                            @elseif ($normalizedStatus === 'dispatched' || $normalizedStatus === 'responding') text-orange-600
+                                            @elseif ($normalizedStatus === 'resolved' || $normalizedStatus === 'completed' || $normalizedStatus === 'closed') text-green-600
+                                            @else text-blue-600
+                                            @endif
+                                        ">
+                                            {{ ucfirst(str_replace('_', ' ', $normalizedStatus)) }}
+                                        </span>
+                                        ·
+                                        {{ $reportedAgo }}
                                     </p>
                                 </div>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+
+                                <span class="rounded-full px-3 py-1 text-xs font-semibold
+                                    @if ($priority === 'critical') bg-red-100 text-red-700
+                                    @elseif ($priority === 'high') bg-orange-100 text-orange-700
+                                    @elseif ($priority === 'moderate' || $priority === 'medium') bg-yellow-100 text-yellow-700
+                                    @else bg-green-100 text-green-700
+                                    @endif
+                                ">
+                                    {{ ucfirst($priority) }}
+                                </span>
+                            </div>
+
+                            <p class="mt-2 text-xs text-slate-400">
+                                Code: {{ $incident->incident_code ?? 'No code' }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            @empty
+                <p class="text-slate-500">
+                    No recent incidents found.
+                </p>
+            @endforelse
         </div>
     </div>
-</div>
+</section>
 @endsection

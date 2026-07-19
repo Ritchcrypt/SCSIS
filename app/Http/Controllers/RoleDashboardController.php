@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Incident;
+use App\Models\Status;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;

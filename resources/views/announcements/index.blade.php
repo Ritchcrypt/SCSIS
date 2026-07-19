@@ -4,6 +4,18 @@
 
 @section('content')
 @php
+    $authUser = auth()->user();
+    $role = strtolower(trim($authUser?->role ?? ''));
+
+    /*
+    |--------------------------------------------------------------------------
+    | Announcement Permission Rule
+    |--------------------------------------------------------------------------
+    | Admin can post/delete announcements.
+    | Official/Dao/Tanod/Resident can only view announcements.
+    */
+    $canManageAnnouncements = $role === 'admin';
+
     $categoryStyles = [
         'advisory' => 'bg-blue-100 text-blue-700 border-blue-200',
         'emergency' => 'bg-red-100 text-red-700 border-red-200',
@@ -41,11 +53,13 @@
             </p>
         </div>
 
-        <button type="button"
-                onclick="openAnnouncementModal()"
-                class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
-            + Post Announcement
-        </button>
+        @if ($canManageAnnouncements)
+            <button type="button"
+                    onclick="openAnnouncementModal()"
+                    class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
+                + Post Announcement
+            </button>
+        @endif
     </div>
 
     {{-- Flash Messages --}}
@@ -55,7 +69,7 @@
         </div>
     @endif
 
-    @if ($errors->any())
+    @if ($canManageAnnouncements && $errors->any())
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <p class="font-bold">Please fix the following errors:</p>
 
@@ -148,43 +162,44 @@
                         </div>
                     </div>
 
-                    <div class="flex shrink-0 items-center gap-3">
+                    @if ($canManageAnnouncements)
+                        <div class="flex shrink-0 items-center gap-3">
+                            <form method="POST"
+                                  action="{{ route('admin.announcements.destroy', $announcement) }}">
+                                @csrf
+                                @method('DELETE')
 
-                        <form method="POST"
-      action="{{ route('admin.announcements.destroy', $announcement) }}">
-                            @csrf
-                            @method('DELETE')
-
-                            <button type="submit"
-        title="Delete announcement"
-        aria-label="Delete announcement"
-        style="
-            width: 40px;
-            height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            vertical-align: middle;
-            border: 1px solid #fca5a5;
-            border-radius: 10px;
-            background-color: #fff7f7;
-            font-size: 17px;
-            line-height: 1;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-            cursor: pointer;
-        "
-        onmouseover="
-            this.style.backgroundColor='#fff1f1';
-            this.style.borderColor='#fb923c';
-        "
-        onmouseout="
-            this.style.backgroundColor='#fff7f7';
-            this.style.borderColor='#fca5a5';
-        ">
-    <span style="display:block; line-height:1;">🗑️</span>
-</button>
-                        </form>
-                    </div>
+                                <button type="submit"
+                                        title="Delete announcement"
+                                        aria-label="Delete announcement"
+                                        style="
+                                            width: 40px;
+                                            height: 40px;
+                                            display: inline-flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            vertical-align: middle;
+                                            border: 1px solid #fca5a5;
+                                            border-radius: 10px;
+                                            background-color: #fff7f7;
+                                            font-size: 17px;
+                                            line-height: 1;
+                                            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+                                            cursor: pointer;
+                                        "
+                                        onmouseover="
+                                            this.style.backgroundColor='#fff1f1';
+                                            this.style.borderColor='#fb923c';
+                                        "
+                                        onmouseout="
+                                            this.style.backgroundColor='#fff7f7';
+                                            this.style.borderColor='#fca5a5';
+                                        ">
+                                    <span style="display:block; line-height:1;">🗑️</span>
+                                </button>
+                            </form>
+                        </div>
+                    @endif
                 </div>
             </div>
         @empty
@@ -194,14 +209,18 @@
                 </h3>
 
                 <p class="mt-2 text-sm text-slate-500">
-                    Post the first community announcement, advisory, or emergency notice.
+                    {{ $canManageAnnouncements
+                        ? 'Post the first community announcement, advisory, or emergency notice.'
+                        : 'No community announcements, advisories, or emergency notices are available yet.' }}
                 </p>
 
-                <button type="button"
-                        onclick="openAnnouncementModal()"
-                        class="mt-5 inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
-                    + Post Announcement
-                </button>
+                @if ($canManageAnnouncements)
+                    <button type="button"
+                            onclick="openAnnouncementModal()"
+                            class="mt-5 inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
+                        + Post Announcement
+                    </button>
+                @endif
             </div>
         @endforelse
     </div>
@@ -213,155 +232,165 @@
     @endif
 </div>
 
-{{-- Post Announcement Modal --}}
-<div id="announcementModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
-    <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-        <div class="mb-6 flex items-center justify-between">
-            <h2 class="text-xl font-bold text-slate-900">
-                Post Announcement
-            </h2>
+@if ($canManageAnnouncements)
+    {{-- Post Announcement Modal --}}
+    <div id="announcementModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+        <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+            <div class="mb-6 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-slate-900">
+                    Post Announcement
+                </h2>
 
-            <button type="button"
-                    onclick="closeAnnouncementModal()"
-                    class="text-2xl leading-none text-slate-500 hover:text-slate-900">
-                &times;
-            </button>
-        </div>
-
-        <form method="POST" action="{{ route('admin.announcements.store') }}" class="space-y-5">
-            @csrf
-
-            <div>
-                <label for="title" class="mb-2 block text-sm font-semibold text-slate-700">
-                    Title *
-                </label>
-
-                <input id="title"
-                       type="text"
-                       name="title"
-                       value="{{ old('title') }}"
-                       required
-                       placeholder="Announcement title"
-                       class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-
-                @error('title')
-                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-
-            <div>
-                <label for="content" class="mb-2 block text-sm font-semibold text-slate-700">
-                    Content *
-                </label>
-
-                <textarea id="content"
-                          name="content"
-                          rows="5"
-                          required
-                          placeholder="Full announcement text..."
-                          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">{{ old('content') }}</textarea>
-
-                @error('content')
-                    <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-
-            <div class="grid gap-5 md:grid-cols-2">
-                <div>
-                    <label for="category" class="mb-2 block text-sm font-semibold text-slate-700">
-                        Category
-                    </label>
-
-                    <select id="category"
-                            name="category"
-                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                        @foreach ($categories as $value => $label)
-                            <option value="{{ $value }}" @selected(old('category', 'general') === $value)>
-                                {{ $label }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label for="priority" class="mb-2 block text-sm font-semibold text-slate-700">
-                        Priority
-                    </label>
-
-                    <select id="priority"
-                            name="priority"
-                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                        @foreach ($priorities as $value => $label)
-                            <option value="{{ $value }}" @selected(old('priority', 'normal') === $value)>
-                                {{ $label }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label for="audience" class="mb-2 block text-sm font-semibold text-slate-700">
-                        Audience
-                    </label>
-
-                    <select id="audience"
-                            name="audience"
-                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                        @foreach ($audiences as $value => $label)
-                            <option value="{{ $value }}" @selected(old('audience', 'everyone') === $value)>
-                                {{ $label }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-            </div>
-
-            <label class="flex cursor-pointer items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4">
-                <div>
-                    <p class="text-sm font-bold text-red-700">
-                        🚨 Activate Calamity Mode
-                    </p>
-
-                    <p class="mt-1 text-sm text-red-600">
-                        Triggers system-wide emergency alert
-                    </p>
-                </div>
-
-                <input type="checkbox"
-                       name="activate_calamity_mode"
-                       value="1"
-                       class="h-5 w-5 rounded border-red-300 text-red-600 focus:ring-red-500">
-            </label>
-
-            <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
                 <button type="button"
                         onclick="closeAnnouncementModal()"
-                        class="rounded-xl border border-slate-300 px-5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
-                    Cancel
-                </button>
-
-                <button type="submit"
-                        class="rounded-xl bg-blue-950 px-5 py-2 text-sm font-bold text-white hover:bg-blue-900">
-                    Post Announcement
+                        class="text-2xl leading-none text-slate-500 hover:text-slate-900">
+                    &times;
                 </button>
             </div>
-        </form>
+
+            <form method="POST" action="{{ route('admin.announcements.store') }}" class="space-y-5">
+                @csrf
+
+                <div>
+                    <label for="title" class="mb-2 block text-sm font-semibold text-slate-700">
+                        Title *
+                    </label>
+
+                    <input id="title"
+                           type="text"
+                           name="title"
+                           value="{{ old('title') }}"
+                           required
+                           placeholder="Announcement title"
+                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+
+                    @error('title')
+                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <label for="content" class="mb-2 block text-sm font-semibold text-slate-700">
+                        Content *
+                    </label>
+
+                    <textarea id="content"
+                              name="content"
+                              rows="5"
+                              required
+                              placeholder="Full announcement text..."
+                              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">{{ old('content') }}</textarea>
+
+                    @error('content')
+                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="grid gap-5 md:grid-cols-2">
+                    <div>
+                        <label for="category" class="mb-2 block text-sm font-semibold text-slate-700">
+                            Category
+                        </label>
+
+                        <select id="category"
+                                name="category"
+                                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                            @foreach ($categories as $value => $label)
+                                <option value="{{ $value }}" @selected(old('category', 'general') === $value)>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="priority" class="mb-2 block text-sm font-semibold text-slate-700">
+                            Priority
+                        </label>
+
+                        <select id="priority"
+                                name="priority"
+                                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                            @foreach ($priorities as $value => $label)
+                                <option value="{{ $value }}" @selected(old('priority', 'normal') === $value)>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="audience" class="mb-2 block text-sm font-semibold text-slate-700">
+                            Audience
+                        </label>
+
+                        <select id="audience"
+                                name="audience"
+                                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                            @foreach ($audiences as $value => $label)
+                                <option value="{{ $value }}" @selected(old('audience', 'everyone') === $value)>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <label class="flex cursor-pointer items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4">
+                    <div>
+                        <p class="text-sm font-bold text-red-700">
+                            🚨 Activate Calamity Mode
+                        </p>
+
+                        <p class="mt-1 text-sm text-red-600">
+                            Triggers system-wide emergency alert
+                        </p>
+                    </div>
+
+                    <input type="checkbox"
+                           name="activate_calamity_mode"
+                           value="1"
+                           class="h-5 w-5 rounded border-red-300 text-red-600 focus:ring-red-500">
+                </label>
+
+                <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+                    <button type="button"
+                            onclick="closeAnnouncementModal()"
+                            class="rounded-xl border border-slate-300 px-5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+
+                    <button type="submit"
+                            class="rounded-xl bg-blue-950 px-5 py-2 text-sm font-bold text-white hover:bg-blue-900">
+                        Post Announcement
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-</div>
 
-<script>
-    function openAnnouncementModal() {
-        const modal = document.getElementById('announcementModal');
+    <script>
+        function openAnnouncementModal() {
+            const modal = document.getElementById('announcementModal');
 
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-    }
+            if (!modal) {
+                return;
+            }
 
-    function closeAnnouncementModal() {
-        const modal = document.getElementById('announcementModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
 
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
-</script>
+        function closeAnnouncementModal() {
+            const modal = document.getElementById('announcementModal');
+
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    </script>
+@endif
 @endsection

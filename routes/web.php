@@ -14,6 +14,7 @@ use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\RoleDashboardController;
 use App\Http\Controllers\SystemBrandingController;
 use App\Http\Controllers\PresenceController;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -66,6 +67,14 @@ Route::middleware(['auth', 'active.user'])
 Route::middleware(['auth', 'active.user'])
     ->get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
     ->name('system-branding.logo');
+
+Route::middleware(['auth', 'active.user'])->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])
+        ->name('profile.edit');
+
+    Route::patch('/profile', [ProfileController::class, 'update'])
+        ->name('profile.update');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -247,6 +256,33 @@ Route::middleware(['auth', 'active.user', 'role:official,dao'])
     ->group(function () {
         Route::get('/dashboard', [RoleDashboardController::class, 'official'])
             ->name('dashboard');
+
+        Route::get('/map', [BarangayMapController::class, 'index'])
+    ->name('map.index');
+
+        Route::get('/emergency-mode', [EmergencyModeController::class, 'index'])
+    ->name('emergency-mode.index');
+
+        Route::get('/announcements', [AnnouncementController::class, 'index'])
+    ->name('announcements.index');
+
+                Route::get('/tanods', [TanodRosterController::class, 'index'])
+            ->name('tanods.index');
+
+        Route::post('/tanods', [TanodRosterController::class, 'store'])
+            ->name('tanods.store');
+
+        Route::patch('/tanods/{tanod}', [TanodRosterController::class, 'update'])
+            ->name('tanods.update');
+
+        Route::delete('/tanods/{tanod}', [TanodRosterController::class, 'destroy'])
+            ->name('tanods.destroy');
+
+                Route::post('/barangays/quick-store', [IncidentController::class, 'quickStoreBarangay'])
+            ->name('barangays.quick-store');
+
+        Route::delete('/barangays/{barangayId}/quick-delete', [IncidentController::class, 'quickDeleteBarangay'])
+            ->name('barangays.quick-delete');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');

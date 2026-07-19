@@ -14,75 +14,75 @@
         <aside id="adminSidebar"
                class="fixed left-0 top-0 z-30 flex h-screen w-72 translate-x-0 flex-col overflow-hidden bg-blue-950 text-white transition-transform duration-300 ease-in-out">
             @php
-    $layoutAuthUser = auth()->user();
+                $layoutAuthUser = auth()->user();
 
-    $systemSetting = null;
+                $systemSetting = null;
 
-    if (
-        class_exists(\App\Models\SystemSetting::class)
-        && \Illuminate\Support\Facades\Schema::hasTable('system_settings')
-    ) {
-        $systemSetting = \App\Models\SystemSetting::query()->first();
-    }
+                if (
+                    class_exists(\App\Models\SystemSetting::class)
+                    && \Illuminate\Support\Facades\Schema::hasTable('system_settings')
+                ) {
+                    $systemSetting = \App\Models\SystemSetting::query()->first();
+                }
 
-    $systemName = $systemSetting?->system_name ?: 'SCSISystem';
-    $systemSubtitle = $systemSetting?->system_subtitle ?: 'Dao, Capiz';
-    $systemLogoPath = $systemSetting?->system_logo_path;
+                $systemName = $systemSetting?->system_name ?: 'SCSISystem';
+                $systemSubtitle = $systemSetting?->system_subtitle ?: 'Dao, Capiz';
+                $systemLogoPath = $systemSetting?->system_logo_path;
 
-    $systemLogoExists = $systemLogoPath
-        && \Illuminate\Support\Facades\Storage::disk('public')->exists($systemLogoPath);
+                $systemLogoExists = $systemLogoPath
+                    && \Illuminate\Support\Facades\Storage::disk('public')->exists($systemLogoPath);
 
-    $systemLogoUrl = $systemLogoExists && \Illuminate\Support\Facades\Route::has('system-branding.logo')
-        ? route('system-branding.logo') . '?v=' . optional($systemSetting?->updated_at)->timestamp
-        : null;
+                $systemLogoUrl = $systemLogoExists && \Illuminate\Support\Facades\Route::has('system-branding.logo')
+                    ? route('system-branding.logo') . '?v=' . optional($systemSetting?->updated_at)->timestamp
+                    : null;
 
-    $canEditSystemBranding = $layoutAuthUser?->role === 'admin'
-        && \Illuminate\Support\Facades\Route::has('admin.system-branding.edit');
-@endphp
+                $canEditSystemBranding = $layoutAuthUser?->role === 'admin'
+                    && \Illuminate\Support\Facades\Route::has('admin.system-branding.edit');
+            @endphp
 
-@if ($canEditSystemBranding)
-    <a href="{{ route('admin.system-branding.edit') }}"
-       title="Edit system branding"
-       class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6 transition hover:bg-blue-900">
-        <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600">
-            @if ($systemLogoUrl)
-    <img src="{{ $systemLogoUrl }}"
-         alt="{{ $systemName }} Logo"
-         class="h-full w-full object-cover"
-         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+            @if ($canEditSystemBranding)
+                <a href="{{ route('admin.system-branding.edit') }}"
+                   title="Edit system branding"
+                   class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6 transition hover:bg-blue-900">
+                    <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600">
+                        @if ($systemLogoUrl)
+                            <img src="{{ $systemLogoUrl }}"
+                                 alt="{{ $systemName }} Logo"
+                                 class="h-full w-full object-cover"
+                                 onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
 
-    <span class="hidden text-lg font-bold">🛡</span>
-@else
-    <span class="text-lg font-bold">🛡</span>
-@endif
-        </div>
+                            <span class="hidden text-lg font-bold">🛡</span>
+                        @else
+                            <span class="text-lg font-bold">🛡</span>
+                        @endif
+                    </div>
 
-        <div class="min-w-0">
-            <h1 class="truncate text-lg font-bold leading-tight">{{ $systemName }}</h1>
-            <p class="truncate text-sm text-blue-200">{{ $systemSubtitle }}</p>
-        </div>
-    </a>
-@else
-    <div class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6">
-        <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600">
-            @if ($systemLogoUrl)
-    <img src="{{ $systemLogoUrl }}"
-         alt="{{ $systemName }} Logo"
-         class="h-full w-full object-cover"
-         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
+                    <div class="min-w-0">
+                        <h1 class="truncate text-lg font-bold leading-tight">{{ $systemName }}</h1>
+                        <p class="truncate text-sm text-blue-200">{{ $systemSubtitle }}</p>
+                    </div>
+                </a>
+            @else
+                <div class="shrink-0 flex items-center gap-3 border-b border-blue-900 px-6 py-6">
+                    <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600">
+                        @if ($systemLogoUrl)
+                            <img src="{{ $systemLogoUrl }}"
+                                 alt="{{ $systemName }} Logo"
+                                 class="h-full w-full object-cover"
+                                 onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden');">
 
-    <span class="hidden text-lg font-bold">🛡</span>
-@else
-    <span class="text-lg font-bold">🛡</span>
-@endif
-        </div>
+                            <span class="hidden text-lg font-bold">🛡</span>
+                        @else
+                            <span class="text-lg font-bold">🛡</span>
+                        @endif
+                    </div>
 
-        <div class="min-w-0">
-            <h1 class="truncate text-lg font-bold leading-tight">{{ $systemName }}</h1>
-            <p class="truncate text-sm text-blue-200">{{ $systemSubtitle }}</p>
-        </div>
-    </div>
-@endif
+                    <div class="min-w-0">
+                        <h1 class="truncate text-lg font-bold leading-tight">{{ $systemName }}</h1>
+                        <p class="truncate text-sm text-blue-200">{{ $systemSubtitle }}</p>
+                    </div>
+                </div>
+            @endif
 
             @php
                 $authUser = auth()->user();
@@ -93,14 +93,28 @@
                     : null;
 
                 $authPhotoUrl = $authPhotoPath && Route::has('users.profile-photo')
-    ? route('users.profile-photo', $authUser) . '?v=' . optional($authUser?->updated_at)->timestamp
-    : null;
+                    ? route('users.profile-photo', $authUser) . '?v=' . optional($authUser?->updated_at)->timestamp
+                    : null;
 
                 $authInitial = strtoupper(mb_substr($authUser?->name ?? 'U', 0, 1));
 
-                $authProfileUrl = $authUser && $authUser->role === 'admin' && Route::has('admin.users.edit')
-                    ? route('admin.users.edit', $authUser)
-                    : '#';
+                $authProfileUrl = '#';
+
+                if ($authUser) {
+                    $authProfileUrl = match ($authUser->role) {
+                        'admin' => Route::has('admin.users.edit')
+                            ? route('admin.users.edit', $authUser)
+                            : (Route::has('profile.edit') ? route('profile.edit') : '#'),
+
+                        'official', 'dao', 'tanod', 'resident' => Route::has('profile.edit')
+                            ? route('profile.edit')
+                            : '#',
+
+                        default => Route::has('profile.edit')
+                            ? route('profile.edit')
+                            : '#',
+                    };
+                }
 
                 $navItems = match ($role) {
                     'admin' => [
@@ -147,7 +161,7 @@
                             'active' => ['admin.announcements.*'],
                         ],
                         [
-                            'label' => 'Emergency Mode',
+                            'label' => 'Emergency Hotlines',
                             'icon' => '🚨',
                             'route' => 'admin.emergency-mode.index',
                             'active' => ['admin.emergency-mode.*'],
@@ -173,19 +187,43 @@
                     ],
 
                     'official', 'dao' => [
-                        [
-                            'label' => 'Dashboard',
-                            'icon' => '▦',
-                            'route' => 'official.dashboard',
-                            'active' => ['official.dashboard'],
-                        ],
-                        [
-                            'label' => 'Incidents',
-                            'icon' => '📄',
-                            'route' => 'official.incidents.index',
-                            'active' => ['official.incidents.*'],
-                        ],
-                    ],
+    [
+        'label' => 'Dashboard',
+        'icon' => '▦',
+        'route' => 'official.dashboard',
+        'active' => ['official.dashboard'],
+    ],
+    [
+        'label' => 'Incidents',
+        'icon' => '📄',
+        'route' => 'official.incidents.index',
+        'active' => ['official.incidents.*'],
+    ],
+    [
+        'label' => 'Tanod Roster',
+        'icon' => '👥',
+        'route' => 'official.tanods.index',
+        'active' => ['official.tanods.*'],
+    ],
+    [
+        'label' => 'Announcements',
+        'icon' => '📢',
+        'route' => 'official.announcements.index',
+        'active' => ['official.announcements.*'],
+    ],
+    [
+        'label' => 'Emergency Hotlines',
+        'icon' => '🚨',
+        'route' => 'official.emergency-mode.index',
+        'active' => ['official.emergency-mode.*'],
+    ],
+    [
+        'label' => 'Map',
+        'icon' => '🗺',
+        'route' => 'official.map.index',
+        'active' => ['official.map.*'],
+    ],
+],
 
                     'tanod' => [
                         [
@@ -294,7 +332,6 @@
                                 {{ ucfirst($authUser?->role ?? 'User') }}
                             </p>
                         </div>
-
                     </summary>
 
                     <div class="absolute bottom-full left-0 right-0 z-50 mb-3 overflow-hidden rounded-2xl border border-blue-900 bg-blue-950 shadow-2xl">
@@ -334,19 +371,18 @@
                                 <span>👤</span>
                                 <span>Profile</span>
                             </a>
-
                         </div>
 
                         <div class="border-t border-blue-900 py-2">
                             <form method="POST" action="{{ route('logout') }}" class="m-0">
-    @csrf
+                                @csrf
 
-    <button type="submit"
-            class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white">
-        <span>↪</span>
-        <span>Logout</span>
-    </button>
-</form>
+                                <button type="submit"
+                                        class="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white">
+                                    <span>↪</span>
+                                    <span>Logout</span>
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </details>
@@ -377,68 +413,68 @@
 
                 <div class="flex items-center gap-4">
                     @php
-    $importantNotificationTypes = [
-        'announcement',
-        'incident_reported',
-        'calamity',
-        'community_problem',
-        'community',
-        'dispatch',
-        'escalation',
-        'emergency',
-        'resolved',
-    ];
+                        $importantNotificationTypes = [
+                            'announcement',
+                            'incident_reported',
+                            'calamity',
+                            'community_problem',
+                            'community',
+                            'dispatch',
+                            'escalation',
+                            'emergency',
+                            'resolved',
+                        ];
 
-    $notificationTypeLabels = [
-        'announcement' => 'Announcement',
-        'incident_reported' => 'New Incident Report',
-        'calamity' => 'Calamity Alert',
-        'community_problem' => 'Community Problem',
-        'community' => 'Community',
-        'dispatch' => 'Dispatch',
-        'escalation' => 'Escalation',
-        'emergency' => 'Emergency',
-        'resolved' => 'Resolved',
-    ];
+                        $notificationTypeLabels = [
+                            'announcement' => 'Announcement',
+                            'incident_reported' => 'New Incident Report',
+                            'calamity' => 'Calamity Alert',
+                            'community_problem' => 'Community Problem',
+                            'community' => 'Community',
+                            'dispatch' => 'Dispatch',
+                            'escalation' => 'Escalation',
+                            'emergency' => 'Emergency',
+                            'resolved' => 'Resolved',
+                        ];
 
-    $unreadNotificationCount = 0;
-    $notificationUrl = '#';
-    $latestUnreadNotifications = collect();
+                        $unreadNotificationCount = 0;
+                        $notificationUrl = '#';
+                        $latestUnreadNotifications = collect();
 
-    if ($authUser) {
-        $notificationQuery = \App\Models\UserNotification::query()
-            ->where('user_id', $authUser->id)
-            ->where('is_read', false)
-            ->whereIn('type', $importantNotificationTypes);
+                        if ($authUser) {
+                            $notificationQuery = \App\Models\UserNotification::query()
+                                ->where('user_id', $authUser->id)
+                                ->where('is_read', false)
+                                ->whereIn('type', $importantNotificationTypes);
 
-        $unreadNotificationCount = (clone $notificationQuery)->count();
+                            $unreadNotificationCount = (clone $notificationQuery)->count();
 
-        $latestUnreadNotifications = (clone $notificationQuery)
-            ->latest()
-            ->limit(6)
-            ->get();
+                            $latestUnreadNotifications = (clone $notificationQuery)
+                                ->latest()
+                                ->limit(6)
+                                ->get();
 
-        $notificationUrl = match ($authUser->role) {
-            'admin' => Route::has('admin.tanod-alerts.index')
-                ? route('admin.tanod-alerts.index')
-                : '#',
+                            $notificationUrl = match ($authUser->role) {
+                                'admin' => Route::has('admin.tanod-alerts.index')
+                                    ? route('admin.tanod-alerts.index')
+                                    : '#',
 
-            'tanod' => Route::has('tanod.tanod-alerts.index')
-                ? route('tanod.tanod-alerts.index')
-                : '#',
+                                'tanod' => Route::has('tanod.tanod-alerts.index')
+                                    ? route('tanod.tanod-alerts.index')
+                                    : '#',
 
-            'official' => Route::has('official.incidents.index')
-                ? route('official.incidents.index')
-                : '#',
+                                'official', 'dao' => Route::has('official.incidents.index')
+                                    ? route('official.incidents.index')
+                                    : '#',
 
-            'resident' => Route::has('resident.incidents.index')
-                ? route('resident.incidents.index')
-                : '#',
+                                'resident' => Route::has('resident.incidents.index')
+                                    ? route('resident.incidents.index')
+                                    : '#',
 
-            default => '#',
-        };
-    }
-@endphp
+                                default => '#',
+                            };
+                        }
+                    @endphp
 
                     <details class="relative z-[110]">
                         <summary class="relative inline-flex cursor-pointer list-none items-center justify-center">
@@ -450,12 +486,12 @@
                                 </span>
                             @endif
                         </summary>
-                        
-<div id="notificationBackdrop"
-     class="fixed bottom-0 left-72 right-0 top-16 z-[100] bg-slate-950/20 backdrop-blur-[1px] transition-[left] duration-300 ease-in-out"
-     onclick="this.closest('details').removeAttribute('open')"
-     aria-hidden="true">
-</div>
+
+                        <div id="notificationBackdrop"
+                             class="fixed bottom-0 left-72 right-0 top-16 z-[100] bg-slate-950/20 backdrop-blur-[1px] transition-[left] duration-300 ease-in-out"
+                             onclick="this.closest('details').removeAttribute('open')"
+                             aria-hidden="true">
+                        </div>
 
                         <div class="fixed right-8 top-[4.5rem] z-[120] flex w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/10">
                             <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -477,25 +513,25 @@
 
                                         $incidentRoute = null;
 
-$incidentLinkedTypes = [
-    'incident_reported',
-    'dispatch',
-    'escalation',
-];
+                                        $incidentLinkedTypes = [
+                                            'incident_reported',
+                                            'dispatch',
+                                            'escalation',
+                                        ];
 
-if ($notification->source_id && in_array($type, $incidentLinkedTypes, true)) {
-    $incidentRouteName = match ($authUser?->role) {
-        'admin' => 'admin.incidents.show',
-        'official' => 'official.incidents.show',
-        'tanod' => 'tanod.incidents.show',
-        'resident' => 'resident.incidents.show',
-        default => null,
-    };
+                                        if ($notification->source_id && in_array($type, $incidentLinkedTypes, true)) {
+                                            $incidentRouteName = match ($authUser?->role) {
+                                                'admin' => 'admin.incidents.show',
+                                                'official', 'dao' => 'official.incidents.show',
+                                                'tanod' => 'tanod.incidents.show',
+                                                'resident' => 'resident.incidents.show',
+                                                default => null,
+                                            };
 
-    if ($incidentRouteName && Route::has($incidentRouteName)) {
-        $incidentRoute = route($incidentRouteName, $notification->source_id);
-    }
-}
+                                            if ($incidentRouteName && Route::has($incidentRouteName)) {
+                                                $incidentRoute = route($incidentRouteName, $notification->source_id);
+                                            }
+                                        }
                                     @endphp
 
                                     <div class="border-b border-slate-100 px-4 py-3 hover:bg-slate-50">
