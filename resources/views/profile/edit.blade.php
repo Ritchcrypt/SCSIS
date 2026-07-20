@@ -189,7 +189,7 @@
                 </div>
             </div>
 
-            <div class="flex justify-end gap-3">
+                        <div class="flex justify-end gap-3">
                 <a href="{{ route('dashboard') }}"
                    class="inline-flex rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                     Cancel
@@ -201,6 +201,139 @@
                 </button>
             </div>
         </form>
+
+        @php
+            $selfServiceRole = strtolower((string) ($userRecord->role ?? auth()->user()?->role ?? ''));
+        @endphp
+
+        @if (in_array($selfServiceRole, ['official', 'dao', 'tanod', 'resident'], true))
+            <div class="border-t border-slate-200 px-6 py-5">
+                <div class="flex justify-end gap-3">
+                    <button type="button"
+                            onclick="document.getElementById('selfResetPasswordPanel').classList.toggle('hidden')"
+                            class="inline-flex rounded-xl border border-yellow-300 bg-yellow-50 px-5 py-2.5 text-sm font-semibold text-yellow-700 hover:bg-yellow-100">
+                        Reset Password
+                    </button>
+
+                    <button type="button"
+                            onclick="document.getElementById('selfDeleteAccountPanel').classList.toggle('hidden')"
+                            class="inline-flex rounded-xl border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100">
+                        Permanent Delete
+                    </button>
+                </div>
+
+                <div id="selfResetPasswordPanel"
+                     class="mt-5 hidden rounded-2xl border border-yellow-200 bg-yellow-50 p-5">
+                    <h2 class="text-lg font-bold text-yellow-800">
+                        Reset Password
+                    </h2>
+
+                    <p class="mt-1 text-sm text-yellow-700">
+                        Update your password using your current password.
+                    </p>
+
+                    <form method="POST"
+                         action="{{ route('profile.password.update') }}"
+                          class="mt-5 space-y-4">
+                        @csrf
+                        @method('PATCH')
+
+                        <div>
+                            <label for="current_password" class="mb-2 block text-sm font-semibold text-slate-700">
+                                Current Password
+                            </label>
+
+                            <input id="current_password"
+                                   name="current_password"
+                                   type="password"
+                                   autocomplete="current-password"
+                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                            @error('current_password', 'updatePassword')
+                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="password" class="mb-2 block text-sm font-semibold text-slate-700">
+                                New Password
+                            </label>
+
+                            <input id="password"
+                                   name="password"
+                                   type="password"
+                                   autocomplete="new-password"
+                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                            @error('password', 'updatePassword')
+                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div>
+                            <label for="password_confirmation" class="mb-2 block text-sm font-semibold text-slate-700">
+                                Confirm New Password
+                            </label>
+
+                            <input id="password_confirmation"
+                                   name="password_confirmation"
+                                   type="password"
+                                   autocomplete="new-password"
+                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button type="submit"
+                                    class="inline-flex rounded-xl bg-yellow-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-yellow-600">
+                                Save New Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="selfDeleteAccountPanel"
+                     class="mt-5 hidden rounded-2xl border border-red-200 bg-red-50 p-5">
+                    <h2 class="text-lg font-bold text-red-800">
+                        Permanent Delete Account
+                    </h2>
+
+                    <p class="mt-1 text-sm leading-6 text-red-700">
+                        This will permanently delete your account. This action cannot be undone.
+                    </p>
+
+                    <form method="POST"
+                          action="{{ route('profile.self-delete') }}"
+                          class="mt-5 space-y-4"
+                          onsubmit="return confirm('Permanently delete this account? This cannot be undone.');">
+                        @csrf
+                        @method('DELETE')
+
+                        <div>
+                            <label for="delete_password" class="mb-2 block text-sm font-semibold text-slate-700">
+                                Confirm Password
+                            </label>
+
+                            <input id="delete_password"
+                                   name="password"
+                                   type="password"
+                                   autocomplete="current-password"
+                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100">
+
+                            @error('password', 'userDeletion')
+                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button type="submit"
+                                    class="inline-flex rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700">
+                                Delete My Account Permanently
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
     </div>
 </div>
 @endsection

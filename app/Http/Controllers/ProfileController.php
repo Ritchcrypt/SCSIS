@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -86,6 +88,56 @@ class ProfileController extends Controller
         return redirect()
             ->route('profile.edit')
             ->with('success', 'Profile updated successfully.');
+    }
+
+    public function updatePassword(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user && in_array(strtolower((string) $user->role), [
+            'official',
+            'dao',
+            'tanod',
+            'resident',
+        ], true), 403);
+
+        $validated = $request->validateWithBag('updatePassword', [
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user->forceFill([
+            'password' => Hash::make($validated['password']),
+        ])->save();
+
+        return redirect()
+            ->route('profile.edit')
+            ->with('success', 'Password updated successfully.');
+    }
+
+    public function destroyOwnAccount(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user && in_array(strtolower((string) $user->role), [
+            'official',
+            'dao',
+            'tanod',
+            'resident',
+        ], true), 403);
+
+        $request->validateWithBag('userDeletion', [
+            'password' => ['required', 'current_password'],
+        ]);
+
+        Auth::logout();
+
+        $user->delete();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect('/');
     }
 
     private function storeProfilePhoto(Request $request): ?string
