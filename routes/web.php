@@ -15,6 +15,7 @@ use App\Http\Controllers\RoleDashboardController;
 use App\Http\Controllers\SystemBrandingController;
 use App\Http\Controllers\PresenceController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\NotificationOpenController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -67,6 +68,10 @@ Route::middleware(['auth', 'active.user'])
 Route::middleware(['auth', 'active.user'])
     ->get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
     ->name('system-branding.logo');
+
+Route::middleware(['auth', 'active.user'])
+    ->post('/notifications/{notification}/open', [NotificationOpenController::class, 'open'])
+    ->name('notifications.open');
 
 Route::middleware(['auth', 'active.user'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])
@@ -318,6 +323,12 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
         Route::get('/dashboard', [RoleDashboardController::class, 'tanod'])
             ->name('dashboard');
 
+        Route::get('/announcements', [AnnouncementController::class, 'index'])
+            ->name('announcements.index');
+
+        Route::get('/announcements', [AnnouncementController::class, 'index'])
+            ->name('announcements.index');
+
         Route::get('/tanod-tasks', [TanodTaskController::class, 'tanodIndex'])
             ->name('tanod-tasks.index');
 
@@ -363,6 +374,9 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
     ->group(function () {
         Route::get('/dashboard', [RoleDashboardController::class, 'resident'])
             ->name('dashboard');
+
+        Route::get('/announcements', [AnnouncementController::class, 'index'])
+            ->name('announcements.index');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');

@@ -233,6 +233,12 @@
                             'active' => ['tanod.dashboard'],
                         ],
                         [
+                            'label' => 'Announcements',
+                            'icon' => '📢',
+                            'route' => 'tanod.announcements.index',
+                            'active' => ['tanod.announcements.*'],
+                        ],
+                        [
                             'label' => 'Tanod Tasks',
                             'icon' => '📋',
                             'route' => 'tanod.tanod-tasks.index',
@@ -258,6 +264,12 @@
                             'icon' => '▦',
                             'route' => 'resident.dashboard',
                             'active' => ['resident.dashboard'],
+                        ],
+                        [
+                            'label' => 'Announcements',
+                            'icon' => '📢',
+                            'route' => 'resident.announcements.index',
+                            'active' => ['resident.announcements.*'],
                         ],
                         [
                             'label' => 'Report Incident',
@@ -413,65 +425,114 @@
 
                 <div class="flex items-center gap-4">
                     @php
-                        $importantNotificationTypes = [
-                            'announcement',
-                            'incident_reported',
-                            'calamity',
-                            'community_problem',
-                            'community',
-                            'dispatch',
-                            'escalation',
-                            'emergency',
-                            'resolved',
-                        ];
+                        /*
+                        |--------------------------------------------------------------------------
+                        | Header Notification Bell
+                        |--------------------------------------------------------------------------
+                        | Unified notification bell.
+                        |
+                        | Reads every unread notification for the current logged-in user
+                        | directly from the notifications table. No incident-only filter.
+                        */
+
+                        $authUser = $authUser ?? auth()->user();
 
                         $notificationTypeLabels = [
-                            'announcement' => 'Announcement',
-                            'incident_reported' => 'New Incident Report',
-                            'calamity' => 'Calamity Alert',
-                            'community_problem' => 'Community Problem',
-                            'community' => 'Community',
+                            'incident' => 'Incident',
+                            'incident_reported' => 'Incident Report',
+                            'incident_update' => 'Incident Update',
                             'dispatch' => 'Dispatch',
                             'escalation' => 'Escalation',
                             'emergency' => 'Emergency',
                             'resolved' => 'Resolved',
+                            'announcement' => 'Announcement',
+                            'calamity' => 'Calamity',
+                            'tanod_alert' => 'Tanod Alert',
+                            'tanod_task' => 'Tanod Task',
+                            'system' => 'System',
+                            'community_problem' => 'Community Problem',
+                            'community' => 'Community',
                         ];
 
                         $unreadNotificationCount = 0;
                         $notificationUrl = '#';
                         $latestUnreadNotifications = collect();
 
-                        if ($authUser) {
-                            $notificationQuery = \App\Models\UserNotification::query()
-                                ->where('user_id', $authUser->id)
-                                ->where('is_read', false)
-                                ->whereIn('type', $importantNotificationTypes);
+                        if (
+                            $authUser
+                            && \Illuminate\Support\Facades\Schema::hasTable('notifications')
+                            && \Illuminate\Support\Facades\Schema::hasColumn('notifications', 'user_id')
+                        ) {
+                            $notificationQuery = \Illuminate\Support\Facades\DB::table('notifications')
+                                ->where('user_id', (int) $authUser->id);
 
-                            $unreadNotificationCount = (clone $notificationQuery)->count();
+                            if (\Illuminate\Support\Facades\Schema::hasColumn('notifications', 'is_read')) {
+                                $notificationQuery->where(function ($query) {
+                                    $query->where('is_read', 0)
+                                        ->orWhere('is_read', false)
+                                        ->orWhereNull('is_read');
+                                });
+                            }
 
-                            $latestUnreadNotifications = (clone $notificationQuery)
-                                ->latest()
-                                ->limit(6)
+                            $allUnreadNotifications = $notificationQuery
+                                ->orderByDesc('created_at')
+                                ->orderByDesc('id')
                                 ->get();
 
-                            $notificationUrl = match ($authUser->role) {
-                                'admin' => Route::has('admin.tanod-alerts.index')
-                                    ? route('admin.tanod-alerts.index')
-                                    : '#',
+                            $groupedUnreadNotifications = $allUnreadNotifications
+                                ->unique(function ($notification) {
+                                    $type = strtolower((string) ($notification->type ?? 'notification'));
+                                    $sourceId = $notification->source_id ?? null;
+                                    $notificationId = $notification->id ?? uniqid();
 
-                                'tanod' => Route::has('tanod.tanod-alerts.index')
-                                    ? route('tanod.tanod-alerts.index')
-                                    : '#',
+                                    return $sourceId
+                                        ? $type . ':source:' . $sourceId
+                                        : $type . ':notification:' . $notificationId;
+                                })
+                                ->values();
 
-                                'official', 'dao' => Route::has('official.incidents.index')
-                                    ? route('official.incidents.index')
-                                    : '#',
+                            $unreadNotificationCount = $groupedUnreadNotifications->count();
 
-                                'resident' => Route::has('resident.incidents.index')
-                                    ? route('resident.incidents.index')
-                                    : '#',
+                            $latestUnreadNotifications = $groupedUnreadNotifications
+                                ->take(20)
+                                ->values();
 
-                                default => '#',
+                            $notificationUrl = match (strtolower((string) $authUser->role)) {
+                                'admin' => \Illuminate\Support\Facades\Route::has('admin.announcements.index')
+                                    ? route('admin.announcements.index')
+                                    : (\Illuminate\Support\Facades\Route::has('admin.tanod-alerts.index')
+                                        ? route('admin.tanod-alerts.index')
+                                        : (\Illuminate\Support\Facades\Route::has('admin.dashboard')
+                                            ? route('admin.dashboard')
+                                            : '#')),
+
+                                'official', 'dao' => \Illuminate\Support\Facades\Route::has('official.announcements.index')
+                                    ? route('official.announcements.index')
+                                    : (\Illuminate\Support\Facades\Route::has('official.incidents.index')
+                                        ? route('official.incidents.index')
+                                        : (\Illuminate\Support\Facades\Route::has('official.dashboard')
+                                            ? route('official.dashboard')
+                                            : '#')),
+
+                                'tanod' => \Illuminate\Support\Facades\Route::has('tanod.announcements.index')
+                                    ? route('tanod.announcements.index')
+                                    : (\Illuminate\Support\Facades\Route::has('tanod.tanod-alerts.index')
+                                        ? route('tanod.tanod-alerts.index')
+                                        : (\Illuminate\Support\Facades\Route::has('tanod.dashboard')
+                                            ? route('tanod.dashboard')
+                                            : '#')),
+
+                                'resident' => \Illuminate\Support\Facades\Route::has('resident.announcements.index')
+                                    ? route('resident.announcements.index')
+                                    : (\Illuminate\Support\Facades\Route::has('resident.incidents.index')
+                                        ? route('resident.incidents.index')
+                                        : (\Illuminate\Support\Facades\Route::has('resident.dashboard')
+                                            ? route('resident.dashboard')
+                                            : '#')),
+
+                                default => \Illuminate\Support\Facades\Route::has('dashboard')
+                                    ? route('dashboard')
+                                    : '#',
                             };
                         }
                     @endphp
@@ -496,8 +557,13 @@
                         <div class="fixed right-8 top-[4.5rem] z-[120] flex w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/10">
                             <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                                 <div>
-                                    <p class="text-sm font-bold text-slate-900">Unread Notifications</p>
-                                    <p class="text-xs text-slate-500">Important new updates only</p>
+                                    <p class="text-sm font-bold text-slate-900">
+                                        Unread Notifications
+                                    </p>
+
+                                    <p class="text-xs text-slate-500">
+                                        Latest updates for your account
+                                    </p>
                                 </div>
 
                                 <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
@@ -505,55 +571,82 @@
                                 </span>
                             </div>
 
-                            <div class="max-h-[calc(100vh-13rem)] overflow-y-auto">
+                            <div class="max-h-80 divide-y divide-slate-200 overflow-y-scroll overscroll-contain pr-1"
+                                 style="scrollbar-gutter: stable;">
                                 @forelse ($latestUnreadNotifications as $notification)
                                     @php
-                                        $type = strtolower($notification->type ?? 'incident');
-                                        $typeLabel = $notificationTypeLabels[$type] ?? ucfirst($type);
+                                        $type = strtolower((string) ($notification->type ?? 'notification'));
 
-                                        $incidentRoute = null;
+                                        $typeLabel = $notificationTypeLabels[$type]
+                                            ?? ucwords(str_replace('_', ' ', $type));
 
-                                        $incidentLinkedTypes = [
-                                            'incident_reported',
-                                            'dispatch',
-                                            'escalation',
-                                        ];
+                                        $notificationMessage = $notification->message
+                                            ?? $notification->title
+                                            ?? 'No notification message provided.';
 
-                                        if ($notification->source_id && in_array($type, $incidentLinkedTypes, true)) {
-                                            $incidentRouteName = match ($authUser?->role) {
-                                                'admin' => 'admin.incidents.show',
-                                                'official', 'dao' => 'official.incidents.show',
-                                                'tanod' => 'tanod.incidents.show',
-                                                'resident' => 'resident.incidents.show',
-                                                default => null,
-                                            };
-
-                                            if ($incidentRouteName && Route::has($incidentRouteName)) {
-                                                $incidentRoute = route($incidentRouteName, $notification->source_id);
-                                            }
+                                        try {
+                                            $notificationAge = ! empty($notification->created_at)
+                                                ? \Carbon\Carbon::parse($notification->created_at)->diffForHumans()
+                                                : 'No date';
+                                        } catch (\Throwable $e) {
+                                            $notificationAge = 'No date';
                                         }
+
+                                        $notificationId = $notification->id ?? null;
+
+                                        $canOpenNotification = $notificationId
+                                            && \Illuminate\Support\Facades\Route::has('notifications.open');
                                     @endphp
 
-                                    <div class="border-b border-slate-100 px-4 py-3 hover:bg-slate-50">
-                                        <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
-                                            {{ $typeLabel }}
-                                        </span>
+                                    @if ($canOpenNotification)
+                                        <form method="POST"
+                                              action="{{ route('notifications.open', $notificationId) }}"
+                                              class="m-0">
+                                            @csrf
 
-                                        <p class="mt-1 text-xs leading-5 text-slate-600">
-                                            {{ $notification->message ?? 'No notification message provided.' }}
-                                        </p>
+                                            <button type="submit"
+                                                    class="block w-full px-4 py-3 text-left transition hover:bg-slate-50">
+                                                <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                                                    {{ $typeLabel }}
+                                                </span>
 
-                                        <p class="mt-2 text-[11px] text-slate-400">
-                                            {{ $notification->created_at?->diffForHumans() ?? 'No date' }}
-                                        </p>
+                                                <p class="mt-2 text-xs leading-5 text-slate-600">
+                                                    {{ $notificationMessage }}
+                                                </p>
 
-                                        @if ($incidentRoute)
-                                            <a href="{{ $incidentRoute }}"
-                                               class="mt-3 inline-flex text-xs font-bold text-blue-700 hover:text-blue-900">
-                                                Open Related Incident →
-                                            </a>
-                                        @endif
-                                    </div>
+                                                <div class="mt-2 flex items-center justify-between gap-3">
+                                                    <p class="text-[11px] text-slate-400">
+                                                        {{ $notificationAge }}
+                                                    </p>
+
+                                                    <span class="text-[11px] font-bold text-blue-700">
+                                                        Open →
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        </form>
+                                    @else
+                                        <a href="{{ $notificationUrl }}"
+                                           class="block px-4 py-3 transition hover:bg-slate-50">
+                                            <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                                                {{ $typeLabel }}
+                                            </span>
+
+                                            <p class="mt-2 text-xs leading-5 text-slate-600">
+                                                {{ $notificationMessage }}
+                                            </p>
+
+                                            <div class="mt-2 flex items-center justify-between gap-3">
+                                                <p class="text-[11px] text-slate-400">
+                                                    {{ $notificationAge }}
+                                                </p>
+
+                                                <span class="text-[11px] font-bold text-blue-700">
+                                                    Open →
+                                                </span>
+                                            </div>
+                                        </a>
+                                    @endif
                                 @empty
                                     <div class="px-4 py-8 text-center">
                                         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl">
@@ -561,22 +654,16 @@
                                         </div>
 
                                         <p class="mt-3 text-sm font-bold text-slate-900">
-                                            No unread notifications
+                                            No unread notifications.
                                         </p>
 
                                         <p class="mt-1 text-xs text-slate-500">
-                                            New important updates will appear here.
+                                            New updates will appear here.
                                         </p>
                                     </div>
                                 @endforelse
                             </div>
 
-                            <div class="border-t border-slate-200 bg-slate-50 px-4 py-3">
-                                <a href="{{ $notificationUrl }}"
-                                   class="block rounded-xl bg-blue-600 px-4 py-2 text-center text-sm font-bold text-white hover:bg-blue-700">
-                                    View All Alerts
-                                </a>
-                            </div>
                         </div>
                     </details>
                 </div>

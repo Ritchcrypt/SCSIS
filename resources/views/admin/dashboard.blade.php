@@ -25,15 +25,6 @@
             <p class="mt-2 text-sm font-medium text-slate-600">Active Cases</p>
         </div>
 
-        <div class="rounded-2xl border border-emerald-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg">
-            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                ✅
-            </div>
-
-            <p class="text-4xl font-bold text-slate-900">{{ $resolvedCases }}</p>
-            <p class="mt-2 text-sm font-medium text-slate-600">Resolved</p>
-        </div>
-
         <div class="rounded-2xl border border-red-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
                 ⚠️
@@ -41,6 +32,15 @@
 
             <p class="text-4xl font-bold text-slate-900">{{ $criticalIncidents }}</p>
             <p class="mt-2 text-sm font-medium text-slate-600">Critical</p>
+        </div>
+
+        <div class="rounded-2xl border border-emerald-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600">
+                ✅
+            </div>
+
+            <p class="text-4xl font-bold text-slate-900">{{ $resolvedCases }}</p>
+            <p class="mt-2 text-sm font-medium text-slate-600">Resolved</p>
         </div>
 
         <div class="rounded-2xl border border-violet-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg">
@@ -97,10 +97,6 @@
                             ?? $incident->incident_title
                             ?? 'Untitled Incident';
 
-                        $categoryName = $incident->category?->category_name
-                            ?? $incident->category?->name
-                            ?? 'Uncategorized';
-
                         $statusName = $incident->currentStatus?->status_name
                             ?? $incident->status?->status_name
                             ?? $incident->status
@@ -151,8 +147,6 @@
                                         </p>
 
                                         <p class="mt-1 text-sm text-slate-500">
-                                            {{ $categoryName }}
-                                            ·
                                             <span class="font-semibold
                                                 @if ($normalizedStatus === 'escalated') text-red-600
                                                 @elseif ($normalizedStatus === 'dispatched' || $normalizedStatus === 'responding') text-orange-600

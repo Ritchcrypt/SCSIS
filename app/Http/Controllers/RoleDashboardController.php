@@ -182,25 +182,28 @@ class RoleDashboardController extends Controller
         return $query->count();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Official Recent Incident Activity
+    |--------------------------------------------------------------------------
+    | Uses the Incident model and relationships so Official dashboard status
+    | matches Admin dashboard status. Do not use direct statuses table join here,
+    | because the latest/current status may come from the model relationship.
+    */
     private function latestIncidents(int $limit = 6): Collection
     {
         if (! Schema::hasTable('incidents')) {
             return collect();
         }
 
-        $query = DB::table('incidents')
-            ->leftJoin('statuses', 'statuses.id', '=', 'incidents.status_id')
-            ->leftJoin('incident_categories', 'incident_categories.id', '=', 'incidents.category_id')
-            ->select([
-                'incidents.id',
-                'incidents.incident_code',
-                'incidents.incident_title',
-                'incidents.priority',
-                'incidents.created_at',
-                'incidents.reported_at',
-                'incidents.incident_datetime',
-                'statuses.status_name',
-                'incident_categories.category_name',
+        $query = Incident::query()
+            ->with([
+                'currentStatus',
+                'status',
+                'category',
+                'reporter',
+                'resident',
+                'assignedTanod',
             ]);
 
         $this->applyIncidentOrdering($query);

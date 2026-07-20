@@ -2,30 +2,59 @@
 
 @section('content')
 @php
-    $totalIncidents = (int) ($summary['total_incidents'] ?? 0);
-    $pendingIncidents = (int) ($summary['pending_incidents'] ?? 0);
-    $activeIncidents = (int) ($summary['active_incidents'] ?? 0);
-    $resolvedIncidents = (int) ($summary['resolved_incidents'] ?? 0);
-    $latestRecordsCount = $latestIncidents?->count() ?? 0;
+    $summary = $summary ?? [];
+    $recentIncidents = $recentIncidents ?? ($latestIncidents ?? collect());
 
-    $watchCount = $pendingIncidents + $activeIncidents;
+    $totalIncidents = (int) data_get($summary, 'total_incidents', 0);
 
-    if ($activeIncidents > 0) {
-        $watchLabel = 'Watch';
-        $watchTitle = 'Active Monitoring';
-        $watchDetails = $pendingIncidents . ' pending · ' . $activeIncidents . ' active';
-        $watchAdvisory = 'Advisory: Barangay officials should monitor active and pending incidents, coordinate updates, and verify response progress throughout the day.';
-    } elseif ($pendingIncidents > 0) {
-        $watchLabel = 'Observe';
-        $watchTitle = 'Pending Review';
-        $watchDetails = $pendingIncidents . ' pending · ' . $activeIncidents . ' active';
-        $watchAdvisory = 'Advisory: Pending reports need review. Officials should verify details and update case status when action is taken.';
-    } else {
-        $watchLabel = 'Stable';
-        $watchTitle = 'No Active Alerts';
-        $watchDetails = $resolvedIncidents . ' resolved records';
-        $watchAdvisory = 'Advisory: No active incident load is currently detected. Continue routine monitoring and keep records updated.';
+    $pendingIncidents = (int) data_get($summary, 'pending_incidents', 0);
+    $activeIncidents = (int) data_get($summary, 'active_incidents', 0);
+    $activeCases = (int) data_get($summary, 'active_cases', $pendingIncidents + $activeIncidents);
+
+    $resolvedCases = (int) data_get($summary, 'resolved_cases', data_get($summary, 'resolved_incidents', 0));
+
+    $criticalIncidents = data_get($summary, 'critical_incidents');
+
+    if (
+        $criticalIncidents === null
+        && class_exists(\App\Models\Incident::class)
+        && \Illuminate\Support\Facades\Schema::hasTable('incidents')
+    ) {
+        $hasPriorityColumn = \Illuminate\Support\Facades\Schema::hasColumn('incidents', 'priority');
+        $hasSeverityColumn = \Illuminate\Support\Facades\Schema::hasColumn('incidents', 'severity');
+
+        if ($hasPriorityColumn || $hasSeverityColumn) {
+            $criticalIncidents = \App\Models\Incident::query()
+                ->where(function ($query) use ($hasPriorityColumn, $hasSeverityColumn) {
+                    if ($hasPriorityColumn) {
+                        $query->where('priority', 'critical');
+                    }
+
+                    if ($hasSeverityColumn) {
+                        $query->orWhere('severity', 'critical');
+                    }
+                })
+                ->count();
+        } else {
+            $criticalIncidents = 0;
+        }
     }
+
+    $criticalIncidents = (int) $criticalIncidents;
+
+    $tanodOnDuty = data_get($summary, 'tanod_on_duty');
+
+    if (
+        $tanodOnDuty === null
+        && \Illuminate\Support\Facades\Schema::hasTable('tanod_profiles')
+        && \Illuminate\Support\Facades\Schema::hasColumn('tanod_profiles', 'duty_status')
+    ) {
+        $tanodOnDuty = \Illuminate\Support\Facades\DB::table('tanod_profiles')
+            ->where('duty_status', 'on_duty')
+            ->count();
+    }
+
+    $tanodOnDuty = (int) $tanodOnDuty;
 @endphp
 
 <div class="mb-8">
@@ -59,25 +88,25 @@
         </div>
 
         <p class="text-4xl font-bold text-slate-900">
-            {{ $pendingIncidents }}
+            {{ $activeCases }}
         </p>
 
         <p class="mt-2 text-sm font-medium text-slate-600">
-            Pending Incidents
+            Active Cases
         </p>
     </div>
 
-    <div class="rounded-2xl border border-orange-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-orange-500 hover:shadow-lg">
-        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-            ⚡
+    <div class="rounded-2xl border border-red-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg">
+        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
+            ⚠️
         </div>
 
         <p class="text-4xl font-bold text-slate-900">
-            {{ $activeIncidents }}
+            {{ $criticalIncidents }}
         </p>
 
         <p class="mt-2 text-sm font-medium text-slate-600">
-            Active Incidents
+            Critical
         </p>
     </div>
 
@@ -87,7 +116,7 @@
         </div>
 
         <p class="text-4xl font-bold text-slate-900">
-            {{ $resolvedIncidents }}
+            {{ $resolvedCases }}
         </p>
 
         <p class="mt-2 text-sm font-medium text-slate-600">
@@ -97,15 +126,15 @@
 
     <div class="rounded-2xl border border-violet-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg">
         <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-blue-950">
-            📌
+            👥
         </div>
 
         <p class="text-4xl font-bold text-slate-900">
-            {{ $latestRecordsCount }}
+            {{ $tanodOnDuty }}
         </p>
 
         <p class="mt-2 text-sm font-medium text-slate-600">
-            Latest Records
+            Tanod On Duty
         </p>
     </div>
 </section>
@@ -124,28 +153,28 @@
             </div>
 
             <span class="rounded-full bg-yellow-100 px-4 py-1 text-sm font-semibold text-yellow-700">
-                {{ $watchLabel }}
+                Watch
             </span>
         </div>
 
         <div class="mb-5 flex items-center gap-6">
             <p class="text-5xl font-bold text-slate-900">
-                {{ $watchCount }}
+                31°
             </p>
 
             <div>
                 <p class="text-lg font-bold text-slate-900">
-                    {{ $watchTitle }}
+                    Cloudy
                 </p>
 
                 <p class="text-sm text-slate-500">
-                    {{ $watchDetails }}
+                    72% humidity · 10 km/h wind
                 </p>
             </div>
         </div>
 
         <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">
-            {{ $watchAdvisory }}
+            Advisory: Tanod patrols should exercise caution and stay alert for possible sudden heavy rainfall or thunderstorms throughout the day.
         </div>
 
         <p class="mt-5 text-sm text-slate-500">
@@ -165,29 +194,28 @@
         </div>
 
         <div class="max-h-96 space-y-5 overflow-y-auto pr-2">
-            @forelse ($latestIncidents as $incident)
+            @forelse ($recentIncidents as $incident)
                 @php
-                    $incidentTitle = $incident->incident_title
-                        ?? $incident->title
-                        ?? $incident->incident_code
+                    $incidentTitle = data_get($incident, 'title')
+                        ?? data_get($incident, 'incident_title')
                         ?? 'Untitled Incident';
 
-                    $categoryName = $incident->category_name
-                        ?? 'Uncategorized';
-
-                    $statusName = $incident->status_name
+                    $statusName = data_get($incident, 'currentStatus.status_name')
+                        ?? data_get($incident, 'status.status_name')
+                        ?? data_get($incident, 'status')
                         ?? 'Pending';
 
                     $normalizedStatus = strtolower(str_replace(' ', '_', (string) $statusName));
 
                     $priority = strtolower((string) (
-                        $incident->priority
+                        data_get($incident, 'priority')
+                        ?? data_get($incident, 'severity')
                         ?? 'low'
                     ));
 
-                    $reportedRaw = $incident->reported_at
-                        ?? $incident->incident_datetime
-                        ?? $incident->created_at;
+                    $reportedRaw = data_get($incident, 'reported_at')
+                        ?? data_get($incident, 'incident_datetime')
+                        ?? data_get($incident, 'created_at');
 
                     try {
                         $reportedAgo = $reportedRaw
@@ -196,6 +224,16 @@
                     } catch (\Throwable $e) {
                         $reportedAgo = 'Unknown time';
                     }
+
+                    $reporterName = data_get($incident, 'reporter.name')
+    ?? data_get($incident, 'reporter_name')
+    ?? data_get($incident, 'resident_name')
+    ?? data_get($incident, 'reported_by_name')
+    ?? 'Unknown';
+
+                    $assignedName = data_get($incident, 'assignedTanod.user.name')
+                        ?? data_get($incident, 'assignedTanod.name')
+                        ?? null;
                 @endphp
 
                 <div class="border-b border-slate-100 pb-4 last:border-0">
@@ -216,8 +254,6 @@
                                     </p>
 
                                     <p class="mt-1 text-sm text-slate-500">
-                                        {{ $categoryName }}
-                                        ·
                                         <span class="font-semibold
                                             @if ($normalizedStatus === 'escalated') text-red-600
                                             @elseif ($normalizedStatus === 'dispatched' || $normalizedStatus === 'responding') text-orange-600
@@ -244,7 +280,11 @@
                             </div>
 
                             <p class="mt-2 text-xs text-slate-400">
-                                Code: {{ $incident->incident_code ?? 'No code' }}
+                                Reporter: {{ $reporterName }}
+
+                                @if ($assignedName)
+                                    · Assigned: {{ $assignedName }}
+                                @endif
                             </p>
                         </div>
                     </div>

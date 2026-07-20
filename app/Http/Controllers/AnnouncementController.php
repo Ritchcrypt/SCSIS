@@ -9,6 +9,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -16,30 +18,59 @@ class AnnouncementController extends Controller
 {
     public function index(Request $request): View
     {
+        $user = $request->user();
+
         $announcements = Announcement::query()
             ->with('poster')
+            ->when(! $this->canManageAnnouncements($user), function ($query) use ($user) {
+                $role = strtolower((string) ($user?->role ?? ''));
+
+                $allowedAudiences = match ($role) {
+                    'tanod' => ['everyone', 'public', 'all', 'tanod'],
+                    'resident' => ['everyone', 'public', 'all', 'residents', 'resident'],
+                    default => ['everyone', 'public', 'all'],
+                };
+
+                if (Schema::hasColumn('announcements', 'is_active')) {
+                    $query->where('is_active', true);
+                }
+
+                if (Schema::hasColumn('announcements', 'audience')) {
+                    $query->whereIn('audience', $allowedAudiences);
+                }
+            })
             ->latest('published_at')
             ->latest()
-            ->paginate(10);
+            ->paginate(10)
+            ->withQueryString();
 
         return view('announcements.index', [
             'announcements' => $announcements,
             'categories' => $this->categories(),
             'priorities' => $this->priorities(),
             'audiences' => $this->audiences(),
+            'canManageAnnouncements' => $this->canManageAnnouncements($user),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $user = $request->user();
+
+        if (! $this->canManageAnnouncements($user)) {
+            abort(403, 'Only admin or official can post announcements.');
+        }
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string', 'max:5000'],
             'category' => ['required', Rule::in(array_keys($this->categories()))],
             'priority' => ['required', Rule::in(array_keys($this->priorities()))],
-            'audience' => ['required', Rule::in(array_keys($this->audiences()))],
+            'audience' => ['required', Rule::in($this->allowedAudienceValues())],
             'activate_calamity_mode' => ['nullable', 'boolean'],
         ]);
+
+        $validated['audience'] = $this->normalizeAudience($validated['audience']);
 
         $calamityMode = (bool) ($validated['activate_calamity_mode'] ?? false);
 
@@ -64,47 +95,76 @@ class AnnouncementController extends Controller
         $this->notifyTargetUsers($announcement);
 
         return redirect()
-            ->route('admin.announcements.index')
-            ->with('success', 'Announcement posted successfully.');
+            ->to($this->announcementIndexUrl($user))
+            ->with('success', 'Announcement posted successfully and users were notified.');
     }
 
-    public function toggle(Announcement $announcement): RedirectResponse
+    public function toggle(Request $request, Announcement $announcement): RedirectResponse
     {
+        $user = $request->user();
+
+        if (! $this->canManageAnnouncements($user)) {
+            abort(403, 'Only admin or official can update announcements.');
+        }
+
         $announcement->update([
             'is_active' => ! $announcement->is_active,
         ]);
 
         return redirect()
-            ->route('admin.announcements.index')
+            ->to($this->announcementIndexUrl($user))
             ->with('success', $announcement->is_active
                 ? 'Announcement activated successfully.'
                 : 'Announcement deactivated successfully.');
     }
 
-    public function destroy(Announcement $announcement): RedirectResponse
+    public function destroy(Request $request, Announcement $announcement): RedirectResponse
     {
+        $user = $request->user();
+
+        if (! $this->canManageAnnouncements($user)) {
+            abort(403, 'Only admin or official can delete announcements.');
+        }
+
+        $this->deleteAnnouncementNotifications($announcement);
+
         $announcement->delete();
 
         return redirect()
-            ->route('admin.announcements.index')
+            ->to($this->announcementIndexUrl($user))
             ->with('success', 'Announcement deleted successfully.');
     }
 
     private function notifyTargetUsers(Announcement $announcement): void
     {
         try {
-            $notificationType = $this->notificationType($announcement);
+            if (! Schema::hasTable('notifications')) {
+                return;
+            }
+
+            $audience = strtolower(trim((string) $announcement->audience));
 
             $usersQuery = User::query()
                 ->select(['id', 'role']);
 
-            switch ($announcement->audience) {
+            if (Schema::hasColumn('users', 'is_active')) {
+                $usersQuery->where('is_active', true);
+            }
+
+            switch ($audience) {
                 case 'tanod':
                     $usersQuery->where('role', 'tanod');
                     break;
 
                 case 'residents':
+                case 'resident':
                     $usersQuery->where('role', 'resident');
+                    break;
+
+                case 'official':
+                case 'officials':
+                case 'dao':
+                    $usersQuery->whereIn('role', ['official', 'dao']);
                     break;
 
                 case 'admin':
@@ -112,9 +172,12 @@ class AnnouncementController extends Controller
                     break;
 
                 case 'everyone':
+                case 'public':
+                case 'all':
                     $usersQuery->whereIn('role', [
                         'admin',
                         'official',
+                        'dao',
                         'tanod',
                         'resident',
                     ]);
@@ -124,21 +187,33 @@ class AnnouncementController extends Controller
                     return;
             }
 
-            $usersQuery->chunkById(100, function ($users) use ($announcement, $notificationType): void {
+            $usersQuery->chunkById(100, function ($users) use ($announcement): void {
                 foreach ($users as $user) {
-                    UserNotification::firstOrCreate(
+                    $notificationData = [
+                        'user_id' => $user->id,
+                        'type' => 'announcement',
+                        'source_id' => $announcement->id,
+                        'title' => mb_substr((string) $announcement->title, 0, 150),
+                        'message' => (string) $announcement->content,
+                        'is_read' => false,
+                        'read_at' => null,
+                    ];
+
+                    if (Schema::hasColumn('notifications', 'acknowledged_by')) {
+                        $notificationData['acknowledged_by'] = null;
+                    }
+
+                    if (Schema::hasColumn('notifications', 'acknowledged_at')) {
+                        $notificationData['acknowledged_at'] = null;
+                    }
+
+                    UserNotification::updateOrCreate(
                         [
                             'user_id' => $user->id,
-                            'type' => $notificationType,
+                            'type' => 'announcement',
                             'source_id' => $announcement->id,
                         ],
-                        [
-                            'title' => $announcement->title,
-                            'message' => $announcement->content,
-                            'is_read' => false,
-                            'read_at' => null,
-                            'acknowledged_at' => null,
-                        ]
+                        $notificationData
                     );
                 }
             });
@@ -150,21 +225,53 @@ class AnnouncementController extends Controller
         }
     }
 
-    private function notificationType(Announcement $announcement): string
+    private function deleteAnnouncementNotifications(Announcement $announcement): void
     {
-        if ($announcement->activate_calamity_mode) {
-            return 'calamity';
+        if (! Schema::hasTable('notifications')) {
+            return;
         }
 
-        if ($announcement->category === 'calamity') {
-            return 'calamity';
-        }
+        UserNotification::query()
+            ->where('source_id', $announcement->id)
+            ->whereIn('type', [
+                'announcement',
+                'calamity',
+            ])
+            ->delete();
+    }
 
-        if ($announcement->category === 'emergency' || $announcement->priority === 'emergency') {
-            return 'emergency';
-        }
+    private function canManageAnnouncements(?User $user): bool
+    {
+        return $user && in_array(strtolower((string) $user->role), [
+            'admin',
+            'official',
+            'dao',
+        ], true);
+    }
 
-        return 'announcement';
+    private function announcementIndexUrl(?User $user): string
+    {
+        $role = strtolower((string) ($user?->role ?? ''));
+
+        $routeName = match ($role) {
+            'admin' => Route::has('admin.announcements.index') ? 'admin.announcements.index' : null,
+            'official', 'dao' => Route::has('official.announcements.index') ? 'official.announcements.index' : null,
+            'tanod' => Route::has('tanod.announcements.index') ? 'tanod.announcements.index' : null,
+            'resident' => Route::has('resident.announcements.index') ? 'resident.announcements.index' : null,
+            default => null,
+        };
+
+        return $routeName ? route($routeName) : route('dashboard');
+    }
+
+    private function normalizeAudience(string $audience): string
+    {
+        return match (strtolower($audience)) {
+            'public', 'all' => 'everyone',
+            'resident' => 'residents',
+            'officials', 'dao' => 'official',
+            default => strtolower($audience),
+        };
     }
 
     private function categories(): array
@@ -192,10 +299,27 @@ class AnnouncementController extends Controller
     private function audiences(): array
     {
         return [
-            'everyone' => 'Everyone',
+            'everyone' => 'Public / Everyone',
             'tanod' => 'Tanod Only',
             'residents' => 'Residents Only',
+            'official' => 'Officials Only',
             'admin' => 'Admin Only',
+        ];
+    }
+
+    private function allowedAudienceValues(): array
+    {
+        return [
+            'everyone',
+            'public',
+            'all',
+            'tanod',
+            'residents',
+            'resident',
+            'official',
+            'officials',
+            'dao',
+            'admin',
         ];
     }
 }

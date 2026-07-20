@@ -49,18 +49,7 @@ class TanodAlertController extends Controller
             'totalAlerts' => $totalAlerts,
             'unreadAlerts' => $unreadAlerts,
             'acknowledgedAlerts' => $acknowledgedAlerts,
-            'alertTypes' => [
-                'all' => 'All Alerts',
-                'announcement' => 'Announcements',
-                'incident_reported' => 'New Incident Reports',
-                'calamity' => 'Calamity',
-                'community_problem' => 'Community Problems',
-                'community' => 'Community',
-                'dispatch' => 'Dispatch',
-                'escalation' => 'Escalation',
-                'emergency' => 'Emergency',
-                'resolved' => 'Resolved',
-            ],
+            'alertTypes' => $this->alertTypeLabels(),
         ]);
     }
 
@@ -128,6 +117,15 @@ class TanodAlertController extends Controller
             abort(403, 'Unauthorized access.');
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Tanod Alerts Module Rule
+        |--------------------------------------------------------------------------
+        | This module must only show operational alerts.
+        |
+        | Announcement notifications are intentionally excluded here because
+        | they belong only inside the Announcements module and notification bell.
+        */
         return UserNotification::query()
             ->where('user_id', $user->id)
             ->whereIn('type', $this->alertTypesOnly());
@@ -135,18 +133,7 @@ class TanodAlertController extends Controller
 
     private function allowedTypes(): array
     {
-        return [
-            'all',
-            'announcement',
-            'incident_reported',
-            'calamity',
-            'community_problem',
-            'community',
-            'dispatch',
-            'escalation',
-            'emergency',
-            'resolved',
-        ];
+        return array_keys($this->alertTypeLabels());
     }
 
     private function alertTypesOnly(): array
@@ -155,5 +142,41 @@ class TanodAlertController extends Controller
             $this->allowedTypes(),
             fn ($type) => $type !== 'all'
         ));
+    }
+
+    private function alertTypeLabels(): array
+    {
+        return [
+            'all' => 'All Alerts',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Operational Alert Types Only
+            |--------------------------------------------------------------------------
+            | Do not include:
+            | - announcement
+            | - calamity from announcement module
+            |
+            | Announcements stay in the Announcements module.
+            */
+            'incident_reported' => 'New Incident Reports',
+            'incident_update' => 'Incident Updates',
+            'dispatch' => 'Dispatch',
+            'escalation' => 'Escalation',
+            'emergency' => 'Emergency',
+            'resolved' => 'Resolved',
+            'tanod_alert' => 'Tanod Alerts',
+            'tanod_task' => 'Tanod Tasks',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Backward Compatibility
+            |--------------------------------------------------------------------------
+            | Keep old operational labels only if old incident/community records exist.
+            | These are not announcement-module records.
+            */
+            'community_problem' => 'Community Problems',
+            'community' => 'Community',
+        ];
     }
 }

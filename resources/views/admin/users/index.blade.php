@@ -164,7 +164,7 @@
                         </th>
 
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
-                            Presence
+                            Status
                         </th>
 
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">

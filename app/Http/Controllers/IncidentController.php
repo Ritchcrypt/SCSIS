@@ -914,23 +914,23 @@ private function deleteIncidentRelatedRows(int $incidentId): void
     }
 
     if (Schema::hasTable('notifications') && Schema::hasColumn('notifications', 'source_id')) {
-        DB::table('notifications')
-            ->where('source_id', $incidentId)
-            ->when(Schema::hasColumn('notifications', 'type'), function ($query) {
-                $query->whereIn('type', [
-                    'incident',
-                    'incident_update',
-                    'incident_reported',
-                    'dispatch',
-                    'escalation',
-                    'emergency',
-                    'calamity',
-                    'community_problem',
-                    'resolved',
-                ]);
-            })
-            ->delete();
-    }
+    DB::table('notifications')
+        ->where('source_id', $incidentId)
+        ->when(Schema::hasColumn('notifications', 'type'), function ($query) {
+            $query->whereIn('type', [
+                'incident',
+                'incident_reported',
+                'incident_update',
+                'dispatch',
+                'escalation',
+                'emergency',
+                'resolved',
+                'community_problem',
+                'community',
+            ]);
+        })
+        ->delete();
+}
 }
 
     private function storeIncidentLocation(Incident $incident, array $validated): void
@@ -1095,83 +1095,70 @@ private function deleteIncidentRelatedRows(int $incidentId): void
     {
         $incident->loadMissing(['category', 'reporter']);
 
-        $notificationType = $this->incidentNotificationType($incident);
-
-        $reporterRole = strtolower((string) ($incident->reporter?->role ?? ''));
-
         /*
         |--------------------------------------------------------------------------
         | New Incident Notification Rule
         |--------------------------------------------------------------------------
-        | Admin-created report:
-        | - Notify the admin who created it.
+        | Every newly created incident must generate INCIDENT notifications only.
         |
-        | Official-created report:
-        | - Notify the official who created it.
+        | Recipients:
+        | - All active admin users
+        | - All active official/dao users
+        | - The reporter, if the reporter is not already included above
         |
-        | Resident-created report:
-        | - Notify admin, official, and dao users.
+        | This prevents Official from showing zero notifications when Admin creates
+        | an incident, and it prevents incident reports from appearing as
+        | Announcement / Community Problem / Calamity in the bell.
         */
 
-        if (in_array($reporterRole, ['admin', 'official', 'dao'], true)) {
-            $receiverIds = collect([$incident->reporter_id])
-                ->filter()
-                ->unique()
-                ->values();
-        } else {
-            $receiverIds = User::query()
-                ->whereIn('role', ['admin', 'official', 'dao'])
-                ->where('id', '!=', $incident->reporter_id)
-                ->pluck('id');
-        }
+        $receiverIds = User::query()
+            ->whereIn('role', ['admin', 'official', 'dao'])
+            ->when(Schema::hasColumn('users', 'is_active'), function ($query) {
+                $query->where('is_active', true);
+            })
+            ->pluck('id')
+            ->push($incident->reporter_id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $incidentTitle = $incident->incident_title
+            ?? $incident->title
+            ?? $incident->display_title
+            ?? 'Untitled Incident';
 
         foreach ($receiverIds as $userId) {
-            UserNotification::create([
+            $notificationData = [
                 'user_id' => $userId,
-                'type' => $notificationType,
+                'type' => 'incident_reported',
                 'source_id' => $incident->id,
-                'title' => match ($notificationType) {
-                    'calamity' => 'New calamity report',
-                    'community_problem' => 'New community problem report',
-                    default => 'New incident report',
-                },
-                'message' => 'A new report was submitted.',
+                'title' => 'New incident report',
+                'message' => 'A new incident report was submitted: ' . $incidentTitle . '.',
                 'is_read' => false,
                 'read_at' => null,
-                'acknowledged_by' => null,
-                'acknowledged_at' => null,
-            ]);
+            ];
+
+            if (Schema::hasColumn('notifications', 'acknowledged_by')) {
+                $notificationData['acknowledged_by'] = null;
+            }
+
+            if (Schema::hasColumn('notifications', 'acknowledged_at')) {
+                $notificationData['acknowledged_at'] = null;
+            }
+
+            UserNotification::updateOrCreate(
+                [
+                    'user_id' => $userId,
+                    'type' => 'incident_reported',
+                    'source_id' => $incident->id,
+                ],
+                $notificationData
+            );
         }
     }
+
     private function incidentNotificationType(Incident $incident): string
     {
-        $categoryName = strtolower((string) (
-            $incident->category?->category_name
-            ?? $incident->category?->name
-            ?? ''
-        ));
-
-        if (
-            str_contains($categoryName, 'calamity') ||
-            str_contains($categoryName, 'disaster') ||
-            str_contains($categoryName, 'flood') ||
-            str_contains($categoryName, 'fire') ||
-            str_contains($categoryName, 'earthquake') ||
-            str_contains($categoryName, 'typhoon')
-        ) {
-            return 'calamity';
-        }
-
-        if (
-            str_contains($categoryName, 'community') ||
-            str_contains($categoryName, 'barangay') ||
-            str_contains($categoryName, 'problem') ||
-            str_contains($categoryName, 'complaint') ||
-            str_contains($categoryName, 'concern')
-        ) {
-            return 'community_problem';
-        }
-
         return 'incident_reported';
     }
 

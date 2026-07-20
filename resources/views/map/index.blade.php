@@ -177,7 +177,6 @@
                 </h3>
 
                 <div style="font-size:13px;color:#475569;line-height:1.6;">
-                    <p style="margin:0;"><strong>Category:</strong> ${escapeHtml(incident.category)}</p>
                     <p style="margin:0;"><strong>Barangay:</strong> ${escapeHtml(incident.barangay)}</p>
                     <p style="margin:0;"><strong>Location:</strong> ${escapeHtml(incident.location)}</p>
                     <p style="margin:0;"><strong>Status:</strong> ${escapeHtml(incident.status)}</p>
