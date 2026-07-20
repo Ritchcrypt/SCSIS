@@ -167,6 +167,13 @@
                             'active' => ['admin.emergency-mode.*'],
                         ],
                         [
+    'label' => 'Resident Complaints',
+    'icon' => '💬',
+    'route' => 'admin.resident-complaints.index',
+    'active' => ['admin.resident-complaints.*'],
+],
+
+                        [
                             'label' => 'Map',
                             'icon' => '🗺',
                             'route' => 'admin.map.index',
@@ -216,6 +223,12 @@
         'icon' => '🚨',
         'route' => 'official.emergency-mode.index',
         'active' => ['official.emergency-mode.*'],
+    ],
+    [
+    'label' => 'Resident Complaints',
+    'icon' => '💬',
+    'route' => 'official.resident-complaints.index',
+    'active' => ['official.resident-complaints.*'],
     ],
     [
         'label' => 'Map',
@@ -438,6 +451,8 @@
                         $authUser = $authUser ?? auth()->user();
 
                         $notificationTypeLabels = [
+                            'resident_complaint' => 'Resident Complaint',
+                            'resident_complaint_update' => 'Complaint Update',
                             'incident' => 'Incident',
                             'incident_reported' => 'Incident Report',
                             'incident_update' => 'Incident Update',
@@ -450,7 +465,7 @@
                             'tanod_alert' => 'Tanod Alert',
                             'tanod_task' => 'Tanod Task',
                             'system' => 'System',
-                            'community_problem' => 'Community Problem',
+                            'community' => 'Community',
                             'community' => 'Community',
                         ];
 

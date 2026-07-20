@@ -25,11 +25,21 @@ class NotificationOpenController extends Controller
         |--------------------------------------------------------------------------
         | Announcement Notifications
         |--------------------------------------------------------------------------
-        | Public announcements, calamity announcements, and emergency announcements
-        | must open the Announcements module, not Tanod Alerts.
+        | Public announcements and calamity announcements must open the
+        | Announcements module, not Tanod Alerts.
         */
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return redirect()->to($this->announcementUrl($role));
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Resident Complaint Notifications
+        |--------------------------------------------------------------------------
+        | Complaint notifications must open the Resident Complaints module.
+        */
+        if (in_array($type, ['resident_complaint', 'resident_complaint_update'], true)) {
+            return redirect()->to($this->residentComplaintUrl($role, $notification));
         }
 
         /*
@@ -93,13 +103,6 @@ class NotificationOpenController extends Controller
             return;
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Mark matching notification as read
-        |--------------------------------------------------------------------------
-        | Uses user_id + type + source_id so one announcement click marks that
-        | announcement notification read for this user only.
-        */
         $query = UserNotification::query()
             ->where('user_id', $notification->user_id)
             ->where('type', $notification->type);
@@ -132,6 +135,49 @@ class NotificationOpenController extends Controller
 
             'resident' => Route::has('resident.announcements.index')
                 ? 'resident.announcements.index'
+                : null,
+
+            default => null,
+        };
+
+        return $routeName ? route($routeName) : $this->dashboardUrl($role);
+    }
+
+    private function residentComplaintUrl(string $role, UserNotification $notification): string
+    {
+        if (! empty($notification->source_id)) {
+            $routeName = match ($role) {
+                'admin' => Route::has('admin.resident-complaints.show')
+                    ? 'admin.resident-complaints.show'
+                    : null,
+
+                'official', 'dao' => Route::has('official.resident-complaints.show')
+                    ? 'official.resident-complaints.show'
+                    : null,
+
+                'resident' => Route::has('resident.resident-complaints.show')
+                    ? 'resident.resident-complaints.show'
+                    : null,
+
+                default => null,
+            };
+
+            if ($routeName) {
+                return route($routeName, $notification->source_id);
+            }
+        }
+
+        $routeName = match ($role) {
+            'admin' => Route::has('admin.resident-complaints.index')
+                ? 'admin.resident-complaints.index'
+                : null,
+
+            'official', 'dao' => Route::has('official.resident-complaints.index')
+                ? 'official.resident-complaints.index'
+                : null,
+
+            'resident' => Route::has('resident.resident-complaints.index')
+                ? 'resident.resident-complaints.index'
                 : null,
 
             default => null,

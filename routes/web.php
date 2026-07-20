@@ -16,6 +16,7 @@ use App\Http\Controllers\SystemBrandingController;
 use App\Http\Controllers\PresenceController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\NotificationOpenController;
+use App\Http\Controllers\ResidentComplaintController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -92,6 +93,18 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
+    ->name('resident-complaints.index');
+
+Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
+    ->name('resident-complaints.show');
+
+Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplaintController::class, 'updateStatus'])
+    ->name('resident-complaints.update-status');
+
+Route::delete('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'destroy'])
+    ->name('resident-complaints.destroy');
 
         Route::get('/presence/users', [PresenceController::class, 'users'])
             ->name('users.presence');
@@ -262,6 +275,15 @@ Route::middleware(['auth', 'active.user', 'role:official,dao'])
         Route::get('/dashboard', [RoleDashboardController::class, 'official'])
             ->name('dashboard');
 
+        Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
+    ->name('resident-complaints.index');
+
+Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
+    ->name('resident-complaints.show');
+
+Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplaintController::class, 'updateStatus'])
+    ->name('resident-complaints.update-status');
+
         Route::get('/map', [BarangayMapController::class, 'index'])
     ->name('map.index');
 
@@ -374,6 +396,18 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
     ->group(function () {
         Route::get('/dashboard', [RoleDashboardController::class, 'resident'])
             ->name('dashboard');
+
+        Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
+    ->name('resident-complaints.index');
+
+Route::get('/resident-complaints/create', [ResidentComplaintController::class, 'create'])
+    ->name('resident-complaints.create');
+
+Route::post('/resident-complaints', [ResidentComplaintController::class, 'store'])
+    ->name('resident-complaints.store');
+
+Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
+    ->name('resident-complaints.show');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->name('announcements.index');
