@@ -41,13 +41,43 @@
             </p>
         </div>
 
-        <div class="divide-y divide-slate-100">
+        <div class="bg-white">
             @forelse ($responses as $response)
                 @php
                     $task = $response->task;
+
+                    $responseStatus = strtolower((string) ($response->response_status ?? 'pending'));
+                    $taskStatus = strtolower((string) ($task->status ?? 'unknown'));
+
+                    $responseBadgeClass = match ($responseStatus) {
+                        'accepted' => 'border-green-200 bg-green-50 text-green-700',
+                        'declined', 'rejected' => 'border-red-200 bg-red-50 text-red-700',
+                        'pending' => 'border-yellow-200 bg-yellow-50 text-yellow-700',
+                        default => 'border-slate-200 bg-slate-100 text-slate-700',
+                    };
+
+                    $responseStatusLabel = match ($responseStatus) {
+                        'accepted' => 'Accepted',
+                        'declined', 'rejected' => 'Declined',
+                        'pending' => 'Pending',
+                        default => ucfirst(str_replace('_', ' ', $responseStatus)),
+                    };
+
+                    $taskStatusBadgeClass = match ($taskStatus) {
+                        'open' => 'border-green-200 bg-green-50 text-green-700',
+                        'closed', 'cancelled', 'canceled' => 'border-red-200 bg-red-50 text-red-700',
+                        default => 'border-slate-200 bg-slate-100 text-slate-700',
+                    };
+
+                    $taskStatusLabel = match ($taskStatus) {
+                        'open' => 'Task Open',
+                        'closed' => 'Task Closed',
+                        'cancelled', 'canceled' => 'Task Cancelled',
+                        default => 'Task ' . ucfirst(str_replace('_', ' ', $taskStatus)),
+                    };
                 @endphp
 
-                <div class="p-6">
+                <div class="border-b border-slate-200 p-6 last:border-b-0">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div class="max-w-3xl">
                             <div class="flex flex-wrap items-center gap-2">
@@ -55,24 +85,12 @@
                                     {{ $task?->title ?? 'Untitled Task' }}
                                 </h3>
 
-                                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold
-                                    @class([
-                                        'border-slate-200 bg-slate-100 text-slate-700' => $response->response_status === 'pending',
-                                        'border-green-200 bg-green-50 text-green-700' => $response->response_status === 'accepted',
-                                        'border-red-200 bg-red-50 text-red-700' => $response->response_status === 'declined',
-                                    ])
-                                ">
-                                    {{ ucfirst($response->response_status) }}
+                                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $responseBadgeClass }}">
+                                    {{ $responseStatusLabel }}
                                 </span>
 
-                                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold
-                                    @class([
-                                        'border-green-200 bg-green-50 text-green-700' => $task?->status === 'open',
-                                        'border-slate-200 bg-slate-100 text-slate-700' => $task?->status === 'closed',
-                                        'border-red-200 bg-red-50 text-red-700' => $task?->status === 'cancelled',
-                                    ])
-                                ">
-                                    Task {{ ucfirst($task?->status ?? 'unknown') }}
+                                <span class="inline-flex rounded-full border px-3 py-1 text-xs font-bold {{ $taskStatusBadgeClass }}">
+                                    {{ $taskStatusLabel }}
                                 </span>
                             </div>
 
@@ -131,7 +149,7 @@
                             @endif
                         </div>
 
-                        @if ($task && $task->status === 'open')
+                        @if ($task && $task->status === 'open' && $responseStatus === 'pending')
                             <div class="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 lg:w-80">
                                 <form method="POST" action="{{ route('tanod.tanod-tasks.respond', $response) }}" class="space-y-4">
                                     @csrf
@@ -167,10 +185,34 @@
                                 </form>
                             </div>
                         @else
-                            <div class="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-medium text-slate-500 lg:w-80">
-                                This task is no longer open for response.
-                            </div>
-                        @endif
+    <div class="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-medium text-slate-600 lg:w-80">
+        @if ($responseStatus === 'accepted')
+            <p class="font-bold text-green-700">
+                You accepted this task.
+            </p>
+
+            <p class="mt-1 text-sm text-slate-500">
+                No further response is needed.
+            </p>
+        @elseif (in_array($responseStatus, ['declined', 'rejected'], true))
+            <p class="font-bold text-red-700">
+                You declined this task.
+            </p>
+
+            <p class="mt-1 text-sm text-slate-500">
+                No further response is needed.
+            </p>
+        @elseif ($task && $task->status !== 'open')
+            <p class="font-bold text-slate-700">
+                This task is no longer open for response.
+            </p>
+        @else
+            <p class="font-bold text-slate-700">
+                Response already submitted.
+            </p>
+        @endif
+    </div>
+@endif
                     </div>
                 </div>
             @empty

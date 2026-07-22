@@ -7,6 +7,7 @@ use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class TanodAlertController extends Controller
@@ -35,13 +36,11 @@ class TanodAlertController extends Controller
 
         $totalAlerts = $this->baseAlertQuery($user)->count();
 
-        $unreadAlerts = $this->baseAlertQuery($user)
-            ->where('is_read', false)
-            ->count();
+        $unreadAlerts = $this->unreadAlertQuery($user)->count();
 
-        $acknowledgedAlerts = $this->baseAlertQuery($user)
-            ->whereNotNull('acknowledged_at')
-            ->count();
+        $acknowledgedAlerts = Schema::hasColumn('notifications', 'acknowledged_at')
+            ? $this->baseAlertQuery($user)->whereNotNull('acknowledged_at')->count()
+            : 0;
 
         return view('tanod-alerts.index', [
             'alerts' => $alerts,
@@ -68,12 +67,25 @@ class TanodAlertController extends Controller
     {
         $user = Auth::user();
 
+        if (! Schema::hasColumn('notifications', 'is_read')) {
+            return back()->with('success', 'No unread alert field found.');
+        }
+
+        $updates = [
+            'is_read' => true,
+        ];
+
+        if (Schema::hasColumn('notifications', 'read_at')) {
+            $updates['read_at'] = now();
+        }
+
         $this->baseAlertQuery($user)
-            ->where('is_read', false)
-            ->update([
-                'is_read' => true,
-                'read_at' => now(),
-            ]);
+            ->where(function ($query) {
+                $query->where('is_read', false)
+                    ->orWhere('is_read', 0)
+                    ->orWhereNull('is_read');
+            })
+            ->update($updates);
 
         return back()->with('success', 'All alerts marked as read.');
     }
@@ -121,14 +133,36 @@ class TanodAlertController extends Controller
         |--------------------------------------------------------------------------
         | Tanod Alerts Module Rule
         |--------------------------------------------------------------------------
-        | This module must only show operational alerts.
+        | Shows operational tanod alerts only.
         |
-        | Announcement notifications are intentionally excluded here because
-        | they belong only inside the Announcements module and notification bell.
+        | Excluded:
+        | - announcement
+        | - calamity
+        |
+        | Those belong to the Announcements module and notification bell only.
         */
         return UserNotification::query()
             ->where('user_id', $user->id)
+            ->whereNotIn('type', [
+                'announcement',
+                'calamity',
+            ])
             ->whereIn('type', $this->alertTypesOnly());
+    }
+
+    private function unreadAlertQuery(?User $user)
+    {
+        $query = $this->baseAlertQuery($user);
+
+        if (Schema::hasColumn('notifications', 'is_read')) {
+            $query->where(function ($unreadQuery) {
+                $unreadQuery->where('is_read', false)
+                    ->orWhere('is_read', 0)
+                    ->orWhereNull('is_read');
+            });
+        }
+
+        return $query;
     }
 
     private function allowedTypes(): array
@@ -151,31 +185,53 @@ class TanodAlertController extends Controller
 
             /*
             |--------------------------------------------------------------------------
-            | Operational Alert Types Only
+            | Assigned Incident / Incoming Incident Alerts
             |--------------------------------------------------------------------------
-            | Do not include:
-            | - announcement
-            | - calamity from announcement module
-            |
-            | Announcements stay in the Announcements module.
             */
-            'incident_reported' => 'New Incident Reports',
-            'incident_update' => 'Incident Updates',
+            'assigned_incident' => 'Assigned Incident',
+            'incident_assigned' => 'Assigned Incident',
+            'new_assigned_incident' => 'Assigned Incident',
+            'incident' => 'Incident',
+            'incident_reported' => 'New Incident Report',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Incident Status / Field Operation Updates
+            |--------------------------------------------------------------------------
+            */
+            'incident_update' => 'Incident Update',
+            'incident_updated' => 'Incident Update',
+            'incident_status_update' => 'Incident Status Update',
+            'status_update' => 'Status Update',
             'dispatch' => 'Dispatch',
             'escalation' => 'Escalation',
             'emergency' => 'Emergency',
             'resolved' => 'Resolved',
-            'tanod_alert' => 'Tanod Alerts',
-            'tanod_task' => 'Tanod Tasks',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Tanod Task Alerts
+            |--------------------------------------------------------------------------
+            */
+            'tanod_task' => 'Tanod Task',
+            'tanod_task_assigned' => 'Tanod Task',
+            'tanod_task_update' => 'Tanod Task Update',
+            'task_assigned' => 'Tanod Task',
+            'task_update' => 'Tanod Task Update',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Tanod-specific operational alerts
+            |--------------------------------------------------------------------------
+            */
+            'tanod_alert' => 'Tanod Alert',
 
             /*
             |--------------------------------------------------------------------------
             | Backward Compatibility
             |--------------------------------------------------------------------------
-            | Keep old operational labels only if old incident/community records exist.
-            | These are not announcement-module records.
             */
-            'community_problem' => 'Community Problems',
+            'community_problem' => 'Community Problem',
             'community' => 'Community',
         ];
     }

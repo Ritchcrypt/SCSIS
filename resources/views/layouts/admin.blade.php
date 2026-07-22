@@ -239,37 +239,43 @@
 ],
 
                     'tanod' => [
-                        [
-                            'label' => 'Dashboard',
-                            'icon' => '▦',
-                            'route' => 'tanod.dashboard',
-                            'active' => ['tanod.dashboard'],
-                        ],
-                        [
-                            'label' => 'Announcements',
-                            'icon' => '📢',
-                            'route' => 'tanod.announcements.index',
-                            'active' => ['tanod.announcements.*'],
-                        ],
-                        [
-                            'label' => 'Tanod Tasks',
-                            'icon' => '📋',
-                            'route' => 'tanod.tanod-tasks.index',
-                            'active' => ['tanod.tanod-tasks.*'],
-                        ],
-                        [
-                            'label' => 'Tanod Alerts',
-                            'icon' => '🔔',
-                            'route' => 'tanod.tanod-alerts.index',
-                            'active' => ['tanod.tanod-alerts.*'],
-                        ],
-                        [
-                            'label' => 'Assigned Incidents',
-                            'icon' => '📄',
-                            'route' => 'tanod.incidents.index',
-                            'active' => ['tanod.incidents.*'],
-                        ],
-                    ],
+    [
+        'label' => 'Dashboard',
+        'icon' => '▦',
+        'route' => 'tanod.dashboard',
+        'active' => ['tanod.dashboard'],
+    ],
+    [
+        'label' => 'Tanod Alerts',
+        'icon' => '🔔',
+        'route' => 'tanod.tanod-alerts.index',
+        'active' => ['tanod.tanod-alerts.*'],
+    ],
+    [
+        'label' => 'Tanod Tasks',
+        'icon' => '📋',
+        'route' => 'tanod.tanod-tasks.index',
+        'active' => ['tanod.tanod-tasks.*'],
+    ],
+    [
+        'label' => 'Assigned Incidents',
+        'icon' => '📄',
+        'route' => 'tanod.incidents.index',
+        'active' => ['tanod.incidents.*'],
+    ],
+    [
+        'label' => 'Announcements',
+        'icon' => '📢',
+        'route' => 'tanod.announcements.index',
+        'active' => ['tanod.announcements.*'],
+    ],
+    [
+        'label' => 'Emergency Hotlines',
+        'icon' => '🚨',
+        'route' => 'tanod.emergency-mode.index',
+        'active' => ['tanod.emergency-mode.*'],
+    ],
+],
 
                     'resident' => [
                         [

@@ -391,6 +391,14 @@ if ($selectedCategoryName) {
                 'response_note' => null,
                 'responded_at' => null,
             ]);
+
+            if ($tanod->user_id) {
+                $this->notifyTanodAboutIncidentTask(
+                    task: $task,
+                    incident: $incident,
+                    tanodUserId: (int) $tanod->user_id
+                );
+            }
         }
     }
 
@@ -772,30 +780,65 @@ public function showEvidenceFile(Request $request, int $evidenceId)
     }
 
     private function notifyIncidentUsers(
-        Incident $incident,
-        string $title,
-        string $message,
-        string $type = 'incident_update'
-    ): void {
-        $userIds = collect([
-            $incident->reporter_id,
-            $incident->assignedTanod?->user_id,
-        ])
-            ->filter()
-            ->unique()
-            ->values();
-
-        foreach ($userIds as $userId) {
-            UserNotification::create([
-                'user_id' => $userId,
-                'type' => $type,
-                'source_id' => $incident->id,
-                'title' => $title,
-                'message' => $message,
-                'is_read' => false,
-            ]);
-        }
+    Incident $incident,
+    string $title,
+    string $message,
+    string $type = 'incident_update'
+): void {
+    if (! Schema::hasTable('notifications')) {
+        return;
     }
+
+    $incident->loadMissing(['reporter', 'assignedTanod.user']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Incident Update Notification Rule
+    |--------------------------------------------------------------------------
+    | Every incident update must notify:
+    | - admin
+    | - official
+    | - dao
+    | - reporter/resident
+    | - assigned tanod
+    */
+    $managementUserIds = User::query()
+        ->whereIn('role', ['admin', 'official', 'dao'])
+        ->when(Schema::hasColumn('users', 'is_active'), function ($query) {
+            $query->where('is_active', true);
+        })
+        ->pluck('id');
+
+    $userIds = collect()
+        ->merge($managementUserIds)
+        ->push($incident->reporter_id)
+        ->push($incident->assignedTanod?->user_id)
+        ->filter()
+        ->unique()
+        ->values();
+
+    foreach ($userIds as $userId) {
+        $notificationData = [
+            'user_id' => $userId,
+            'type' => $type,
+            'source_id' => $incident->id,
+            'title' => $title,
+            'message' => $message,
+            'is_read' => false,
+            'read_at' => null,
+        ];
+
+        if (Schema::hasColumn('notifications', 'acknowledged_by')) {
+            $notificationData['acknowledged_by'] = null;
+        }
+
+        if (Schema::hasColumn('notifications', 'acknowledged_at')) {
+            $notificationData['acknowledged_at'] = null;
+        }
+
+        UserNotification::create($notificationData);
+    }
+}
 
     private function createTanodAlert(Incident $incident, string $type, string $title, string $message): void
 {
@@ -1155,6 +1198,45 @@ private function deleteIncidentRelatedRows(int $incidentId): void
                 $notificationData
             );
         }
+    }
+
+    private function notifyTanodAboutIncidentTask(\App\Models\TanodTask $task, Incident $incident, int $tanodUserId): void
+    {
+        if (! Schema::hasTable('notifications')) {
+            return;
+        }
+
+        $incidentTitle = $incident->incident_title
+            ?? $incident->title
+            ?? $incident->display_title
+            ?? 'Untitled Incident';
+
+        $notificationData = [
+            'user_id' => $tanodUserId,
+            'type' => 'tanod_task',
+            'source_id' => $task->id,
+            'title' => 'New incident response task',
+            'message' => 'A new incident response task is waiting for your response: ' . $incidentTitle . '.',
+            'is_read' => false,
+            'read_at' => null,
+        ];
+
+        if (Schema::hasColumn('notifications', 'acknowledged_by')) {
+            $notificationData['acknowledged_by'] = null;
+        }
+
+        if (Schema::hasColumn('notifications', 'acknowledged_at')) {
+            $notificationData['acknowledged_at'] = null;
+        }
+
+        UserNotification::updateOrCreate(
+            [
+                'user_id' => $tanodUserId,
+                'type' => 'tanod_task',
+                'source_id' => $task->id,
+            ],
+            $notificationData
+        );
     }
 
     private function incidentNotificationType(Incident $incident): string

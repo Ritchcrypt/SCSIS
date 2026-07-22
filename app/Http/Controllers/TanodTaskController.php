@@ -95,6 +95,10 @@ class TanodTaskController extends Controller
                     'response_note' => null,
                     'responded_at' => null,
                 ]);
+
+                if ($tanod->user_id) {
+                    $this->notifyTanodAboutNewTask($task, (int) $tanod->user_id);
+                }
             }
         });
 
@@ -431,6 +435,44 @@ private function createIncidentStatusHistoryRecord(
         DB::table('incident_status_histories')->insert($historyData);
     }
 }
+private function notifyTanodAboutNewTask(TanodTask $task, int $tanodUserId): void
+{
+    if (! Schema::hasTable('notifications')) {
+        return;
+    }
+
+    $taskTitle = $task->title
+        ?? $task->task_title
+        ?? 'Untitled Task';
+
+    $notificationData = [
+        'user_id' => $tanodUserId,
+        'type' => 'tanod_task',
+        'source_id' => $task->id,
+        'title' => 'New tanod task',
+        'message' => 'A new tanod task was assigned to you: ' . $taskTitle . '.',
+        'is_read' => false,
+        'read_at' => null,
+    ];
+
+    if (Schema::hasColumn('notifications', 'acknowledged_by')) {
+        $notificationData['acknowledged_by'] = null;
+    }
+
+    if (Schema::hasColumn('notifications', 'acknowledged_at')) {
+        $notificationData['acknowledged_at'] = null;
+    }
+
+    UserNotification::updateOrCreate(
+        [
+            'user_id' => $tanodUserId,
+            'type' => 'tanod_task',
+            'source_id' => $task->id,
+        ],
+        $notificationData
+    );
+}
+
 private function getTanodEmployee(Request $request): Employee
 {
     $user = $request->user();

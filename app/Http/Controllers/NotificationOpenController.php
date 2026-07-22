@@ -21,33 +21,22 @@ class NotificationOpenController extends Controller
 
         $this->markNotificationGroupAsRead($notification);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Announcement Notifications
-        |--------------------------------------------------------------------------
-        | Public announcements and calamity announcements must open the
-        | Announcements module, not Tanod Alerts.
-        */
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return redirect()->to($this->announcementUrl($role));
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Resident Complaint Notifications
-        |--------------------------------------------------------------------------
-        | Complaint notifications must open the Resident Complaints module.
-        */
         if (in_array($type, ['resident_complaint', 'resident_complaint_update'], true)) {
             return redirect()->to($this->residentComplaintUrl($role, $notification));
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Incident Notifications
-        |--------------------------------------------------------------------------
-        | These open the related incident page when source_id is an incident ID.
-        */
+        if ($type === 'tanod_task') {
+            return redirect()->to($this->tanodTaskUrl($role, $notification));
+        }
+
+        if ($type === 'tanod_alert') {
+            return redirect()->to($this->tanodAlertUrl($role));
+        }
+
         if (in_array($type, [
             'incident',
             'incident_reported',
@@ -58,26 +47,6 @@ class NotificationOpenController extends Controller
             'resolved',
         ], true)) {
             return redirect()->to($this->incidentUrl($role, $notification));
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Tanod Task Notifications
-        |--------------------------------------------------------------------------
-        | Tanod task notifications open the task module.
-        */
-        if ($type === 'tanod_task') {
-            return redirect()->to($this->tanodTaskUrl($role, $notification));
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Tanod Alert Notifications
-        |--------------------------------------------------------------------------
-        | Only operational tanod alerts should open Tanod Alerts.
-        */
-        if ($type === 'tanod_alert') {
-            return redirect()->to($this->tanodAlertUrl($role));
         }
 
         return redirect()->to($this->dashboardUrl($role));
@@ -214,7 +183,25 @@ class NotificationOpenController extends Controller
             }
         }
 
-        return $this->dashboardUrl($role);
+        return match ($role) {
+            'admin' => Route::has('admin.incidents.index')
+                ? route('admin.incidents.index')
+                : $this->dashboardUrl($role),
+
+            'official', 'dao' => Route::has('official.incidents.index')
+                ? route('official.incidents.index')
+                : $this->dashboardUrl($role),
+
+            'tanod' => Route::has('tanod.incidents.index')
+                ? route('tanod.incidents.index')
+                : $this->dashboardUrl($role),
+
+            'resident' => Route::has('resident.incidents.index')
+                ? route('resident.incidents.index')
+                : $this->dashboardUrl($role),
+
+            default => $this->dashboardUrl($role),
+        };
     }
 
     private function tanodTaskUrl(string $role, UserNotification $notification): string
@@ -223,12 +210,12 @@ class NotificationOpenController extends Controller
             return route('admin.tanod-tasks.show', $notification->source_id);
         }
 
-        if ($role === 'tanod' && Route::has('tanod.tanod-tasks.index')) {
-            return route('tanod.tanod-tasks.index');
-        }
-
         if ($role === 'admin' && Route::has('admin.tanod-tasks.index')) {
             return route('admin.tanod-tasks.index');
+        }
+
+        if ($role === 'tanod' && Route::has('tanod.tanod-tasks.index')) {
+            return route('tanod.tanod-tasks.index');
         }
 
         return $this->dashboardUrl($role);

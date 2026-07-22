@@ -1,0 +1,50 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (! Schema::hasTable('emergency_hotlines')) {
+            return;
+        }
+
+        Schema::table('emergency_hotlines', function (Blueprint $table) {
+            if (! Schema::hasColumn('emergency_hotlines', 'color')) {
+                $table->string('color', 30)->default('blue')->after('hotline_number');
+            }
+
+            if (! Schema::hasColumn('emergency_hotlines', 'is_active')) {
+                $table->boolean('is_active')->default(true)->after('color');
+            }
+
+            if (! Schema::hasColumn('emergency_hotlines', 'sort_order')) {
+                $table->unsignedInteger('sort_order')->default(0)->after('is_active');
+            }
+        });
+    }
+
+    public function down(): void
+    {
+        if (! Schema::hasTable('emergency_hotlines')) {
+            return;
+        }
+
+        Schema::table('emergency_hotlines', function (Blueprint $table) {
+            if (Schema::hasColumn('emergency_hotlines', 'sort_order')) {
+                $table->dropColumn('sort_order');
+            }
+
+            if (Schema::hasColumn('emergency_hotlines', 'is_active')) {
+                $table->dropColumn('is_active');
+            }
+
+            if (Schema::hasColumn('emergency_hotlines', 'color')) {
+                $table->dropColumn('color');
+            }
+        });
+    }
+};

@@ -37,14 +37,12 @@ class RoleDashboardController extends Controller
 
         return view('dashboards.tanod', [
             'summary' => [
-                'assigned_incidents' => $this->tanodAssignedIncidentCount($employeeId),
+                'assigned_incidents' => $this->tanodAssignedIncidentCount($user->id, $employeeId),
                 'open_tasks' => $this->tanodTaskCount($user->id, $employeeId, ['pending']),
                 'accepted_tasks' => $this->tanodTaskCount($user->id, $employeeId, ['accepted']),
-                'unread_alerts' => $this->tanodUnreadAlertCount($user->id),
+                'declined_tasks' => $this->tanodTaskCount($user->id, $employeeId, ['declined', 'rejected']),
             ],
-            'assignedIncidents' => $this->latestTanodAssignedIncidents($employeeId),
-            'latestTasks' => $this->latestTanodTasks($user->id, $employeeId),
-            'latestAlerts' => $this->latestTanodAlerts($user->id),
+            'recentIncidents' => $this->latestIncidents(),
         ]);
     }
 
@@ -87,15 +85,73 @@ class RoleDashboardController extends Controller
         return $query->count();
     }
 
-    private function tanodAssignedIncidentCount(?int $employeeId): int
+    private function tanodAssignedIncidentCount(int $userId, ?int $employeeId): int
     {
-        if (! $employeeId || ! Schema::hasTable('incidents') || ! Schema::hasColumn('incidents', 'assigned_to')) {
+        if (
+            ! $employeeId
+            || ! Schema::hasTable('incidents')
+            || ! Schema::hasColumn('incidents', 'assigned_to')
+        ) {
             return 0;
         }
 
-        return DB::table('incidents')
-            ->where('assigned_to', $employeeId)
-            ->count();
+        $query = DB::table('incidents')
+            ->where('incidents.assigned_to', $employeeId);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Exclude declined/rejected tanod task responses
+        |--------------------------------------------------------------------------
+        | An incident may remain assigned_to the tanod employee record even after the
+        | tanod declines the related task. The dashboard count should not include
+        | incidents connected to declined/rejected task responses for this tanod.
+        */
+        if (
+            Schema::hasTable('tanod_tasks')
+            && Schema::hasTable('tanod_task_responses')
+            && Schema::hasColumn('tanod_tasks', 'incident_id')
+            && Schema::hasColumn('tanod_task_responses', 'tanod_task_id')
+        ) {
+            $responseStatusColumn = null;
+
+            if (Schema::hasColumn('tanod_task_responses', 'response_status')) {
+                $responseStatusColumn = 'response_status';
+            } elseif (Schema::hasColumn('tanod_task_responses', 'status')) {
+                $responseStatusColumn = 'status';
+            }
+
+            if ($responseStatusColumn) {
+                $query->whereNotExists(function ($subQuery) use ($userId, $employeeId, $responseStatusColumn) {
+                    $subQuery->selectRaw('1')
+                        ->from('tanod_tasks')
+                        ->join(
+                            'tanod_task_responses',
+                            'tanod_task_responses.tanod_task_id',
+                            '=',
+                            'tanod_tasks.id'
+                        )
+                        ->whereColumn('tanod_tasks.incident_id', 'incidents.id')
+                        ->whereIn('tanod_task_responses.' . $responseStatusColumn, [
+                            'declined',
+                            'rejected',
+                        ])
+                        ->where(function ($ownerQuery) use ($userId, $employeeId) {
+                            if (
+                                $employeeId
+                                && Schema::hasColumn('tanod_task_responses', 'employee_id')
+                            ) {
+                                $ownerQuery->orWhere('tanod_task_responses.employee_id', $employeeId);
+                            }
+
+                            if (Schema::hasColumn('tanod_task_responses', 'user_id')) {
+                                $ownerQuery->orWhere('tanod_task_responses.user_id', $userId);
+                            }
+                        });
+                });
+            }
+        }
+
+        return $query->count();
     }
 
     private function tanodTaskCount(int $userId, ?int $employeeId, array $statuses): int

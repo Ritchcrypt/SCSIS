@@ -100,6 +100,15 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
 
+        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
+    ->name('emergency-mode.index');
+
+Route::post('/emergency-hotlines', [EmergencyModeController::class, 'store'])
+    ->name('emergency-mode.store');
+
+Route::delete('/emergency-hotlines/{emergencyHotline}', [EmergencyModeController::class, 'destroy'])
+    ->name('emergency-mode.destroy');
+
         Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
     ->name('resident-complaints.index');
 
@@ -281,6 +290,15 @@ Route::middleware(['auth', 'active.user', 'role:official,dao'])
         Route::get('/dashboard', [RoleDashboardController::class, 'official'])
             ->name('dashboard');
 
+        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
+    ->name('emergency-mode.index');
+
+Route::post('/emergency-hotlines', [EmergencyModeController::class, 'store'])
+    ->name('emergency-mode.store');
+
+Route::delete('/emergency-hotlines/{emergencyHotline}', [EmergencyModeController::class, 'destroy'])
+    ->name('emergency-mode.destroy');
+
         Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
     ->name('resident-complaints.index');
 
@@ -351,6 +369,12 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
         Route::get('/dashboard', [RoleDashboardController::class, 'tanod'])
             ->name('dashboard');
 
+        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
+    ->name('emergency-mode.index');
+
+        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
+            ->name('emergency-mode.index');
+
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->name('announcements.index');
 
@@ -402,6 +426,9 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
     ->group(function () {
         Route::get('/dashboard', [RoleDashboardController::class, 'resident'])
             ->name('dashboard');
+
+        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
+    ->name('emergency-mode.index');
 
         Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
     ->name('resident-complaints.index');
