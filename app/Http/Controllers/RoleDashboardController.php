@@ -17,8 +17,8 @@ class RoleDashboardController extends Controller
         return view('dashboards.official', [
             'summary' => [
                 'total_incidents' => $this->incidentCount(),
-                'pending_incidents' => $this->incidentStatusCount(['pending', 'reported']),
-                'active_incidents' => $this->incidentStatusCount(['active', 'dispatched', 'responding', 'in progress', 'in_progress', 'escalated']),
+                'pending_incidents' => $this->incidentStatusCount(['pending', 'reported', 'submitted']),
+                'active_incidents' => $this->incidentStatusCount(['active', 'dispatched', 'responding', 'in progress', 'in_progress', 'escalated', 'under review', 'under_review']),
                 'resolved_incidents' => $this->incidentStatusCount(['resolved', 'closed', 'completed']),
             ],
             'latestIncidents' => $this->latestIncidents(),
@@ -49,16 +49,34 @@ class RoleDashboardController extends Controller
     public function resident(Request $request): View
     {
         $user = $request->user();
+        $residentIds = $this->residentProfileIds((int) $user->id);
 
         return view('dashboards.resident', [
             'summary' => [
-                'my_reports' => $this->residentIncidentCount($user->id),
-                'pending_reports' => $this->residentIncidentStatusCount($user->id, ['pending', 'reported']),
-                'active_reports' => $this->residentIncidentStatusCount($user->id, ['active', 'dispatched', 'responding', 'in progress', 'in_progress', 'escalated']),
-                'resolved_reports' => $this->residentIncidentStatusCount($user->id, ['resolved', 'closed', 'completed']),
+                'my_reports' => $this->residentIncidentCount((int) $user->id, $residentIds),
+                'pending_reports' => $this->residentIncidentStatusCount((int) $user->id, $residentIds, [
+                    'pending',
+                    'reported',
+                    'submitted',
+                ]),
+                'active_reports' => $this->residentIncidentStatusCount((int) $user->id, $residentIds, [
+                    'active',
+                    'dispatched',
+                    'responding',
+                    'in progress',
+                    'in_progress',
+                    'escalated',
+                    'under review',
+                    'under_review',
+                ]),
+                'resolved_reports' => $this->residentIncidentStatusCount((int) $user->id, $residentIds, [
+                    'resolved',
+                    'closed',
+                    'completed',
+                ]),
                 'announcements' => $this->activeAnnouncementCount(),
             ],
-            'myLatestReports' => $this->latestResidentReports($user->id),
+            'myLatestReports' => $this->latestResidentReports((int) $user->id, $residentIds),
             'latestAnnouncements' => $this->latestAnnouncements(),
         ]);
     }
@@ -98,14 +116,6 @@ class RoleDashboardController extends Controller
         $query = DB::table('incidents')
             ->where('incidents.assigned_to', $employeeId);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Exclude declined/rejected tanod task responses
-        |--------------------------------------------------------------------------
-        | An incident may remain assigned_to the tanod employee record even after the
-        | tanod declines the related task. The dashboard count should not include
-        | incidents connected to declined/rejected task responses for this tanod.
-        */
         if (
             Schema::hasTable('tanod_tasks')
             && Schema::hasTable('tanod_task_responses')
@@ -196,28 +206,23 @@ class RoleDashboardController extends Controller
         return $query->count();
     }
 
-    private function residentIncidentCount(int $userId): int
+    private function residentIncidentCount(int $userId, array $residentIds = []): int
     {
         if (! Schema::hasTable('incidents')) {
             return 0;
         }
 
-        $query = DB::table('incidents');
-
-        $this->applyResidentIncidentFilter($query, $userId);
-
-        return $query->count();
+        return $this->residentIncidentBaseQuery($userId, $residentIds)->count();
     }
 
-    private function residentIncidentStatusCount(int $userId, array $statuses): int
+    private function residentIncidentStatusCount(int $userId, array $residentIds, array $statuses): int
     {
         if (! Schema::hasTable('incidents')) {
             return 0;
         }
 
-        $query = DB::table('incidents');
+        $query = $this->residentIncidentBaseQuery($userId, $residentIds);
 
-        $this->applyResidentIncidentFilter($query, $userId);
         $this->applyIncidentStatusFilter($query, $statuses);
 
         return $query->count();
@@ -238,14 +243,6 @@ class RoleDashboardController extends Controller
         return $query->count();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Official Recent Incident Activity
-    |--------------------------------------------------------------------------
-    | Uses the Incident model and relationships so Official dashboard status
-    | matches Admin dashboard status. Do not use direct statuses table join here,
-    | because the latest/current status may come from the model relationship.
-    */
     private function latestIncidents(int $limit = 6): Collection
     {
         if (! Schema::hasTable('incidents')) {
@@ -294,13 +291,13 @@ class RoleDashboardController extends Controller
         return $query->limit($limit)->get();
     }
 
-    private function latestResidentReports(int $userId, int $limit = 6): Collection
+    private function latestResidentReports(int $userId, array $residentIds = [], int $limit = 6): Collection
     {
         if (! Schema::hasTable('incidents')) {
             return collect();
         }
 
-        $query = DB::table('incidents')
+        $query = $this->residentIncidentBaseQuery($userId, $residentIds)
             ->leftJoin('statuses', 'statuses.id', '=', 'incidents.status_id')
             ->leftJoin('incident_categories', 'incident_categories.id', '=', 'incidents.category_id')
             ->select([
@@ -315,7 +312,6 @@ class RoleDashboardController extends Controller
                 'incident_categories.category_name',
             ]);
 
-        $this->applyResidentIncidentFilter($query, $userId);
         $this->applyIncidentOrdering($query);
 
         return $query->limit($limit)->get();
@@ -426,60 +422,110 @@ class RoleDashboardController extends Controller
             ->get();
     }
 
-    private function applyResidentIncidentFilter($query, int $userId): void
+    private function residentIncidentBaseQuery(int $userId, array $residentIds = [])
     {
-        $hasReporter = Schema::hasColumn('incidents', 'reporter_id');
-        $hasResident = Schema::hasColumn('incidents', 'resident_id');
+        $query = DB::table('incidents');
 
-        if ($hasReporter && $hasResident) {
-            $query->where(function ($residentQuery) use ($userId) {
-                $residentQuery
-                    ->where('incidents.reporter_id', $userId)
-                    ->orWhere('incidents.resident_id', $userId);
-            });
-
-            return;
-        }
-
-        if ($hasReporter) {
-            $query->where('incidents.reporter_id', $userId);
-            return;
-        }
-
-        if ($hasResident) {
-            $query->where('incidents.resident_id', $userId);
-            return;
-        }
-
-        $query->whereRaw('1 = 0');
-    }
-
-    private function applyIncidentStatusFilter($query, array $statuses): void
-    {
-        $normalizedStatuses = collect($statuses)
-            ->map(fn ($status) => strtolower((string) $status))
+        $residentIds = collect($residentIds)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->push($userId)
+            ->unique()
             ->values()
             ->all();
 
-        if (Schema::hasColumn('incidents', 'status')) {
-            $query->whereIn(DB::raw('LOWER(incidents.status)'), $normalizedStatuses);
-            return;
-        }
+        $ownershipColumns = [
+            'reporter_id' => $userId,
+            'user_id' => $userId,
+            'created_by' => $userId,
+            'submitted_by' => $userId,
+            'reported_by' => $userId,
+            'resident_user_id' => $userId,
+        ];
 
-        if (
-            Schema::hasColumn('incidents', 'status_id')
-            && Schema::hasTable('statuses')
-            && Schema::hasColumn('statuses', 'status_name')
-        ) {
-            $query
-                ->join('statuses', 'statuses.id', '=', 'incidents.status_id')
-                ->whereIn(DB::raw('LOWER(statuses.status_name)'), $normalizedStatuses);
+        $query->where(function ($ownerQuery) use ($ownershipColumns, $residentIds) {
+            $hasCondition = false;
 
-            return;
-        }
+            foreach ($ownershipColumns as $column => $value) {
+                if (! Schema::hasColumn('incidents', $column)) {
+                    continue;
+                }
 
-        $query->whereRaw('1 = 0');
+                if (! $hasCondition) {
+                    $ownerQuery->where('incidents.' . $column, $value);
+                    $hasCondition = true;
+                } else {
+                    $ownerQuery->orWhere('incidents.' . $column, $value);
+                }
+            }
+
+            if (Schema::hasColumn('incidents', 'resident_id')) {
+                if (! $hasCondition) {
+                    $ownerQuery->whereIn('incidents.resident_id', $residentIds);
+                    $hasCondition = true;
+                } else {
+                    $ownerQuery->orWhereIn('incidents.resident_id', $residentIds);
+                }
+            }
+
+            if (! $hasCondition) {
+                $ownerQuery->whereRaw('1 = 0');
+            }
+        });
+
+        return $query;
     }
+
+    private function residentProfileIds(int $userId): array
+    {
+        if (! Schema::hasTable('residents') || ! Schema::hasColumn('residents', 'user_id')) {
+            return [];
+        }
+
+        return DB::table('residents')
+            ->where('user_id', $userId)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private function applyIncidentStatusFilter($query, array $statuses): void
+{
+    $normalizedStatuses = collect($statuses)
+        ->map(fn ($status) => strtolower(trim((string) $status)))
+        ->values()
+        ->all();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard Status Rule
+    |--------------------------------------------------------------------------
+    | Use incidents.status_id -> statuses.status_name as the current source of
+    | truth. Only fall back to incidents.status when there is no status_id setup.
+    |
+    | This prevents one report from being counted as Pending and Resolved at
+    | the same time when incidents.status contains old/stale text.
+    */
+    if (
+        Schema::hasColumn('incidents', 'status_id')
+        && Schema::hasTable('statuses')
+        && Schema::hasColumn('statuses', 'status_name')
+    ) {
+        $query
+            ->leftJoin('statuses as dashboard_statuses', 'dashboard_statuses.id', '=', 'incidents.status_id')
+            ->whereIn(DB::raw('LOWER(TRIM(dashboard_statuses.status_name))'), $normalizedStatuses);
+
+        return;
+    }
+
+    if (Schema::hasColumn('incidents', 'status')) {
+        $query->whereIn(DB::raw('LOWER(TRIM(incidents.status))'), $normalizedStatuses);
+        return;
+    }
+
+    $query->whereRaw('1 = 0');
+}
 
     private function applyIncidentOrdering($query): void
     {

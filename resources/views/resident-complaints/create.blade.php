@@ -32,14 +32,21 @@
 
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
-                    <label class="mb-2 block text-sm font-bold text-slate-700">
+                    <label for="complainant_name" class="mb-2 block text-sm font-bold text-slate-700">
                         Complainant Full Name
                     </label>
 
-                    <input type="text"
-                           value="{{ $user->name }}"
-                           disabled
-                           class="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+                    <input id="complainant_name"
+                           name="complainant_name"
+                           type="text"
+                           value="{{ old('complainant_name', $user->name ?? auth()->user()->name ?? '') }}"
+                           required
+                           placeholder="Enter complainant full name"
+                           class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                    @error('complainant_name')
+                        <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 <div>
@@ -53,6 +60,10 @@
                            value="{{ old('contact_number') }}"
                            placeholder="Optional"
                            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                    @error('contact_number')
+                        <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
                 </div>
             </div>
 
@@ -67,6 +78,10 @@
                           required
                           placeholder="Example: Purok 2, near covered court, Dao, Capiz"
                           class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">{{ old('complaint_address') }}</textarea>
+
+                @error('complaint_address')
+                    <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                @enderror
             </div>
 
             <div>
@@ -80,6 +95,10 @@
                           required
                           placeholder="Describe the complaint clearly."
                           class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">{{ old('complaint_description') }}</textarea>
+
+                @error('complaint_description')
+                    <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                @enderror
             </div>
 
             <div>
@@ -90,12 +109,16 @@
                 <input id="evidence"
                        name="evidence"
                        type="file"
-                       accept="image/jpeg,image/png,image/webp"
+                       accept="image/jpeg,image/jpg,image/png,image/webp"
                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100">
 
                 <p class="mt-2 text-xs text-slate-500">
-                    Accepted: JPG, PNG, WEBP. Maximum size: 4MB.
+                    Accepted: JPG, JPEG, PNG, WEBP. Maximum size: 50MB.
                 </p>
+
+                @error('evidence')
+                    <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                @enderror
             </div>
 
             <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-5">

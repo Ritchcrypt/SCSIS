@@ -78,6 +78,10 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])
         ->name('profile.edit');
 
+    Route::middleware(['auth', 'active.user'])
+    ->get('/resident-complaint-proofs/{proof}/file', [ResidentComplaintController::class, 'proofFile'])
+    ->name('resident-complaint-proofs.file');
+
     Route::patch('/profile', [ProfileController::class, 'update'])
         ->name('profile.update');
 
@@ -99,6 +103,12 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::post('/resident-complaints/{residentComplaint}/proofs', [ResidentComplaintController::class, 'storeProof'])
+    ->name('resident-complaints.proofs.store');
+
+        Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
+    ->name('resident-complaints.evidence');
 
         Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
     ->name('emergency-mode.index');
@@ -290,6 +300,12 @@ Route::middleware(['auth', 'active.user', 'role:official,dao'])
         Route::get('/dashboard', [RoleDashboardController::class, 'official'])
             ->name('dashboard');
 
+        Route::post('/resident-complaints/{residentComplaint}/proofs', [ResidentComplaintController::class, 'storeProof'])
+    ->name('resident-complaints.proofs.store');
+
+        Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
+    ->name('resident-complaints.evidence');
+
         Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
     ->name('emergency-mode.index');
 
@@ -426,6 +442,24 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
     ->group(function () {
         Route::get('/dashboard', [RoleDashboardController::class, 'resident'])
             ->name('dashboard');
+
+        Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
+    ->name('resident-complaints.evidence');
+
+        Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
+    ->name('resident-complaints.index');
+
+Route::get('/resident-complaints/create', [ResidentComplaintController::class, 'create'])
+    ->name('resident-complaints.create');
+
+Route::post('/resident-complaints', [ResidentComplaintController::class, 'store'])
+    ->name('resident-complaints.store');
+
+Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
+    ->name('resident-complaints.show');
+
+Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
+    ->name('emergency-mode.index');
 
         Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
     ->name('emergency-mode.index');

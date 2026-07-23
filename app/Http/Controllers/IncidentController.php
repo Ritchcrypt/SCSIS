@@ -23,29 +23,30 @@ use Illuminate\View\View;
 class IncidentController extends Controller
 {
     public function destroy(Request $request, Incident $incident): RedirectResponse
-{
-    $user = $request->user();
+    {
+        $user = $request->user();
 
-    if (! $user || $user->role !== 'admin') {
-        abort(403, 'Only admin can delete incidents.');
+        if (! $user || $user->role !== 'admin') {
+            abort(403, 'Only admin can delete incidents.');
+        }
+
+        DB::transaction(function () use ($incident) {
+            $this->deleteIncidentRelatedFiles((int) $incident->id);
+            $this->deleteIncidentRelatedRows((int) $incident->id);
+
+            $incident->delete();
+        });
+
+        return redirect()
+            ->route('admin.incidents.index')
+            ->with('success', 'Incident deleted successfully.');
     }
 
-    DB::transaction(function () use ($incident) {
-        $this->deleteIncidentRelatedFiles((int) $incident->id);
-        $this->deleteIncidentRelatedRows((int) $incident->id);
-
-        $incident->delete();
-    });
-
-    return redirect()
-        ->route('admin.incidents.index')
-        ->with('success', 'Incident deleted successfully.');
-}
     public function index(Request $request): View
     {
         $user = $request->user();
 
-        $incidents = Incident::query()
+        $query = Incident::query()
             ->with([
                 'barangay',
                 'category',
@@ -65,16 +66,14 @@ class IncidentController extends Controller
                 }
             })
             ->when($user->role === 'resident', function ($query) use ($user) {
-                $query->where('reporter_id', $user->id);
+                $this->applyResidentIncidentOwnerFilter($query, (int) $user->id);
             })
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->string('search')->toString();
 
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery
-    ->where('incident_title', 'like', "%{$search}%")
-    ->orWhere('incident_description', 'like', "%{$search}%")
-                        ->orWhere('incident_title', 'like', "%{$search}%")
+                        ->where('incident_title', 'like', "%{$search}%")
                         ->orWhere('incident_description', 'like', "%{$search}%")
                         ->orWhereHas('barangay', function ($barangayQuery) use ($search) {
                             $barangayQuery->where('barangay_name', 'like', "%{$search}%");
@@ -95,9 +94,14 @@ class IncidentController extends Controller
             })
             ->when($request->filled('severity') && $request->severity !== 'all', function ($query) use ($request) {
                 $query->where('priority', $request->string('severity')->toString());
-            })
-            ->latest('incident_datetime')
-            ->latest('created_at')
+            });
+
+        if (Schema::hasColumn('incidents', 'incident_datetime')) {
+            $query->orderByDesc('incident_datetime');
+        }
+
+        $incidents = $query
+            ->orderByDesc('created_at')
             ->paginate(10)
             ->withQueryString();
 
@@ -172,7 +176,7 @@ class IncidentController extends Controller
     {
         $user = $request->user();
 
-        if (! in_array($user->role, ['resident', 'admin', 'official'], true)) {
+        if (! in_array($user->role, ['resident', 'admin', 'official', 'dao'], true)) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -181,9 +185,7 @@ class IncidentController extends Controller
             ->get();
 
         $barangays = Schema::hasTable('barangays')
-            ? DB::table('barangays')
-                ->orderBy('barangay_name')
-                ->get()
+            ? DB::table('barangays')->orderBy('barangay_name')->get()
             : collect();
 
         return view('incidents.create', [
@@ -197,7 +199,7 @@ class IncidentController extends Controller
     {
         $user = $request->user();
 
-        if (! in_array($user->role, ['resident', 'admin', 'official'], true)) {
+        if (! in_array($user->role, ['resident', 'admin', 'official', 'dao'], true)) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -236,37 +238,34 @@ class IncidentController extends Controller
         DB::transaction(function () use ($request, $validated, $pendingStatus, &$incident) {
             $incident = new Incident();
 
-            if (Schema::hasColumn('incidents', 'incident_code')) {
-               $incident->incident_code = null;
-            }
+            $this->attachIncidentOwner($incident, $request);
 
-            if (Schema::hasColumn('incidents', 'reporter_id')) {
-                $incident->reporter_id = $request->user()->id;
+            if (Schema::hasColumn('incidents', 'incident_code')) {
+                $incident->incident_code = null;
             }
 
             if (Schema::hasColumn('incidents', 'category_id')) {
-    $incident->category_id = $validated['category_id'];
-}
+                $incident->category_id = $validated['category_id'];
+            }
 
-$selectedCategory = IncidentCategory::find($validated['category_id']);
+            $selectedCategory = IncidentCategory::find($validated['category_id']);
+            $selectedCategoryName = $selectedCategory?->category_name
+                ?? $selectedCategory?->name
+                ?? null;
 
-$selectedCategoryName = $selectedCategory?->category_name
-    ?? $selectedCategory?->name
-    ?? null;
+            if ($selectedCategoryName) {
+                if (Schema::hasColumn('incidents', 'type')) {
+                    $incident->type = $selectedCategoryName;
+                }
 
-if ($selectedCategoryName) {
-    if (Schema::hasColumn('incidents', 'type')) {
-        $incident->type = $selectedCategoryName;
-    }
+                if (Schema::hasColumn('incidents', 'incident_type')) {
+                    $incident->incident_type = $selectedCategoryName;
+                }
 
-    if (Schema::hasColumn('incidents', 'incident_type')) {
-        $incident->incident_type = $selectedCategoryName;
-    }
-
-    if (Schema::hasColumn('incidents', 'category_name')) {
-        $incident->category_name = $selectedCategoryName;
-    }
-}
+                if (Schema::hasColumn('incidents', 'category_name')) {
+                    $incident->category_name = $selectedCategoryName;
+                }
+            }
 
             if (Schema::hasColumn('incidents', 'barangay_id')) {
                 $incident->barangay_id = $validated['barangay_id'];
@@ -274,6 +273,10 @@ if ($selectedCategoryName) {
 
             if (Schema::hasColumn('incidents', 'status_id')) {
                 $incident->status_id = $pendingStatus->id;
+            }
+
+            if (Schema::hasColumn('incidents', 'status')) {
+                $incident->status = $pendingStatus->status_name ?? 'pending';
             }
 
             if (Schema::hasColumn('incidents', 'incident_title')) {
@@ -331,7 +334,7 @@ if ($selectedCategoryName) {
         $showRoute = match ($user->role) {
             'resident' => Route::has('resident.incidents.show') ? 'resident.incidents.show' : null,
             'admin' => Route::has('admin.incidents.show') ? 'admin.incidents.show' : null,
-            'official' => Route::has('official.incidents.show') ? 'official.incidents.show' : null,
+            'official', 'dao' => Route::has('official.incidents.show') ? 'official.incidents.show' : null,
             default => null,
         };
 
@@ -342,7 +345,7 @@ if ($selectedCategoryName) {
         }
 
         return redirect()
-            ->route('resident.incidents.index')
+            ->route('dashboard')
             ->with('success', 'Incident report submitted successfully.');
     }
 
@@ -393,11 +396,7 @@ if ($selectedCategoryName) {
             ]);
 
             if ($tanod->user_id) {
-                $this->notifyTanodAboutIncidentTask(
-                    task: $task,
-                    incident: $incident,
-                    tanodUserId: (int) $tanod->user_id
-                );
+                $this->notifyTanodAboutIncidentTask($task, $incident, (int) $tanod->user_id);
             }
         }
     }
@@ -420,24 +419,50 @@ if ($selectedCategoryName) {
         $validated = $request->validate($rules);
 
         $oldAssignedTo = $incident->assigned_to;
-        $oldStatusId = $incident->status_id;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Assignment Rule
-        |--------------------------------------------------------------------------
-        | Admin can assign or reassign responders.
-        | Official and tanod can update status, but cannot change assigned responder.
-        */
         $newAssignedTo = $request->has('assigned_to')
-    ? ($validated['assigned_to'] ?? null)
-    : $incident->assigned_to;
+            ? ($validated['assigned_to'] ?? null)
+            : $incident->assigned_to;
 
-        DB::transaction(function () use ($request, $incident, $validated, $oldAssignedTo, $oldStatusId, $newAssignedTo) {
-            $incident->update([
-                'status_id' => $validated['status_id'],
-                'assigned_to' => $newAssignedTo,
-            ]);
+        DB::transaction(function () use ($request, $incident, $validated, $oldAssignedTo, $newAssignedTo) {
+            
+
+            
+
+$incidentUpdateData = [
+    'status_id' => $validated['status_id'],
+    'assigned_to' => $newAssignedTo,
+];
+
+if (Schema::hasColumn('incidents', 'status')) {
+    $incidentUpdateData['status'] = $status?->status_name ?? 'Updated';
+}
+
+$incident->update($incidentUpdateData);
+
+            if (Schema::hasColumn('incidents', 'status')) {
+                $incidentUpdates['status'] = $status?->status_name ?? 'Updated';
+            }
+
+            $status = Status::find($validated['status_id']);
+
+$incidentUpdateData = [
+    'status_id' => $validated['status_id'],
+    'assigned_to' => $newAssignedTo,
+];
+
+if (Schema::hasColumn('incidents', 'status')) {
+    $incidentUpdateData['status'] = $status?->status_name ?? 'Updated';
+}
+
+$incident->update($incidentUpdateData);
+
+IncidentStatusHistory::create([
+    'incident_id' => $incident->id,
+    'status_id' => $validated['status_id'],
+    'updated_by' => $request->user()->id,
+    'remarks' => $validated['remarks'] ?? null,
+    'status_changed_at' => now(),
+]);
 
             IncidentStatusHistory::create([
                 'incident_id' => $incident->id,
@@ -446,8 +471,6 @@ if ($selectedCategoryName) {
                 'remarks' => $validated['remarks'] ?? null,
                 'status_changed_at' => now(),
             ]);
-
-            $status = Status::find($validated['status_id']);
 
             $freshIncident = $incident->fresh([
                 'reporter',
@@ -471,7 +494,6 @@ if ($selectedCategoryName) {
                     message: 'You have been assigned to respond to incident: ' . $freshIncident->display_title . '.'
                 );
             }
-
         });
 
         return back()->with('success', 'Incident status updated successfully.');
@@ -498,9 +520,13 @@ if ($selectedCategoryName) {
             $escalatedStatus = Status::where('status_name', 'Escalated')->first();
 
             if ($escalatedStatus) {
-                $incident->update([
-                    'status_id' => $escalatedStatus->id,
-                ]);
+                $incidentUpdates = ['status_id' => $escalatedStatus->id];
+
+                if (Schema::hasColumn('incidents', 'status')) {
+                    $incidentUpdates['status'] = $escalatedStatus->status_name;
+                }
+
+                $incident->update($incidentUpdates);
 
                 IncidentStatusHistory::create([
                     'incident_id' => $incident->id,
@@ -552,184 +578,185 @@ if ($selectedCategoryName) {
 
         return back()->with('success', 'Message added successfully.');
     }
-public function quickStoreBarangay(Request $request): RedirectResponse
-{
-    $user = $request->user();
 
-    if (! $user || ! in_array($user->role, ['admin', 'official'], true)) {
-        abort(403, 'Only admin or official can add barangays.');
+    public function quickStoreBarangay(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user || ! in_array($user->role, ['admin', 'official', 'dao'], true)) {
+            abort(403, 'Only admin or official can add barangays.');
+        }
+
+        if (! Schema::hasTable('barangays')) {
+            return back()->with('error', 'Barangays table does not exist.');
+        }
+
+        $validated = $request->validate([
+            'barangay_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $barangayName = trim($validated['barangay_name']);
+        $columns = Schema::getColumnListing('barangays');
+
+        $exists = DB::table('barangays')
+            ->when(in_array('barangay_name', $columns, true), function ($query) use ($barangayName) {
+                $query->whereRaw('LOWER(barangay_name) = ?', [strtolower($barangayName)]);
+            })
+            ->when(! in_array('barangay_name', $columns, true) && in_array('name', $columns, true), function ($query) use ($barangayName) {
+                $query->whereRaw('LOWER(name) = ?', [strtolower($barangayName)]);
+            })
+            ->exists();
+
+        if ($exists) {
+            return back()->with('error', 'Barangay already exists.');
+        }
+
+        $data = [];
+
+        if (in_array('barangay_name', $columns, true)) {
+            $data['barangay_name'] = $barangayName;
+        }
+
+        if (in_array('name', $columns, true)) {
+            $data['name'] = $barangayName;
+        }
+
+        if (in_array('created_at', $columns, true)) {
+            $data['created_at'] = now();
+        }
+
+        if (in_array('updated_at', $columns, true)) {
+            $data['updated_at'] = now();
+        }
+
+        DB::table('barangays')->insert($data);
+
+        return back()->with('success', 'Barangay added successfully.');
     }
 
-    if (! Schema::hasTable('barangays')) {
-        return back()->with('error', 'Barangays table does not exist.');
-    }
+    public function quickDeleteBarangay(Request $request, int $barangayId): RedirectResponse
+    {
+        $user = $request->user();
 
-    $validated = $request->validate([
-        'barangay_name' => ['required', 'string', 'max:255'],
-    ]);
+        if (! $user || ! in_array($user->role, ['admin', 'official', 'dao'], true)) {
+            abort(403, 'Only admin or official can remove barangays.');
+        }
 
-    $barangayName = trim($validated['barangay_name']);
+        if (! Schema::hasTable('barangays')) {
+            return back()->with('error', 'Barangays table does not exist.');
+        }
 
-    $columns = Schema::getColumnListing('barangays');
-
-    $exists = DB::table('barangays')
-        ->when(in_array('barangay_name', $columns, true), function ($query) use ($barangayName) {
-            $query->whereRaw('LOWER(barangay_name) = ?', [strtolower($barangayName)]);
-        })
-        ->when(! in_array('barangay_name', $columns, true) && in_array('name', $columns, true), function ($query) use ($barangayName) {
-            $query->whereRaw('LOWER(name) = ?', [strtolower($barangayName)]);
-        })
-        ->exists();
-
-    if ($exists) {
-        return back()->with('error', 'Barangay already exists.');
-    }
-
-    $data = [];
-
-    if (in_array('barangay_name', $columns, true)) {
-        $data['barangay_name'] = $barangayName;
-    }
-
-    if (in_array('name', $columns, true)) {
-        $data['name'] = $barangayName;
-    }
-
-    if (in_array('created_at', $columns, true)) {
-        $data['created_at'] = now();
-    }
-
-    if (in_array('updated_at', $columns, true)) {
-        $data['updated_at'] = now();
-    }
-
-    DB::table('barangays')->insert($data);
-
-    return back()->with('success', 'Barangay added successfully.');
-}
-
-public function quickDeleteBarangay(Request $request, int $barangayId): RedirectResponse
-{
-    $user = $request->user();
-
-    if (! $user || ! in_array($user->role, ['admin', 'official'], true)) {
-        abort(403, 'Only admin or official can remove barangays.');
-    }
-
-    if (! Schema::hasTable('barangays')) {
-        return back()->with('error', 'Barangays table does not exist.');
-    }
-
-    if (
-        Schema::hasTable('incidents')
-        && Schema::hasColumn('incidents', 'barangay_id')
-        && DB::table('incidents')->where('barangay_id', $barangayId)->exists()
-    ) {
-        return back()->with('error', 'This barangay cannot be removed because incidents are already linked to it.');
-    }
-
-    DB::table('barangays')
-        ->where('id', $barangayId)
-        ->delete();
-
-    return back()->with('success', 'Barangay removed successfully.');
-}
-
-public function showEvidenceFile(Request $request, int $evidenceId)
-{
-    $evidenceTables = [
-        'evidence',
-        'incident_evidence',
-        'incident_evidences',
-        'incident_attachments',
-        'attachments',
-    ];
-
-    $evidenceRecord = null;
-
-    foreach ($evidenceTables as $table) {
         if (
-            ! Schema::hasTable($table)
-            || ! Schema::hasColumn($table, 'id')
-            || ! Schema::hasColumn($table, 'incident_id')
+            Schema::hasTable('incidents')
+            && Schema::hasColumn('incidents', 'barangay_id')
+            && DB::table('incidents')->where('barangay_id', $barangayId)->exists()
         ) {
-            continue;
+            return back()->with('error', 'This barangay cannot be removed because incidents are already linked to it.');
         }
 
-        $record = DB::table($table)
-            ->where('id', $evidenceId)
-            ->first();
+        DB::table('barangays')
+            ->where('id', $barangayId)
+            ->delete();
 
-        if ($record) {
-            $evidenceRecord = $record;
-            break;
+        return back()->with('success', 'Barangay removed successfully.');
+    }
+
+    public function showEvidenceFile(Request $request, int $evidenceId)
+    {
+        $evidenceTables = [
+            'evidence',
+            'incident_evidence',
+            'incident_evidences',
+            'incident_attachments',
+            'attachments',
+        ];
+
+        $evidenceRecord = null;
+
+        foreach ($evidenceTables as $table) {
+            if (
+                ! Schema::hasTable($table)
+                || ! Schema::hasColumn($table, 'id')
+                || ! Schema::hasColumn($table, 'incident_id')
+            ) {
+                continue;
+            }
+
+            $record = DB::table($table)
+                ->where('id', $evidenceId)
+                ->first();
+
+            if ($record) {
+                $evidenceRecord = $record;
+                break;
+            }
         }
+
+        if (! $evidenceRecord) {
+            abort(404, 'Evidence record not found.');
+        }
+
+        $incident = Incident::find((int) $evidenceRecord->incident_id);
+
+        if (! $incident) {
+            abort(404, 'Related incident not found.');
+        }
+
+        $this->authorizeIncidentAccess($request, $incident);
+
+        $filePath = $evidenceRecord->file_path
+            ?? $evidenceRecord->path
+            ?? $evidenceRecord->file_url
+            ?? $evidenceRecord->url
+            ?? null;
+
+        if (! $filePath || str_starts_with((string) $filePath, 'http')) {
+            abort(404, 'Evidence file path is invalid.');
+        }
+
+        $cleanFilePath = str_replace('\\', '/', trim((string) $filePath));
+        $cleanFilePath = preg_replace('#^/?storage/#', '', $cleanFilePath);
+        $cleanFilePath = preg_replace('#^/?public/#', '', $cleanFilePath);
+        $cleanFilePath = ltrim($cleanFilePath, '/');
+
+        if (
+            ! $cleanFilePath
+            || str_contains($cleanFilePath, '..')
+            || ! Storage::disk('public')->exists($cleanFilePath)
+        ) {
+            abort(404, 'Evidence file not found in storage.');
+        }
+
+        $absolutePath = Storage::disk('public')->path($cleanFilePath);
+
+        if (! is_file($absolutePath)) {
+            abort(404, 'Evidence file is missing from disk.');
+        }
+
+        $mimeType = $evidenceRecord->mime_type ?? null;
+
+        if (! $mimeType) {
+            $detectedMimeType = @mime_content_type($absolutePath);
+            $mimeType = $detectedMimeType ?: 'application/octet-stream';
+        }
+
+        $fileName = $evidenceRecord->file_name
+            ?? $evidenceRecord->name
+            ?? basename($cleanFilePath);
+
+        $fileName = str_replace('"', '', (string) $fileName);
+
+        return response()->file($absolutePath, [
+            'Content-Type' => (string) $mimeType,
+            'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+        ]);
     }
 
-    if (! $evidenceRecord) {
-        abort(404, 'Evidence record not found.');
-    }
-
-    $incident = Incident::find((int) $evidenceRecord->incident_id);
-
-    if (! $incident) {
-        abort(404, 'Related incident not found.');
-    }
-
-    $this->authorizeIncidentAccess($request, $incident);
-
-    $filePath = $evidenceRecord->file_path
-        ?? $evidenceRecord->path
-        ?? $evidenceRecord->file_url
-        ?? $evidenceRecord->url
-        ?? null;
-
-    if (! $filePath || str_starts_with((string) $filePath, 'http')) {
-        abort(404, 'Evidence file path is invalid.');
-    }
-
-    $cleanFilePath = str_replace('\\', '/', trim((string) $filePath));
-    $cleanFilePath = preg_replace('#^/?storage/#', '', $cleanFilePath);
-    $cleanFilePath = preg_replace('#^/?public/#', '', $cleanFilePath);
-    $cleanFilePath = ltrim($cleanFilePath, '/');
-
-    if (
-        ! $cleanFilePath
-        || str_contains($cleanFilePath, '..')
-        || ! Storage::disk('public')->exists($cleanFilePath)
-    ) {
-        abort(404, 'Evidence file not found in storage.');
-    }
-
-    $absolutePath = Storage::disk('public')->path($cleanFilePath);
-
-    if (! is_file($absolutePath)) {
-        abort(404, 'Evidence file is missing from disk.');
-    }
-
-    $mimeType = $evidenceRecord->mime_type ?? null;
-
-    if (! $mimeType) {
-        $detectedMimeType = @mime_content_type($absolutePath);
-        $mimeType = $detectedMimeType ?: 'application/octet-stream';
-    }
-
-    $fileName = $evidenceRecord->file_name
-        ?? $evidenceRecord->name
-        ?? basename($cleanFilePath);
-
-    $fileName = str_replace('"', '', (string) $fileName);
-
-    return response()->file($absolutePath, [
-        'Content-Type' => (string) $mimeType,
-        'Content-Disposition' => 'inline; filename="' . $fileName . '"',
-    ]);
-}
     private function authorizeIncidentAccess(Request $request, Incident $incident): void
     {
         $user = $request->user();
 
-        if ($user->role === 'admin' || $user->role === 'official') {
+        if (in_array($user->role, ['admin', 'official', 'dao'], true)) {
             return;
         }
 
@@ -741,7 +768,7 @@ public function showEvidenceFile(Request $request, int $evidenceId)
             }
         }
 
-        if ($user->role === 'resident' && (int) $incident->reporter_id === (int) $user->id) {
+        if ($user->role === 'resident' && $this->residentOwnsIncident($incident, (int) $user->id)) {
             return;
         }
 
@@ -752,7 +779,7 @@ public function showEvidenceFile(Request $request, int $evidenceId)
     {
         $user = $request->user();
 
-        if ($user->role === 'admin' || $user->role === 'official') {
+        if (in_array($user->role, ['admin', 'official', 'dao'], true)) {
             return;
         }
 
@@ -767,12 +794,11 @@ public function showEvidenceFile(Request $request, int $evidenceId)
         abort(403, 'Unauthorized access.');
     }
 
-
     private function authorizeIncidentEscalation(Request $request, Incident $incident): void
     {
         $user = $request->user();
 
-        if (in_array($user->role, ['admin', 'official'], true)) {
+        if (in_array($user->role, ['admin', 'official', 'dao'], true)) {
             return;
         }
 
@@ -780,46 +806,71 @@ public function showEvidenceFile(Request $request, int $evidenceId)
     }
 
     private function notifyIncidentUsers(
-    Incident $incident,
-    string $title,
-    string $message,
-    string $type = 'incident_update'
-): void {
-    if (! Schema::hasTable('notifications')) {
-        return;
+        Incident $incident,
+        string $title,
+        string $message,
+        string $type = 'incident_update'
+    ): void {
+        if (! Schema::hasTable('notifications')) {
+            return;
+        }
+
+        $incident->loadMissing(['reporter', 'assignedTanod.user']);
+
+        $managementUserIds = User::query()
+            ->whereIn('role', ['admin', 'official', 'dao'])
+            ->when(Schema::hasColumn('users', 'is_active'), function ($query) {
+                $query->where('is_active', true);
+            })
+            ->pluck('id');
+
+        $userIds = collect()
+            ->merge($managementUserIds)
+            ->push($incident->reporter_id)
+            ->push($incident->assignedTanod?->user_id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        foreach ($userIds as $userId) {
+            $notificationData = [
+                'user_id' => $userId,
+                'type' => $type,
+                'source_id' => $incident->id,
+                'title' => $title,
+                'message' => $message,
+                'is_read' => false,
+                'read_at' => null,
+            ];
+
+            if (Schema::hasColumn('notifications', 'acknowledged_by')) {
+                $notificationData['acknowledged_by'] = null;
+            }
+
+            if (Schema::hasColumn('notifications', 'acknowledged_at')) {
+                $notificationData['acknowledged_at'] = null;
+            }
+
+            UserNotification::create($notificationData);
+        }
     }
 
-    $incident->loadMissing(['reporter', 'assignedTanod.user']);
+    private function createTanodAlert(Incident $incident, string $type, string $title, string $message): void
+    {
+        $incident->loadMissing('assignedTanod.user');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Incident Update Notification Rule
-    |--------------------------------------------------------------------------
-    | Every incident update must notify:
-    | - admin
-    | - official
-    | - dao
-    | - reporter/resident
-    | - assigned tanod
-    */
-    $managementUserIds = User::query()
-        ->whereIn('role', ['admin', 'official', 'dao'])
-        ->when(Schema::hasColumn('users', 'is_active'), function ($query) {
-            $query->where('is_active', true);
-        })
-        ->pluck('id');
+        $assignedTanodUser = $incident->assignedTanod?->user;
 
-    $userIds = collect()
-        ->merge($managementUserIds)
-        ->push($incident->reporter_id)
-        ->push($incident->assignedTanod?->user_id)
-        ->filter()
-        ->unique()
-        ->values();
+        if (! $assignedTanodUser) {
+            return;
+        }
 
-    foreach ($userIds as $userId) {
+        if ((int) $assignedTanodUser->id === (int) $incident->reporter_id) {
+            return;
+        }
+
         $notificationData = [
-            'user_id' => $userId,
+            'user_id' => $assignedTanodUser->id,
             'type' => $type,
             'source_id' => $incident->id,
             'title' => $title,
@@ -838,143 +889,112 @@ public function showEvidenceFile(Request $request, int $evidenceId)
 
         UserNotification::create($notificationData);
     }
-}
 
-    private function createTanodAlert(Incident $incident, string $type, string $title, string $message): void
-{
-    $incident->loadMissing('assignedTanod.user');
+    private function deleteIncidentRelatedFiles(int $incidentId): void
+    {
+        $fileTables = [
+            'evidence',
+            'incident_evidence',
+            'incident_evidences',
+            'incident_attachments',
+            'attachments',
+        ];
 
-    $assignedTanodUser = $incident->assignedTanod?->user;
+        $fileColumns = [
+            'file_path',
+            'path',
+            'file_url',
+            'url',
+        ];
 
-    if (! $assignedTanodUser) {
-        return;
-    }
+        foreach ($fileTables as $table) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'incident_id')) {
+                continue;
+            }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Notification Safety Rule
-    |--------------------------------------------------------------------------
-    | Do not send a dispatch/escalation alert to the same user who submitted
-    | the report. This prevents "you are assigned to your own report" alerts.
-    */
-    if ((int) $assignedTanodUser->id === (int) $incident->reporter_id) {
-        return;
-    }
+            $existingFileColumns = array_values(array_filter(
+                $fileColumns,
+                fn ($column) => Schema::hasColumn($table, $column)
+            ));
 
-    UserNotification::create([
-        'user_id' => $assignedTanodUser->id,
-        'type' => $type,
-        'source_id' => $incident->id,
-        'title' => $title,
-        'message' => $message,
-        'is_read' => false,
-        'read_at' => null,
-        'acknowledged_by' => null,
-        'acknowledged_at' => null,
-    ]);
-}
-private function deleteIncidentRelatedFiles(int $incidentId): void
-{
-    $fileTables = [
-        'evidence',
-        'incident_evidence',
-        'incident_evidences',
-        'incident_attachments',
-        'attachments',
-    ];
+            if (empty($existingFileColumns)) {
+                continue;
+            }
 
-    $fileColumns = [
-        'file_path',
-        'path',
-        'file_url',
-        'url',
-    ];
+            $records = DB::table($table)
+                ->where('incident_id', $incidentId)
+                ->get($existingFileColumns);
 
-    foreach ($fileTables as $table) {
-        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'incident_id')) {
-            continue;
-        }
+            foreach ($records as $record) {
+                foreach ($existingFileColumns as $column) {
+                    $path = $record->{$column} ?? null;
 
-        $existingFileColumns = array_values(array_filter(
-            $fileColumns,
-            fn ($column) => Schema::hasColumn($table, $column)
-        ));
+                    if (! $path || str_starts_with((string) $path, 'http')) {
+                        continue;
+                    }
 
-        if (empty($existingFileColumns)) {
-            continue;
-        }
+                    $path = str_replace('\\', '/', trim((string) $path));
+                    $path = preg_replace('#^/?storage/#', '', $path);
+                    $path = preg_replace('#^/?public/#', '', $path);
+                    $path = ltrim($path, '/');
 
-        $records = DB::table($table)
-            ->where('incident_id', $incidentId)
-            ->get($existingFileColumns);
-
-        foreach ($records as $record) {
-            foreach ($existingFileColumns as $column) {
-                $path = $record->{$column} ?? null;
-
-                if (! $path || str_starts_with((string) $path, 'http')) {
-                    continue;
-                }
-
-                $path = str_replace('\\', '/', trim((string) $path));
-                $path = preg_replace('#^/?storage/#', '', $path);
-                $path = preg_replace('#^/?public/#', '', $path);
-                $path = ltrim($path, '/');
-
-                if (
-                    $path
-                    && ! str_contains($path, '..')
-                    && Storage::disk('public')->exists($path)
-                ) {
-                    Storage::disk('public')->delete($path);
+                    if (
+                        $path
+                        && ! str_contains($path, '..')
+                        && Storage::disk('public')->exists($path)
+                    ) {
+                        Storage::disk('public')->delete($path);
+                    }
                 }
             }
         }
     }
-}
 
-private function deleteIncidentRelatedRows(int $incidentId): void
-{
-    $relatedTables = [
-        'evidence',
-        'incident_evidence',
-        'incident_evidences',
-        'incident_attachments',
-        'attachments',
-        'incident_messages',
-        'incident_status_histories',
-        'incident_status_history',
-        'incident_escalations',
-        'case_records',
-    ];
+    private function deleteIncidentRelatedRows(int $incidentId): void
+    {
+        $relatedTables = [
+            'evidence',
+            'incident_evidence',
+            'incident_evidences',
+            'incident_attachments',
+            'attachments',
+            'incident_messages',
+            'incident_status_histories',
+            'incident_status_history',
+            'incident_escalations',
+            'case_records',
+        ];
 
-    foreach ($relatedTables as $table) {
-        if (Schema::hasTable($table) && Schema::hasColumn($table, 'incident_id')) {
-            DB::table($table)
-                ->where('incident_id', $incidentId)
+        foreach ($relatedTables as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'incident_id')) {
+                DB::table($table)
+                    ->where('incident_id', $incidentId)
+                    ->delete();
+            }
+        }
+
+        if (Schema::hasTable('notifications') && Schema::hasColumn('notifications', 'source_id')) {
+            DB::table('notifications')
+                ->where('source_id', $incidentId)
+                ->when(Schema::hasColumn('notifications', 'type'), function ($query) {
+                    $query->whereIn('type', [
+                        'incident',
+                        'incident_reported',
+                        'incident_update',
+                        'incident_updated',
+                        'incident_status_update',
+                        'status_update',
+                        'dispatch',
+                        'escalation',
+                        'emergency',
+                        'resolved',
+                        'community_problem',
+                        'community',
+                    ]);
+                })
                 ->delete();
         }
     }
-
-    if (Schema::hasTable('notifications') && Schema::hasColumn('notifications', 'source_id')) {
-    DB::table('notifications')
-        ->where('source_id', $incidentId)
-        ->when(Schema::hasColumn('notifications', 'type'), function ($query) {
-            $query->whereIn('type', [
-                'incident',
-                'incident_reported',
-                'incident_update',
-                'dispatch',
-                'escalation',
-                'emergency',
-                'resolved',
-                'community_problem',
-                'community',
-            ]);
-        })
-        ->delete();
-}
-}
 
     private function storeIncidentLocation(Incident $incident, array $validated): void
     {
@@ -1138,22 +1158,6 @@ private function deleteIncidentRelatedRows(int $incidentId): void
     {
         $incident->loadMissing(['category', 'reporter']);
 
-        /*
-        |--------------------------------------------------------------------------
-        | New Incident Notification Rule
-        |--------------------------------------------------------------------------
-        | Every newly created incident must generate INCIDENT notifications only.
-        |
-        | Recipients:
-        | - All active admin users
-        | - All active official/dao users
-        | - The reporter, if the reporter is not already included above
-        |
-        | This prevents Official from showing zero notifications when Admin creates
-        | an incident, and it prevents incident reports from appearing as
-        | Announcement / Community Problem / Calamity in the bell.
-        */
-
         $receiverIds = User::query()
             ->whereIn('role', ['admin', 'official', 'dao'])
             ->when(Schema::hasColumn('users', 'is_active'), function ($query) {
@@ -1237,6 +1241,161 @@ private function deleteIncidentRelatedRows(int $incidentId): void
             ],
             $notificationData
         );
+    }
+
+    private function attachIncidentOwner(Incident $incident, Request $request): void
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return;
+        }
+
+        $userId = (int) $user->id;
+        $role = strtolower((string) $user->role);
+
+        foreach ([
+            'reporter_id',
+            'created_by',
+            'submitted_by',
+            'reported_by',
+        ] as $column) {
+            if (Schema::hasColumn('incidents', $column)) {
+                $incident->{$column} = $userId;
+            }
+        }
+
+        if ($role === 'resident') {
+            foreach ([
+                'user_id',
+                'resident_user_id',
+            ] as $column) {
+                if (Schema::hasColumn('incidents', $column)) {
+                    $incident->{$column} = $userId;
+                }
+            }
+
+            if (Schema::hasColumn('incidents', 'resident_id')) {
+                $residentProfileId = $this->residentProfileIdForUser($userId);
+
+                if ($residentProfileId) {
+                    $incident->resident_id = $residentProfileId;
+                } elseif (! Schema::hasTable('residents') || ! Schema::hasColumn('residents', 'user_id')) {
+                    $incident->resident_id = $userId;
+                }
+            }
+        }
+    }
+
+    private function applyResidentIncidentOwnerFilter($query, int $userId): void
+    {
+        $residentIds = $this->residentProfileIdsForUser($userId);
+
+        $query->where(function ($ownerQuery) use ($userId, $residentIds) {
+            $hasCondition = false;
+
+            foreach ([
+                'reporter_id',
+                'user_id',
+                'created_by',
+                'submitted_by',
+                'reported_by',
+                'resident_user_id',
+            ] as $column) {
+                if (! Schema::hasColumn('incidents', $column)) {
+                    continue;
+                }
+
+                if (! $hasCondition) {
+                    $ownerQuery->where('incidents.' . $column, $userId);
+                    $hasCondition = true;
+                } else {
+                    $ownerQuery->orWhere('incidents.' . $column, $userId);
+                }
+            }
+
+            if (Schema::hasColumn('incidents', 'resident_id')) {
+                if (! $hasCondition) {
+                    $ownerQuery->whereIn('incidents.resident_id', $residentIds);
+                    $hasCondition = true;
+                } else {
+                    $ownerQuery->orWhereIn('incidents.resident_id', $residentIds);
+                }
+            }
+
+            if (! $hasCondition) {
+                $ownerQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function residentOwnsIncident(Incident $incident, int $userId): bool
+    {
+        foreach ([
+            'reporter_id',
+            'user_id',
+            'created_by',
+            'submitted_by',
+            'reported_by',
+            'resident_user_id',
+        ] as $column) {
+            if (
+                Schema::hasColumn('incidents', $column)
+                && (int) ($incident->{$column} ?? 0) === $userId
+            ) {
+                return true;
+            }
+        }
+
+        if (Schema::hasColumn('incidents', 'resident_id')) {
+            return in_array(
+                (int) ($incident->resident_id ?? 0),
+                $this->residentProfileIdsForUser($userId),
+                true
+            );
+        }
+
+        return false;
+    }
+
+    private function residentProfileIdForUser(int $userId): ?int
+    {
+        if (! Schema::hasTable('residents')) {
+            return null;
+        }
+
+        if (! Schema::hasColumn('residents', 'user_id')) {
+            return null;
+        }
+
+        $residentId = DB::table('residents')
+            ->where('user_id', $userId)
+            ->value('id');
+
+        return $residentId ? (int) $residentId : null;
+    }
+
+    private function residentProfileIdsForUser(int $userId): array
+    {
+        $ids = collect([$userId]);
+
+        if (
+            Schema::hasTable('residents')
+            && Schema::hasColumn('residents', 'user_id')
+        ) {
+            $residentIds = DB::table('residents')
+                ->where('user_id', $userId)
+                ->pluck('id');
+
+            $ids = $ids->merge($residentIds);
+        }
+
+        return $ids
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function incidentNotificationType(Incident $incident): string

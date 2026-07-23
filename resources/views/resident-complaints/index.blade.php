@@ -108,9 +108,23 @@
                                 <td class="whitespace-nowrap px-5 py-4 text-right">
                                     @if ($showRoute && Route::has($showRoute))
                                         <a href="{{ route($showRoute, $complaint) }}"
-                                           class="inline-flex rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100">
-                                            View
-                                        </a>
+   title="View complaint"
+   aria-label="View complaint"
+   class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm">
+    <svg xmlns="http://www.w3.org/2000/svg"
+         class="h-5 w-5"
+         fill="none"
+         viewBox="0 0 24 24"
+         stroke="currentColor"
+         stroke-width="2">
+        <path stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12s-3.75 6.75-9.75 6.75S2.25 12 2.25 12z" />
+        <path stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+</a>
                                     @endif
                                 </td>
                             </tr>

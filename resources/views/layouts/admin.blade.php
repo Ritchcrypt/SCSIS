@@ -278,40 +278,45 @@
 ],
 
                     'resident' => [
-                        [
-                            'label' => 'Dashboard',
-                            'icon' => '▦',
-                            'route' => 'resident.dashboard',
-                            'active' => ['resident.dashboard'],
-                        ],
-                        [
-                            'label' => 'Announcements',
-                            'icon' => '📢',
-                            'route' => 'resident.announcements.index',
-                            'active' => ['resident.announcements.*'],
-                        ],
-                        [
-                            'label' => 'Report Incident',
-                            'icon' => '➕',
-                            'route' => 'resident.incidents.create',
-                            'active' => ['resident.incidents.create'],
-                        ],
-                        [
-                            'label' => 'My Reports',
-                            'icon' => '📄',
-                            'route' => 'resident.incidents.index',
-                            'active' => ['resident.incidents.index', 'resident.incidents.show'],
-                        ],
-                    ],
-
-                    default => [
-                        [
-                            'label' => 'Dashboard',
-                            'icon' => '▦',
-                            'route' => 'dashboard',
-                            'active' => ['dashboard'],
-                        ],
-                    ],
+    [
+        'label' => 'Dashboard',
+        'icon' => '▦',
+        'route' => 'resident.dashboard',
+        'active' => ['resident.dashboard'],
+    ],
+    [
+        'label' => 'Report Incident',
+        'icon' => '📄',
+        'route' => 'resident.incidents.index',
+        'active' => [
+            'resident.incidents.index',
+            'resident.incidents.show',
+            'resident.incidents.create',
+        ],
+    ],
+    [
+        'label' => 'Complaints Form',
+        'icon' => '📝',
+        'route' => 'resident.resident-complaints.create',
+        'active' => [
+            'resident.resident-complaints.index',
+            'resident.resident-complaints.create',
+            'resident.resident-complaints.show',
+        ],
+    ],
+    [
+        'label' => 'Announcements',
+        'icon' => '📢',
+        'route' => 'resident.announcements.index',
+        'active' => ['resident.announcements.*'],
+    ],
+    [
+        'label' => 'Emergency Hotlines',
+        'icon' => '🚨',
+        'route' => 'resident.emergency-mode.index',
+        'active' => ['resident.emergency-mode.*'],
+    ],
+],
                 };
             @endphp
 
@@ -320,9 +325,15 @@
                     @continue(! Route::has($item['route']))
 
                     @php
-                        $isActive = collect($item['active'])
-                            ->contains(fn ($pattern) => request()->routeIs($pattern));
-                    @endphp
+    $activePatterns = $item['active'] ?? [$item['route']];
+
+    if (is_string($activePatterns)) {
+        $activePatterns = [$activePatterns];
+    }
+
+    $isActive = collect($activePatterns)
+        ->contains(fn ($pattern) => request()->routeIs($pattern));
+@endphp
 
                     <a href="{{ route($item['route']) }}"
                        class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
