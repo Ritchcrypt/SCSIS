@@ -68,19 +68,23 @@ class AnnouncementController extends Controller
             'priority' => ['required', Rule::in(array_keys($this->priorities()))],
             'audience' => ['required', Rule::in($this->allowedAudienceValues())],
             'activate_calamity_mode' => ['nullable', 'boolean'],
+            'show_in_weather_feed' => ['nullable', 'boolean'],
         ]);
 
         $validated['audience'] = $this->normalizeAudience($validated['audience']);
 
         $calamityMode = (bool) ($validated['activate_calamity_mode'] ?? false);
+        $showInWeatherFeed = $request->boolean('show_in_weather_feed');
 
         if ($calamityMode) {
             $validated['category'] = 'calamity';
             $validated['priority'] = 'emergency';
             $validated['audience'] = 'everyone';
+
+            $showInWeatherFeed = true;
         }
 
-        $announcement = Announcement::create([
+        $announcementData = [
             'title' => $validated['title'],
             'content' => $validated['content'],
             'category' => $validated['category'],
@@ -90,7 +94,13 @@ class AnnouncementController extends Controller
             'activate_calamity_mode' => $calamityMode,
             'posted_by' => Auth::id(),
             'published_at' => now(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('announcements', 'show_in_weather_feed')) {
+            $announcementData['show_in_weather_feed'] = $showInWeatherFeed;
+        }
+
+        $announcement = Announcement::create($announcementData);
 
         $this->notifyTargetUsers($announcement);
 

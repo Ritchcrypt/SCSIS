@@ -139,49 +139,11 @@
     </div>
 </section>
 
-<section class="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
-    <div class="rounded-2xl border border-sky-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sky-500 hover:shadow-lg">
-        <div class="mb-6 flex items-start justify-between">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900">
-                    Weather & Disaster Feed
-                </h2>
+<section class="mt-8">
+    @include('components.dashboard.weather-disaster-feed')
+</section>
 
-                <p class="text-sm text-slate-500">
-                    Dao, Capiz
-                </p>
-            </div>
-
-            <span class="rounded-full bg-yellow-100 px-4 py-1 text-sm font-semibold text-yellow-700">
-                Watch
-            </span>
-        </div>
-
-        <div class="mb-5 flex items-center gap-6">
-            <p class="text-5xl font-bold text-slate-900">
-                31°
-            </p>
-
-            <div>
-                <p class="text-lg font-bold text-slate-900">
-                    Cloudy
-                </p>
-
-                <p class="text-sm text-slate-500">
-                    72% humidity · 10 km/h wind
-                </p>
-            </div>
-        </div>
-
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">
-            Advisory: Tanod patrols should exercise caution and stay alert for possible sudden heavy rainfall or thunderstorms throughout the day.
-        </div>
-
-        <p class="mt-5 text-sm text-slate-500">
-            Last updated: {{ now()->format('h:i:s A') }}
-        </p>
-    </div>
-
+<section class="mt-8">
     <div class="rounded-2xl border border-orange-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-orange-500 hover:shadow-lg">
         <div class="mb-6 flex items-center justify-between">
             <h2 class="text-xl font-bold text-slate-900">
@@ -226,10 +188,10 @@
                     }
 
                     $reporterName = data_get($incident, 'reporter.name')
-    ?? data_get($incident, 'reporter_name')
-    ?? data_get($incident, 'resident_name')
-    ?? data_get($incident, 'reported_by_name')
-    ?? 'Unknown';
+                        ?? data_get($incident, 'reporter_name')
+                        ?? data_get($incident, 'resident_name')
+                        ?? data_get($incident, 'reported_by_name')
+                        ?? 'Unknown';
 
                     $assignedName = data_get($incident, 'assignedTanod.user.name')
                         ?? data_get($incident, 'assignedTanod.name')

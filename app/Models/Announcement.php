@@ -18,6 +18,7 @@ class Announcement extends Model
         'audience',
         'is_active',
         'activate_calamity_mode',
+        'show_in_weather_feed',
         'posted_by',
         'published_at',
     ];

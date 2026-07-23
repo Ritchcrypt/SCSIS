@@ -31,60 +31,64 @@
 
     <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-blue-700">My Reports</p>
-            <p class="mt-3 text-3xl font-bold text-blue-900">{{ $myReportsCount }}</p>
-            <p class="mt-2 text-xs text-blue-700">Incident reports you submitted</p>
+            <p class="text-sm font-semibold text-blue-700">
+                My Reports
+            </p>
+
+            <p class="mt-3 text-3xl font-bold text-blue-900">
+                {{ $myReportsCount }}
+            </p>
+
+            <p class="mt-2 text-xs text-blue-700">
+                Incident reports you submitted
+            </p>
         </div>
 
         <div class="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-yellow-700">Pending Reports</p>
-            <p class="mt-3 text-3xl font-bold text-yellow-900">{{ $pendingReportsCount }}</p>
-            <p class="mt-2 text-xs text-yellow-700">Reports waiting for review</p>
+            <p class="text-sm font-semibold text-yellow-700">
+                Pending Reports
+            </p>
+
+            <p class="mt-3 text-3xl font-bold text-yellow-900">
+                {{ $pendingReportsCount }}
+            </p>
+
+            <p class="mt-2 text-xs text-yellow-700">
+                Reports waiting for review
+            </p>
         </div>
 
         <div class="rounded-2xl border border-orange-200 bg-orange-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-orange-700">Active Reports</p>
-            <p class="mt-3 text-3xl font-bold text-orange-900">{{ $activeReportsCount }}</p>
-            <p class="mt-2 text-xs text-orange-700">Reports currently being handled</p>
+            <p class="text-sm font-semibold text-orange-700">
+                Active Reports
+            </p>
+
+            <p class="mt-3 text-3xl font-bold text-orange-900">
+                {{ $activeReportsCount }}
+            </p>
+
+            <p class="mt-2 text-xs text-orange-700">
+                Reports currently being handled
+            </p>
         </div>
 
         <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-green-700">Resolved Reports</p>
-            <p class="mt-3 text-3xl font-bold text-green-900">{{ $resolvedReportsCount }}</p>
-            <p class="mt-2 text-xs text-green-700">Reports already resolved or closed</p>
+            <p class="text-sm font-semibold text-green-700">
+                Resolved Reports
+            </p>
+
+            <p class="mt-3 text-3xl font-bold text-green-900">
+                {{ $resolvedReportsCount }}
+            </p>
+
+            <p class="mt-2 text-xs text-green-700">
+                Reports already resolved or closed
+            </p>
         </div>
     </div>
 
-    <section class="grid grid-cols-1 gap-6">
-        <div class="rounded-2xl border border-sky-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sky-500 hover:shadow-lg">
-            <div class="mb-6 flex items-start justify-between">
-                <div>
-                    <h2 class="text-xl font-bold text-slate-900">Weather & Disaster Feed</h2>
-                    <p class="text-sm text-slate-500">Dao, Capiz</p>
-                </div>
-
-                <span class="rounded-full bg-yellow-100 px-4 py-1 text-sm font-semibold text-yellow-700">
-                    Watch
-                </span>
-            </div>
-
-            <div class="mb-5 flex items-center gap-6">
-                <p class="text-5xl font-bold text-slate-900">31°</p>
-
-                <div>
-                    <p class="text-lg font-bold text-slate-900">Cloudy</p>
-                    <p class="text-sm text-slate-500">72% humidity · 10 km/h wind</p>
-                </div>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">
-                Advisory: Residents should stay alert for possible sudden heavy rainfall or thunderstorms throughout the day.
-            </div>
-
-            <p class="mt-5 text-sm text-slate-500">
-                Last updated: {{ now()->format('h:i:s A') }}
-            </p>
-        </div>
+    <section class="mt-8">
+        @include('components.dashboard.weather-disaster-feed')
     </section>
 </div>
 @endsection

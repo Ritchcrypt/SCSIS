@@ -11,10 +11,10 @@
     |--------------------------------------------------------------------------
     | Announcement Permission Rule
     |--------------------------------------------------------------------------
-    | Admin can post/delete announcements.
-    | Official/Dao/Tanod/Resident can only view announcements.
+    | Admin, Official, and Dao can post/delete announcements.
+    | Tanod/Resident can only view announcements.
     */
-    $canManageAnnouncements = $role === 'admin';
+    $canManageAnnouncements = in_array($role, ['admin', 'official', 'dao'], true);
 
     $categoryStyles = [
         'advisory' => 'bg-blue-100 text-blue-700 border-blue-200',
@@ -38,6 +38,18 @@
         'urgent' => 'border-orange-200 bg-orange-50/30',
         'emergency' => 'border-red-200 bg-red-50/40',
     ];
+
+    $storeRouteName = match ($role) {
+        'admin' => \Illuminate\Support\Facades\Route::has('admin.announcements.store')
+            ? 'admin.announcements.store'
+            : null,
+        'official', 'dao' => \Illuminate\Support\Facades\Route::has('official.announcements.store')
+            ? 'official.announcements.store'
+            : null,
+        default => null,
+    };
+
+    $storeAction = $storeRouteName ? route($storeRouteName) : '#';
 @endphp
 
 <div class="space-y-6">
@@ -53,7 +65,7 @@
             </p>
         </div>
 
-        @if ($canManageAnnouncements)
+        @if ($canManageAnnouncements && $storeRouteName)
             <button type="button"
                     onclick="openAnnouncementModal()"
                     class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
@@ -87,6 +99,7 @@
             @php
                 $categoryClass = $categoryStyles[$announcement->category] ?? $categoryStyles['general'];
                 $priorityClass = $priorityStyles[$announcement->priority] ?? $priorityStyles['normal'];
+
                 $cardClass = $announcement->activate_calamity_mode
                     ? 'border-red-300 bg-red-50/60'
                     : ($cardStyles[$announcement->priority] ?? $cardStyles['normal']);
@@ -104,6 +117,18 @@
                     : $announcement->created_at?->format('M d, Y h:i A');
 
                 $posterName = $announcement->poster?->name ?: 'System';
+
+                $showInWeatherFeed = (bool) ($announcement->show_in_weather_feed ?? false);
+
+                $destroyRouteName = match ($role) {
+                    'admin' => \Illuminate\Support\Facades\Route::has('admin.announcements.destroy')
+                        ? 'admin.announcements.destroy'
+                        : null,
+                    'official', 'dao' => \Illuminate\Support\Facades\Route::has('official.announcements.destroy')
+                        ? 'official.announcements.destroy'
+                        : null,
+                    default => null,
+                };
             @endphp
 
             <div class="rounded-2xl border p-6 shadow-sm {{ $cardClass }}">
@@ -135,6 +160,12 @@
                                     {{ $announcement->display_priority }}
                                 </span>
 
+                                @if ($showInWeatherFeed)
+                                    <span class="rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                                        Weather Feed
+                                    </span>
+                                @endif
+
                                 @if (! $announcement->is_active)
                                     <span class="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                                         Inactive
@@ -162,10 +193,10 @@
                         </div>
                     </div>
 
-                    @if ($canManageAnnouncements)
+                    @if ($canManageAnnouncements && $destroyRouteName)
                         <div class="flex shrink-0 items-center gap-3">
                             <form method="POST"
-                                  action="{{ route('admin.announcements.destroy', $announcement) }}">
+                                  action="{{ route($destroyRouteName, $announcement) }}">
                                 @csrf
                                 @method('DELETE')
 
@@ -214,7 +245,7 @@
                         : 'No community announcements, advisories, or emergency notices are available yet.' }}
                 </p>
 
-                @if ($canManageAnnouncements)
+                @if ($canManageAnnouncements && $storeRouteName)
                     <button type="button"
                             onclick="openAnnouncementModal()"
                             class="mt-5 inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
@@ -232,7 +263,7 @@
     @endif
 </div>
 
-@if ($canManageAnnouncements)
+@if ($canManageAnnouncements && $storeRouteName)
     {{-- Post Announcement Modal --}}
     <div id="announcementModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
         <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
@@ -248,7 +279,7 @@
                 </button>
             </div>
 
-            <form method="POST" action="{{ route('admin.announcements.store') }}" class="space-y-5">
+            <form method="POST" action="{{ $storeAction }}" class="space-y-5">
                 @csrf
 
                 <div>
@@ -343,7 +374,7 @@
                         </p>
 
                         <p class="mt-1 text-sm text-red-600">
-                            Triggers system-wide emergency alert
+                            Triggers system-wide emergency alert and automatically shows this announcement in the Weather & Disaster Feed.
                         </p>
                     </div>
 
@@ -351,6 +382,25 @@
                            name="activate_calamity_mode"
                            value="1"
                            class="h-5 w-5 rounded border-red-300 text-red-600 focus:ring-red-500">
+                </label>
+
+                <label class="flex cursor-pointer items-center justify-between rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    <div>
+                        <p class="text-sm font-bold text-blue-900">
+                            Show in Weather & Disaster Feed
+                        </p>
+
+                        <p class="mt-1 text-sm leading-5 text-blue-700">
+                            Use this for PAGASA, MDRRMO, flood, typhoon, evacuation, weather, emergency, or disaster advisories.
+                            Normal announcements should stay unchecked.
+                        </p>
+                    </div>
+
+                    <input type="checkbox"
+                           name="show_in_weather_feed"
+                           value="1"
+                           {{ old('show_in_weather_feed') ? 'checked' : '' }}
+                           class="h-5 w-5 rounded border-blue-300 text-blue-600 focus:ring-blue-500">
                 </label>
 
                 <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">

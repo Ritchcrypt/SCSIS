@@ -54,12 +54,7 @@
     </section>
 
     <section class="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div class="rounded-2xl border border-sky-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sky-500 hover:shadow-lg">
-            <div class="mb-6 flex items-start justify-between">
-                <div>
-                    <h2 class="text-xl font-bold text-slate-900">Weather & Disaster Feed</h2>
-                    <p class="text-sm text-slate-500">Dao, Capiz</p>
-                </div>
+        @include('components.dashboard.weather-disaster-feed')
 
                 <span class="rounded-full bg-yellow-100 px-4 py-1 text-sm font-semibold text-yellow-700">
                     Watch
