@@ -208,10 +208,16 @@ Route::delete('/resident-complaints/{residentComplaint}', [ResidentComplaintCont
             ->name('tanod-tasks.cancel');
 
         Route::get('/reports', [ReportController::class, 'index'])
-            ->name('reports.index');
+    ->name('reports.index');
 
-        Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
-            ->name('reports.pdf');
+Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
+    ->name('reports.pdf');
+
+Route::get('/reports/incidents/{incident}/pdf', [ReportController::class, 'downloadIncidentPdf'])
+    ->name('reports.incident-pdf');
+
+Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
+    ->name('reports.complaint-pdf');
 
         Route::get('/map', [BarangayMapController::class, 'index'])
             ->name('map.index');

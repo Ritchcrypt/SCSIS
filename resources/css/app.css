@@ -667,3 +667,19 @@ html[data-theme='dark'] .tn-hotline-guidance {
         color: #dbeafe;
     }
 }
+
+.tn-report-total-number {
+    color: #1d4ed8;
+}
+
+html[data-theme='dark'] .tn-report-total-number {
+    color: #93c5fd;
+    text-shadow: 0 0 16px rgba(147, 197, 253, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) .tn-report-total-number {
+        color: #93c5fd;
+        text-shadow: 0 0 16px rgba(147, 197, 253, 0.22);
+    }
+}

@@ -6,6 +6,7 @@ use App\Models\Announcement;
 use App\Models\CaseRecord;
 use App\Models\Employee;
 use App\Models\Incident;
+use App\Models\ResidentComplaint;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,22 +19,60 @@ class ReportController extends Controller
 {
     public function index(Request $request): View
     {
-        $data = $this->reportData($request);
-
-        return view('reports.index', $data);
+        return view('reports.index', $this->reportData($request));
     }
 
     public function downloadPdf(Request $request)
-{
-    $data = $this->reportData($request);
+    {
+        $data = $this->reportData($request);
 
-    $fileName = 'barangay-report-' . strtolower(str_replace(' ', '-', $data['periodLabel'])) . '-' . now()->format('Ymd-His') . '.pdf';
+        $fileName = 'barangay-report-'
+            . strtolower(str_replace(' ', '-', $data['periodLabel']))
+            . '-'
+            . now()->format('Ymd-His')
+            . '.pdf';
 
-    $pdf = Pdf::loadView('reports.pdf', $data)
-        ->setPaper('a4', 'portrait');
+        return Pdf::loadView('reports.pdf', $data)
+            ->setPaper('a4', 'portrait')
+            ->download($fileName);
+    }
 
-    return $pdf->download($fileName);
-}
+    public function downloadIncidentPdf(Request $request, Incident $incident)
+    {
+        $data = $this->specificIncidentReportData($incident);
+
+        $fileName = 'incident-report-'
+            . strtolower(str_replace(' ', '-', $data['incidentReport']['code']))
+            . '-'
+            . now()->format('Ymd-His')
+            . '.pdf';
+
+        return Pdf::loadView('reports.incident-pdf', $data)
+            ->setPaper('a4', 'portrait')
+            ->download($fileName);
+    }
+
+    public function downloadComplaintPdf(Request $request, ResidentComplaint $residentComplaint)
+    {
+        $data = $this->specificComplaintReportData($residentComplaint);
+
+        $code = $data['complaintReport']['code'] ?? 'complaint-' . $residentComplaint->id;
+
+        $safeCode = trim(
+            preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $code)),
+            '-'
+        );
+
+        $fileName = 'complaint-report-'
+            . ($safeCode !== '' ? $safeCode : 'complaint-' . $residentComplaint->id)
+            . '-'
+            . now()->format('Ymd-His')
+            . '.pdf';
+
+        return Pdf::loadHTML($this->complaintPdfHtml($data))
+            ->setPaper('a4', 'portrait')
+            ->download($fileName);
+    }
 
     private function reportData(Request $request): array
     {
@@ -70,9 +109,7 @@ class ReportController extends Controller
             })
             ->count();
 
-        $casesFiled = $this->countTableByDate('case_records', $startDate, $endDate);
-        $announcements = $this->countTableByDate('announcements', $startDate, $endDate);
-$currentUser = Auth::user();
+        $currentUser = Auth::user();
 
         return [
             'period' => $period,
@@ -85,15 +122,684 @@ $currentUser = Auth::user();
             'totalIncidents' => $totalIncidents,
             'activeIncidents' => $activeIncidents,
             'resolvedIncidents' => $resolvedIncidents,
-            'casesFiled' => $casesFiled,
-            'announcements' => $announcements,
+            'casesFiled' => $this->countTableByDate('case_records', $startDate, $endDate),
+            'announcements' => $this->countTableByDate('announcements', $startDate, $endDate),
 
             'records' => $this->recordsBreakdown($startDate, $endDate),
             'statusSummary' => $this->statusSummary($startDate, $endDate),
             'severitySummary' => $this->severitySummary($startDate, $endDate),
             'barangaySummary' => $this->barangaySummary($startDate, $endDate),
             'tanodSummary' => $this->tanodResponseSummary($startDate, $endDate),
+
+            'incidentReportOptions' => $this->incidentReportOptions(),
+            'complaintReportOptions' => $this->complaintReportOptions(),
         ];
+    }
+
+    private function specificIncidentReportData(Incident $incident): array
+    {
+        $incident->loadMissing(['barangay', 'category', 'currentStatus']);
+
+        $currentUser = Auth::user();
+
+        $incidentDateTime = $incident->incident_datetime
+            ?? $incident->created_at
+            ?? null;
+
+        return [
+            'generatedAt' => now(),
+            'generatedBy' => $currentUser ? $currentUser->name : 'System',
+
+            'incident' => $incident,
+
+            'incidentReport' => [
+                'id' => $incident->id,
+                'code' => $incident->incident_code ?? 'INC-' . str_pad((string) $incident->id, 6, '0', STR_PAD_LEFT),
+                'title' => $incident->incident_title ?? $incident->title ?? 'Untitled Incident',
+                'category' => $this->incidentCategoryLabel($incident),
+                'description' => $incident->incident_description ?? $incident->description ?? '—',
+                'persons_involved' => $incident->persons_involved ?? '—',
+                'barangay' => $incident->barangay?->barangay_name
+                    ?? $incident->barangay?->name
+                    ?? 'Unknown barangay',
+                'status' => $incident->currentStatus?->status_name
+                    ?? $incident->currentStatus?->name
+                    ?? 'Pending',
+                'priority' => ucfirst((string) ($incident->priority ?? $incident->severity ?? 'Low')),
+                'date_time' => $this->formatDateTime($incidentDateTime),
+                'created_at' => $this->formatDateTime($incident->created_at),
+                'updated_at' => $this->formatDateTime($incident->updated_at),
+            ],
+
+            'relatedCases' => $this->specificIncidentCaseRecords($incident),
+            'evidenceRecords' => $this->specificIncidentEvidenceRecords($incident),
+            'tanodTaskRecords' => $this->specificIncidentTanodTaskRecords($incident),
+        ];
+    }
+
+    private function specificComplaintReportData(ResidentComplaint $complaint): array
+    {
+        $currentUser = Auth::user();
+
+        return [
+            'generatedAt' => now(),
+            'generatedBy' => $currentUser ? $currentUser->name : 'System',
+
+            'complaint' => $complaint,
+
+            'complaintReport' => [
+                'id' => $complaint->id,
+
+                'code' => $this->firstTextValue($complaint, [
+                    'complaint_code',
+                    'reference_number',
+                    'ticket_number',
+                    'case_number',
+                ], 'COMP-' . str_pad((string) $complaint->id, 6, '0', STR_PAD_LEFT)),
+
+                'title' => $this->firstTextValue($complaint, [
+                    'subject',
+                    'title',
+                    'complaint_title',
+                    'concern',
+                ], 'Resident Complaint'),
+
+                'complainant' => $this->firstTextValue($complaint, [
+                    'complainant_name',
+                    'complainant_full_name',
+                    'full_name',
+                    'resident_name',
+                    'name',
+                ], 'Unknown complainant'),
+
+                'address' => $this->firstTextValue($complaint, [
+                    'address',
+                    'complainant_address',
+                    'complaint_address',
+                    'address_of_complaint',
+                    'location',
+                ], 'Not specified'),
+
+                'status' => ucfirst(str_replace('_', ' ', $this->firstTextValue($complaint, [
+                    'status',
+                    'complaint_status',
+                ], 'Pending'))),
+
+                'description' => $this->firstTextValue($complaint, [
+                    'description',
+                    'complaint',
+                    'complaint_body',
+                    'details',
+                    'narrative',
+                    'message',
+                    'body',
+                ], '—'),
+
+                'date_time' => $this->formatDateTime(
+                    $complaint->complaint_datetime
+                    ?? $complaint->reported_at
+                    ?? $complaint->created_at
+                    ?? null
+                ),
+
+                'created_at' => $this->formatDateTime($complaint->created_at ?? null),
+                'updated_at' => $this->formatDateTime($complaint->updated_at ?? null),
+            ],
+
+            'proofRecords' => $this->specificComplaintProofRecords($complaint),
+        ];
+    }
+
+    private function complaintPdfHtml(array $data): string
+    {
+        $complaintReport = $data['complaintReport'] ?? [];
+        $proofRecords = collect($data['proofRecords'] ?? []);
+
+        $generatedBy = e($data['generatedBy'] ?? 'System');
+
+        try {
+            $generatedAt = Carbon::parse($data['generatedAt'] ?? now())->format('M d, Y h:i A');
+        } catch (\Throwable $e) {
+            $generatedAt = now()->format('M d, Y h:i A');
+        }
+
+        $value = function (string $key, string $default = '—') use ($complaintReport): string {
+            $rawValue = $complaintReport[$key] ?? null;
+
+            if ($rawValue === null) {
+                return e($default);
+            }
+
+            $text = trim((string) $rawValue);
+
+            return e($text !== '' ? $text : $default);
+        };
+
+        $proofSection = '<table><tr><td class="muted">No proof or attachment records found for this complaint.</td></tr></table>';
+
+        if ($proofRecords->count()) {
+            $proofRows = '';
+
+            foreach ($proofRecords as $proof) {
+                $proofRows .= '
+                    <tr>
+                        <td>' . e($proof['file_name'] ?? 'Proof file') . '</td>
+                        <td>' . e($proof['file_type'] ?? '—') . '</td>
+                        <td>' . e($proof['file_size'] ?? '—') . '</td>
+                        <td>' . e($proof['uploaded_at'] ?? '—') . '</td>
+                    </tr>';
+            }
+
+            $proofSection = '
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Uploaded At</th>
+                        </tr>
+                    </thead>
+                    <tbody>' . $proofRows . '</tbody>
+                </table>';
+        }
+
+        return '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Complaint Report</title>
+
+    <style>
+        body {
+            font-family: DejaVu Sans, sans-serif;
+            color: #0f172a;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .header {
+            border-bottom: 3px solid #1e3a8a;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+        }
+
+        .system-title {
+            margin: 0;
+            color: #1e3a8a;
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .title {
+            margin: 4px 0 0;
+            color: #0f172a;
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            margin-top: 4px;
+            color: #475569;
+            font-size: 11px;
+        }
+
+        .meta {
+            margin-top: 10px;
+            font-size: 10px;
+            color: #475569;
+        }
+
+        .notice {
+            margin-bottom: 16px;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1e3a8a;
+            padding: 9px 10px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .section {
+            margin-top: 16px;
+        }
+
+        .section-title {
+            background: #1e3a8a;
+            color: #ffffff;
+            font-weight: bold;
+            padding: 8px 10px;
+            margin: 0;
+            font-size: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            page-break-inside: auto;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
+        td,
+        th {
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #334155;
+            text-align: left;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .label {
+            width: 30%;
+            background: #f8fafc;
+            font-weight: bold;
+            color: #334155;
+        }
+
+        .value {
+            color: #0f172a;
+        }
+
+        .wide-text {
+            min-height: 42px;
+            white-space: pre-line;
+        }
+
+        .muted {
+            color: #64748b;
+        }
+
+        .footer {
+            margin-top: 28px;
+            border-top: 1px solid #cbd5e1;
+            padding-top: 10px;
+            font-size: 10px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <p class="system-title">TabangNow / DaoSystem</p>
+
+        <p class="title">Complaint Report</p>
+
+        <p class="subtitle">
+            Resident Complaint Documentation — Dao, Capiz
+        </p>
+
+        <div class="meta">
+            Generated by: ' . $generatedBy . '<br>
+            Generated at: ' . e($generatedAt) . '
+        </div>
+    </div>
+
+    <div class="notice">
+        This report contains only the selected resident complaint and its directly related records. Other complaints or incidents are excluded.
+    </div>
+
+    <div class="section">
+        <p class="section-title">Complaint Details</p>
+
+        <table>
+            <tr>
+                <td class="label">Complaint Code</td>
+                <td class="value">' . $value('code') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Title / Subject</td>
+                <td class="value">' . $value('title') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Complainant</td>
+                <td class="value">' . $value('complainant') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Address / Location</td>
+                <td class="value">' . $value('address') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Status</td>
+                <td class="value">' . $value('status') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Complaint Date & Time</td>
+                <td class="value">' . $value('date_time') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Created At</td>
+                <td class="value">' . $value('created_at') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Last Updated</td>
+                <td class="value">' . $value('updated_at') . '</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <p class="section-title">Complaint Narrative / Details</p>
+
+        <table>
+            <tr>
+                <td class="wide-text">' . nl2br($value('description')) . '</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <p class="section-title">Proofs / Attachments</p>
+        ' . $proofSection . '
+    </div>
+
+    <div class="footer">
+        This report is generated from TabangNow / DaoSystem records. It is intended for barangay complaint documentation and monitoring.
+    </div>
+</body>
+</html>';
+    }
+
+    private function incidentReportOptions()
+    {
+        return Incident::query()
+            ->with(['barangay'])
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(function ($incident) {
+                $dateValue = $incident->incident_datetime
+                    ?? $incident->created_at
+                    ?? null;
+
+                $code = $incident->incident_code
+                    ?? 'INC-' . str_pad((string) $incident->id, 6, '0', STR_PAD_LEFT);
+
+                $title = $incident->incident_title
+                    ?? $incident->title
+                    ?? 'Untitled Incident';
+
+                $barangay = $incident->barangay?->barangay_name
+                    ?? $incident->barangay?->name
+                    ?? 'Unknown barangay';
+
+                return [
+                    'id' => $incident->id,
+                    'label' => $code
+                        . ' - '
+                        . $title
+                        . ' - '
+                        . $barangay
+                        . ' - '
+                        . $this->formatDateTime($dateValue),
+                ];
+            });
+    }
+
+    private function complaintReportOptions()
+    {
+        if (
+            ! class_exists(ResidentComplaint::class)
+            || ! Schema::hasTable('resident_complaints')
+        ) {
+            return collect();
+        }
+
+        $query = ResidentComplaint::query();
+
+        if (Schema::hasColumn('resident_complaints', 'created_at')) {
+            $query->orderByDesc('created_at');
+        } else {
+            $query->orderByDesc('id');
+        }
+
+        return $query
+            ->limit(100)
+            ->get()
+            ->map(function ($complaint) {
+                $code = $this->firstTextValue($complaint, [
+                    'complaint_code',
+                    'reference_number',
+                    'ticket_number',
+                    'case_number',
+                ], 'COMP-' . str_pad((string) $complaint->id, 6, '0', STR_PAD_LEFT));
+
+                $complainant = $this->firstTextValue($complaint, [
+                    'complainant_name',
+                    'complainant_full_name',
+                    'full_name',
+                    'resident_name',
+                    'name',
+                ], 'Unknown complainant');
+
+                $title = $this->firstTextValue($complaint, [
+                    'subject',
+                    'title',
+                    'complaint_title',
+                    'concern',
+                ], 'Resident Complaint');
+
+                return [
+                    'id' => $complaint->id,
+                    'label' => $code
+                        . ' - '
+                        . $title
+                        . ' - '
+                        . $complainant
+                        . ' - '
+                        . $this->formatDateTime($complaint->created_at ?? null),
+                ];
+            });
+    }
+
+    private function incidentCategoryLabel(Incident $incident): string
+    {
+        $relatedCategory = $incident->category;
+
+        if ($relatedCategory) {
+            foreach ([
+                'category_name',
+                'name',
+                'title',
+                'label',
+                'type',
+                'incident_type',
+                'description',
+            ] as $column) {
+                $value = $relatedCategory->{$column} ?? null;
+
+                if ($this->hasTextValue($value)) {
+                    return $this->displayText($value);
+                }
+            }
+        }
+
+        foreach ([
+            'category_name',
+            'incident_category',
+            'category',
+            'type',
+            'incident_type',
+            'incident_type_name',
+            'nature',
+            'nature_of_incident',
+        ] as $column) {
+            $value = $incident->{$column} ?? null;
+
+            if ($this->hasTextValue($value)) {
+                return $this->displayText($value);
+            }
+        }
+
+        return 'Not specified';
+    }
+
+    private function specificIncidentCaseRecords(Incident $incident)
+    {
+        if (
+            ! class_exists(CaseRecord::class)
+            || ! Schema::hasTable('case_records')
+            || ! Schema::hasColumn('case_records', 'incident_id')
+        ) {
+            return collect();
+        }
+
+        return CaseRecord::query()
+            ->where('incident_id', $incident->id)
+            ->latest()
+            ->get()
+            ->map(function ($case) {
+                return [
+                    'case_number' => $case->case_number ?? 'Case #' . $case->id,
+                    'subject_name' => $case->subject_name ?? $case->title ?? '—',
+                    'case_type' => ucfirst(str_replace('_', ' ', (string) ($case->case_type ?? 'case'))),
+                    'status' => ucfirst(str_replace('_', ' ', (string) ($case->status ?? '—'))),
+                    'handled_by' => $case->handled_by ?? '—',
+                    'hearing_date' => $this->formatDateOnly($case->hearing_date ?? null),
+                    'resolution' => $case->resolution ?? '—',
+                    'notes' => $case->notes ?? '—',
+                    'created_at' => $this->formatDateTime($case->created_at ?? null),
+                ];
+            });
+    }
+
+    private function specificIncidentEvidenceRecords(Incident $incident)
+    {
+        $candidateTables = [
+            'evidence',
+            'incident_evidence',
+            'incident_evidences',
+            'incident_attachments',
+        ];
+
+        foreach ($candidateTables as $table) {
+            if (
+                ! Schema::hasTable($table)
+                || ! Schema::hasColumn($table, 'incident_id')
+            ) {
+                continue;
+            }
+
+            return DB::table($table)
+                ->where('incident_id', $incident->id)
+                ->orderByDesc(Schema::hasColumn($table, 'created_at') ? 'created_at' : 'id')
+                ->get()
+                ->map(function ($record) use ($table) {
+                    return [
+                        'table' => $table,
+                        'file_name' => $record->file_name
+                            ?? $record->name
+                            ?? basename((string) ($record->file_path ?? $record->path ?? 'Evidence file')),
+                        'file_type' => $record->file_type
+                            ?? $record->mime_type
+                            ?? '—',
+                        'file_size' => isset($record->file_size)
+                            ? $this->formatFileSize((int) $record->file_size)
+                            : '—',
+                        'uploaded_at' => isset($record->created_at)
+                            ? $this->formatDateTime($record->created_at)
+                            : '—',
+                    ];
+                });
+        }
+
+        return collect();
+    }
+
+    private function specificComplaintProofRecords(ResidentComplaint $complaint)
+    {
+        $candidateTables = [
+            'resident_complaint_proofs',
+            'resident_complaint_evidence',
+            'resident_complaint_evidences',
+            'complaint_proofs',
+            'complaint_evidence',
+            'complaint_evidences',
+        ];
+
+        $candidateForeignKeys = [
+            'resident_complaint_id',
+            'complaint_id',
+        ];
+
+        foreach ($candidateTables as $table) {
+            if (! Schema::hasTable($table)) {
+                continue;
+            }
+
+            foreach ($candidateForeignKeys as $foreignKey) {
+                if (! Schema::hasColumn($table, $foreignKey)) {
+                    continue;
+                }
+
+                return DB::table($table)
+                    ->where($foreignKey, $complaint->id)
+                    ->orderByDesc(Schema::hasColumn($table, 'created_at') ? 'created_at' : 'id')
+                    ->get()
+                    ->map(function ($record) {
+                        return [
+                            'file_name' => $record->file_name
+                                ?? $record->name
+                                ?? basename((string) ($record->file_path ?? $record->path ?? 'Proof file')),
+                            'file_type' => $record->file_type
+                                ?? $record->mime_type
+                                ?? '—',
+                            'file_size' => isset($record->file_size)
+                                ? $this->formatFileSize((int) $record->file_size)
+                                : '—',
+                            'uploaded_at' => isset($record->created_at)
+                                ? $this->formatDateTime($record->created_at)
+                                : '—',
+                        ];
+                    });
+            }
+        }
+
+        return collect();
+    }
+
+    private function specificIncidentTanodTaskRecords(Incident $incident)
+    {
+        if (
+            ! Schema::hasTable('tanod_tasks')
+            || ! Schema::hasColumn('tanod_tasks', 'incident_id')
+        ) {
+            return collect();
+        }
+
+        $tasks = DB::table('tanod_tasks')
+            ->where('incident_id', $incident->id)
+            ->orderByDesc(Schema::hasColumn('tanod_tasks', 'created_at') ? 'created_at' : 'id')
+            ->get();
+
+        return $tasks->map(function ($task) {
+            return [
+                'task_id' => $task->id,
+                'title' => $task->title
+                    ?? $task->task_title
+                    ?? 'Tanod Task #' . $task->id,
+                'status' => ucfirst(str_replace('_', ' ', (string) ($task->status ?? '—'))),
+                'created_at' => $this->formatDateTime($task->created_at ?? null),
+                'responses' => collect(),
+            ];
+        });
     }
 
     private function incidentBaseQuery(Carbon $startDate, Carbon $endDate)
@@ -118,15 +824,11 @@ $currentUser = Auth::user();
             $records[] = [
                 'category' => 'Incident',
                 'title' => ($incident->incident_code ?? 'INC-' . $incident->id) . ' - ' . ($incident->incident_title ?? $incident->title ?? 'Untitled Incident'),
-                'type' => $incident->category?->category_name ?? $incident->category?->name ?? 'Uncategorized',
+                'type' => $this->incidentCategoryLabel($incident),
                 'status' => $incident->currentStatus?->status_name
                     ?? $incident->currentStatus?->name
                     ?? 'Pending',
-                'severity' => ucfirst((string) (
-                    $incident->priority
-                    ?? $incident->severity
-                    ?? 'Low'
-                )),
+                'severity' => ucfirst((string) ($incident->priority ?? $incident->severity ?? 'Low')),
                 'barangay' => $incident->barangay?->barangay_name
                     ?? $incident->barangay?->name
                     ?? 'Unknown barangay',
@@ -257,17 +959,6 @@ $currentUser = Auth::user();
             return collect();
         }
 
-        $taskDateColumn = Schema::hasColumn('tanod_tasks', 'created_at')
-            ? 'tasks.created_at'
-            : null;
-
-        $responseDateColumn = Schema::hasColumn('tanod_task_responses', 'created_at')
-            ? 'responses.created_at'
-            : null;
-
-        $hasRespondedAt = Schema::hasColumn('tanod_task_responses', 'responded_at');
-        $hasUpdatedAt = Schema::hasColumn('tanod_task_responses', 'updated_at');
-
         return Employee::query()
             ->with('user')
             ->when(Schema::hasColumn('employees', 'employee_type'), function ($query) {
@@ -275,97 +966,42 @@ $currentUser = Auth::user();
             })
             ->orderBy('id')
             ->get()
-            ->map(function ($employee) use (
-                $startDate,
-                $endDate,
-                $taskDateColumn,
-                $responseDateColumn,
-                $hasRespondedAt,
-                $hasUpdatedAt
-            ) {
+            ->map(function ($employee) use ($startDate, $endDate) {
                 $responsesQuery = DB::table('tanod_task_responses as responses')
-                    ->join(
-                        'tanod_tasks as tasks',
-                        'tasks.id',
-                        '=',
-                        'responses.tanod_task_id'
-                    )
+                    ->join('tanod_tasks as tasks', 'tasks.id', '=', 'responses.tanod_task_id')
                     ->where('responses.employee_id', $employee->id);
 
-                if ($taskDateColumn) {
-                    $responsesQuery->whereBetween(
-                        $taskDateColumn,
-                        [$startDate, $endDate]
-                    );
-                } elseif ($responseDateColumn) {
-                    $responsesQuery->whereBetween(
-                        $responseDateColumn,
-                        [$startDate, $endDate]
-                    );
+                if (Schema::hasColumn('tanod_tasks', 'created_at')) {
+                    $responsesQuery->whereBetween('tasks.created_at', [$startDate, $endDate]);
                 }
 
                 $totalTasks = (clone $responsesQuery)->count();
 
                 $accepted = (clone $responsesQuery)
-                    ->whereRaw(
-                        "LOWER(COALESCE(responses.response_status, 'pending')) = ?",
-                        ['accepted']
-                    )
+                    ->whereRaw("LOWER(COALESCE(responses.response_status, 'pending')) = ?", ['accepted'])
                     ->count();
 
                 $declined = (clone $responsesQuery)
-                    ->whereRaw(
-                        "LOWER(COALESCE(responses.response_status, 'pending')) = ?",
-                        ['declined']
-                    )
+                    ->whereRaw("LOWER(COALESCE(responses.response_status, 'pending')) = ?", ['declined'])
                     ->count();
 
                 $pending = (clone $responsesQuery)
                     ->where(function ($query) {
                         $query->whereNull('responses.response_status')
-                            ->orWhereRaw(
-                                "LOWER(responses.response_status) = ?",
-                                ['pending']
-                            );
+                            ->orWhereRaw("LOWER(responses.response_status) = ?", ['pending']);
                     })
                     ->count();
 
                 $responded = $accepted + $declined;
 
-                $responseRate = $totalTasks > 0
-                    ? round(($responded / $totalTasks) * 100)
-                    : 0;
-
-                $lastResponseValue = null;
-
-                if ($hasRespondedAt) {
-                    $lastResponseValue = (clone $responsesQuery)
-                        ->whereNotNull('responses.responded_at')
-                        ->max('responses.responded_at');
-                }
-
-                if (! $lastResponseValue && $hasUpdatedAt) {
-                    $lastResponseValue = (clone $responsesQuery)
-                        ->max('responses.updated_at');
-                }
-
-                try {
-                    $lastResponse = $lastResponseValue
-                        ? Carbon::parse($lastResponseValue)->format('M d, Y h:i A')
-                        : 'No response yet';
-                } catch (\Throwable $e) {
-                    $lastResponse = 'No response yet';
-                }
-
                 return [
-                    'name' => $employee->user?->name
-                        ?? 'Tanod #' . $employee->id,
+                    'name' => $employee->user?->name ?? 'Tanod #' . $employee->id,
                     'total_tasks' => $totalTasks,
                     'accepted' => $accepted,
                     'declined' => $declined,
                     'pending' => $pending,
-                    'response_rate' => $responseRate,
-                    'last_response' => $lastResponse,
+                    'response_rate' => $totalTasks > 0 ? round(($responded / $totalTasks) * 100) : 0,
+                    'last_response' => 'No response yet',
                 ];
             })
             ->filter(function ($row) {
@@ -387,6 +1023,89 @@ $currentUser = Auth::user();
         return DB::table($table)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->count();
+    }
+
+    private function firstTextValue(object $record, array $columns, string $default = '—'): string
+    {
+        foreach ($columns as $column) {
+            $value = $record->{$column} ?? null;
+
+            if ($this->hasTextValue($value)) {
+                return trim((string) $value);
+            }
+        }
+
+        return $default;
+    }
+
+    private function hasTextValue($value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        $text = trim((string) $value);
+        $lowerText = strtolower($text);
+
+        return $text !== ''
+            && $lowerText !== 'null'
+            && $lowerText !== 'undefined'
+            && $lowerText !== 'uncategorized';
+    }
+
+    private function displayText($value): string
+    {
+        $text = trim((string) $value);
+
+        if ($text === '') {
+            return 'Not specified';
+        }
+
+        return ucwords(str_replace('_', ' ', $text));
+    }
+
+    private function formatDateTime($value): string
+    {
+        if (! $value) {
+            return '—';
+        }
+
+        try {
+            return Carbon::parse($value)->format('M d, Y h:i A');
+        } catch (\Throwable $e) {
+            return '—';
+        }
+    }
+
+    private function formatDateOnly($value): string
+    {
+        if (! $value) {
+            return '—';
+        }
+
+        try {
+            return Carbon::parse($value)->format('M d, Y');
+        } catch (\Throwable $e) {
+            return '—';
+        }
+    }
+
+    private function formatFileSize(int $bytes): string
+    {
+        if ($bytes <= 0) {
+            return '—';
+        }
+
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $size = $bytes;
+        $unitIndex = 0;
+
+        while ($size >= 1024 && $unitIndex < count($units) - 1) {
+            $size /= 1024;
+            $unitIndex++;
+        }
+
+        return round($size, 2) . ' ' . $units[$unitIndex];
     }
 
     private function validPeriod(?string $period): string
