@@ -108,6 +108,21 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
 
+        Route::get('/reports', [ReportController::class, 'index'])
+    ->name('reports.index');
+
+Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
+    ->name('reports.pdf');
+
+Route::get('/reports/incidents/{incident}/pdf', [ReportController::class, 'downloadIncidentPdf'])
+    ->name('reports.incident-pdf');
+
+Route::get('/reports/cases/{caseRecord}/pdf', [ReportController::class, 'downloadCasePdf'])
+    ->name('reports.case-pdf');
+
+Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
+    ->name('reports.complaint-pdf');
+
         Route::post('/resident-complaints/{residentComplaint}/proofs', [ResidentComplaintController::class, 'storeProof'])
     ->name('resident-complaints.proofs.store');
 

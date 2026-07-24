@@ -40,16 +40,22 @@
             </form>
 
             <button type="button"
-                    onclick="openSpecificIncidentReportModal()"
-                    class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                Incident PDF
-            </button>
+        onclick="openSpecificIncidentReportModal()"
+        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+    Incident PDF
+</button>
 
-            <button type="button"
-                    onclick="openSpecificComplaintReportModal()"
-                    class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                Complaint PDF
-            </button>
+<button type="button"
+        onclick="openCaseReportModal()"
+        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+    Case PDF
+</button>
+
+<button type="button"
+        onclick="openSpecificComplaintReportModal()"
+        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+    Complaint PDF
+</button>
 
             <a href="{{ route('admin.reports.pdf', ['period' => $period]) }}"
                class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
@@ -336,6 +342,12 @@
                                     data-value="{{ $incidentOption['id'] }}"
                                     onclick="selectSpecificReportOption(this, 'specific_incident_id', 'specificIncidentSelectedLabel')"
                                     class="mb-2 block w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800">
+
+                                    const caseWarning = document.getElementById('caseReportWarning');
+
+if (caseWarning) {
+    caseWarning.classList.add('hidden');
+}
                                 {{ $incidentOption['label'] }}
                             </button>
                         @endforeach
@@ -364,6 +376,102 @@
             <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                 <h3 class="text-sm font-bold text-slate-900">
                     No incidents available
+                </h3>
+            </div>
+        @endif
+    </div>
+</div>
+
+{{-- Case Report Modal --}}
+<div id="caseReportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <div class="mb-5 flex items-start justify-between gap-4">
+            <div>
+                <h2 class="text-xl font-bold text-slate-900">
+                    Case Report
+                </h2>
+
+                <p class="mt-1 text-sm leading-6 text-slate-500">
+                    Generate a separate PDF report for one selected case management record only.
+                </p>
+            </div>
+
+            <button type="button"
+                    onclick="closeCaseReportModal()"
+                    class="text-2xl leading-none text-slate-500 hover:text-slate-900">
+                &times;
+            </button>
+        </div>
+
+        @if (($caseReportOptions ?? collect())->count())
+            <form id="caseReportForm"
+                  data-report-url-template="{{ url('/admin/reports/cases/__CASE_ID__/pdf') }}"
+                  class="space-y-5">
+                <input type="hidden" id="case_report_id">
+
+                <div>
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <label class="block text-sm font-semibold text-slate-700">
+                            Select Case
+                        </label>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    onclick="scrollSpecificReportList('caseReportList', 'up')"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+                                ↑
+                            </button>
+
+                            <button type="button"
+                                    onclick="scrollSpecificReportList('caseReportList', 'down')"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+                                ↓
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="caseReportSelectedLabel"
+                         class="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                        No case selected
+                    </div>
+
+                    <div id="caseReportList"
+                         data-specific-report-list
+                         class="max-h-64 overflow-y-auto rounded-xl border border-slate-300 bg-white p-2">
+                        @foreach ($caseReportOptions as $caseOption)
+                            <button type="button"
+                                    data-specific-report-option
+                                    data-value="{{ $caseOption['id'] }}"
+                                    onclick="selectSpecificReportOption(this, 'case_report_id', 'caseReportSelectedLabel')"
+                                    class="mb-2 block w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800">
+                                {{ $caseOption['label'] }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div id="caseReportWarning"
+                     class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    Select one case first.
+                </div>
+
+                <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+                    <button type="button"
+                            onclick="closeCaseReportModal()"
+                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                        Cancel
+                    </button>
+
+                    <button type="submit"
+                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                        Generate PDF
+                    </button>
+                </div>
+            </form>
+        @else
+            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <h3 class="text-sm font-bold text-slate-900">
+                    No cases available
                 </h3>
             </div>
         @endif
@@ -539,6 +647,14 @@
         modal.classList.remove('flex');
     }
 
+    function openCaseReportModal() {
+    openSpecificReportModal('caseReportModal');
+}
+
+function closeCaseReportModal() {
+    closeSpecificReportModal('caseReportModal');
+}
+
     function scrollSpecificReportList(listId, direction) {
         const list = document.getElementById(listId);
 
@@ -603,6 +719,31 @@
                 }
 
                 const template = incidentForm.dataset.reportUrlTemplate;
+                const caseForm = document.getElementById('caseReportForm');
+const caseInput = document.getElementById('case_report_id');
+const caseWarning = document.getElementById('caseReportWarning');
+
+if (caseForm && caseInput) {
+    caseForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        if (!caseInput.value) {
+            if (caseWarning) {
+                caseWarning.classList.remove('hidden');
+            }
+
+            return;
+        }
+
+        const template = caseForm.dataset.reportUrlTemplate;
+
+        if (!template) {
+            return;
+        }
+
+        window.location.href = template.replace('__CASE_ID__', encodeURIComponent(caseInput.value));
+    });
+}
 
                 if (!template) {
                     return;

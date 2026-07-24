@@ -294,7 +294,7 @@
     </div>
 
     <div class="footer">
-        This report is generated from TabangNow / DaoSystem records. It contains only the selected incident and its directly related records.
+        This report is generated from TabangNow sytem records. It contains only the selected incident and its directly related records.
     </div>
 </body>
 </html>
