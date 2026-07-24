@@ -17,6 +17,7 @@ use App\Http\Controllers\PresenceController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\NotificationOpenController;
 use App\Http\Controllers\ResidentComplaintController;
+use App\Http\Controllers\ThemePreferenceController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -61,6 +62,9 @@ Route::get('/dashboard', function () {
 */
 Route::middleware(['auth'])->get('/users/{user}/profile-photo', [UserManagementController::class, 'profilePhoto'])
     ->name('users.profile-photo');
+
+Route::patch('/theme-preference', [ThemePreferenceController::class, 'update'])
+    ->name('theme-preference.update');
 
 Route::middleware(['auth', 'active.user'])
     ->get('/incident-evidence/{evidenceId}/file', [IncidentController::class, 'showEvidenceFile'])

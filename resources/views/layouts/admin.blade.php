@@ -1,5 +1,39 @@
+@php
+    $layoutThemeUser = auth()->user();
+
+    $layoutThemeMode = 'system';
+    $layoutThemeCustomColor = '#2563eb';
+    $layoutThemeRole = strtolower(trim($layoutThemeUser?->role ?? 'guest'));
+
+    if (
+        $layoutThemeUser
+        && \Illuminate\Support\Facades\Schema::hasTable('users')
+        && \Illuminate\Support\Facades\Schema::hasColumn('users', 'theme_mode')
+    ) {
+        $layoutThemeMode = $layoutThemeUser->theme_mode ?: 'system';
+    }
+
+    if ($layoutThemeMode === 'custom' && $layoutThemeRole !== 'admin') {
+        $layoutThemeMode = 'system';
+    }
+
+    if (
+        $layoutThemeUser
+        && \Illuminate\Support\Facades\Schema::hasTable('users')
+        && \Illuminate\Support\Facades\Schema::hasColumn('users', 'theme_custom_color')
+        && preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $layoutThemeUser->theme_custom_color)
+    ) {
+        $layoutThemeCustomColor = strtolower($layoutThemeUser->theme_custom_color);
+    }
+@endphp
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"
+      data-theme="{{ $layoutThemeMode }}"
+      data-theme-role="{{ $layoutThemeRole }}"
+      @if ($layoutThemeMode === 'custom' && $layoutThemeRole === 'admin')
+          style="--tn-accent: {{ $layoutThemeCustomColor }};"
+      @endif>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -432,278 +466,42 @@
         </aside>
 
         <div id="adminMainContent"
-             class="min-h-screen flex-1 pl-72 transition-[padding] duration-300 ease-in-out">
-            <header class="sticky top-0 z-[100] isolate flex h-16 items-center justify-between border-b border-slate-200 bg-white px-8 shadow-sm">
-                <button id="sidebarToggleButton"
-                        type="button"
-                        aria-label="Toggle sidebar"
-                        aria-controls="adminSidebar"
-                        aria-expanded="true"
-                        title="Open or close sidebar"
-                        class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                         viewBox="0 0 24 24"
-                         fill="none"
-                         stroke="currentColor"
-                         stroke-width="2"
-                         class="h-6 w-6"
-                         aria-hidden="true">
-                        <path stroke-linecap="round"
-                              d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
-                </button>
+     class="min-h-screen w-full flex-1 pl-72 transition-[padding] duration-300 ease-in-out">
+    <header class="sticky top-0 z-[100] isolate flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-8 shadow-sm">
+        <button id="sidebarToggleButton"
+                type="button"
+                aria-label="Toggle sidebar"
+                aria-controls="adminSidebar"
+                aria-expanded="true"
+                title="Open or close sidebar"
+                class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-200">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 viewBox="0 0 24 24"
+                 fill="none"
+                 stroke="currentColor"
+                 stroke-width="2"
+                 class="h-6 w-6"
+                 aria-hidden="true">
+                <path stroke-linecap="round"
+                      d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
 
-                <div class="flex items-center gap-4">
-                    @php
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Header Notification Bell
-                        |--------------------------------------------------------------------------
-                        | Unified notification bell.
-                        |
-                        | Reads every unread notification for the current logged-in user
-                        | directly from the notifications table. No incident-only filter.
-                        */
+        <div class="ml-auto flex items-center gap-3">
+            @if (view()->exists('components.theme-toggle'))
+                @include('components.theme-toggle')
+            @endif
 
-                        $authUser = $authUser ?? auth()->user();
+            @if (view()->exists('components.notification-bell'))
+                @include('components.notification-bell')
+            @endif
+        </div>
+    </header>
 
-                        $notificationTypeLabels = [
-                            'resident_complaint' => 'Resident Complaint',
-                            'resident_complaint_update' => 'Complaint Update',
-                            'incident' => 'Incident',
-                            'incident_reported' => 'Incident Report',
-                            'incident_update' => 'Incident Update',
-                            'dispatch' => 'Dispatch',
-                            'escalation' => 'Escalation',
-                            'emergency' => 'Emergency',
-                            'resolved' => 'Resolved',
-                            'announcement' => 'Announcement',
-                            'calamity' => 'Calamity',
-                            'tanod_alert' => 'Tanod Alert',
-                            'tanod_task' => 'Tanod Task',
-                            'system' => 'System',
-                            'community' => 'Community',
-                            'community' => 'Community',
-                        ];
-
-                        $unreadNotificationCount = 0;
-                        $notificationUrl = '#';
-                        $latestUnreadNotifications = collect();
-
-                        if (
-                            $authUser
-                            && \Illuminate\Support\Facades\Schema::hasTable('notifications')
-                            && \Illuminate\Support\Facades\Schema::hasColumn('notifications', 'user_id')
-                        ) {
-                            $notificationQuery = \Illuminate\Support\Facades\DB::table('notifications')
-                                ->where('user_id', (int) $authUser->id);
-
-                            if (\Illuminate\Support\Facades\Schema::hasColumn('notifications', 'is_read')) {
-                                $notificationQuery->where(function ($query) {
-                                    $query->where('is_read', 0)
-                                        ->orWhere('is_read', false)
-                                        ->orWhereNull('is_read');
-                                });
-                            }
-
-                            $allUnreadNotifications = $notificationQuery
-                                ->orderByDesc('created_at')
-                                ->orderByDesc('id')
-                                ->get();
-
-                            $groupedUnreadNotifications = $allUnreadNotifications
-                                ->unique(function ($notification) {
-                                    $type = strtolower((string) ($notification->type ?? 'notification'));
-                                    $sourceId = $notification->source_id ?? null;
-                                    $notificationId = $notification->id ?? uniqid();
-
-                                    return $sourceId
-                                        ? $type . ':source:' . $sourceId
-                                        : $type . ':notification:' . $notificationId;
-                                })
-                                ->values();
-
-                            $unreadNotificationCount = $groupedUnreadNotifications->count();
-
-                            $latestUnreadNotifications = $groupedUnreadNotifications
-                                ->take(20)
-                                ->values();
-
-                            $notificationUrl = match (strtolower((string) $authUser->role)) {
-                                'admin' => \Illuminate\Support\Facades\Route::has('admin.announcements.index')
-                                    ? route('admin.announcements.index')
-                                    : (\Illuminate\Support\Facades\Route::has('admin.tanod-alerts.index')
-                                        ? route('admin.tanod-alerts.index')
-                                        : (\Illuminate\Support\Facades\Route::has('admin.dashboard')
-                                            ? route('admin.dashboard')
-                                            : '#')),
-
-                                'official', 'dao' => \Illuminate\Support\Facades\Route::has('official.announcements.index')
-                                    ? route('official.announcements.index')
-                                    : (\Illuminate\Support\Facades\Route::has('official.incidents.index')
-                                        ? route('official.incidents.index')
-                                        : (\Illuminate\Support\Facades\Route::has('official.dashboard')
-                                            ? route('official.dashboard')
-                                            : '#')),
-
-                                'tanod' => \Illuminate\Support\Facades\Route::has('tanod.announcements.index')
-                                    ? route('tanod.announcements.index')
-                                    : (\Illuminate\Support\Facades\Route::has('tanod.tanod-alerts.index')
-                                        ? route('tanod.tanod-alerts.index')
-                                        : (\Illuminate\Support\Facades\Route::has('tanod.dashboard')
-                                            ? route('tanod.dashboard')
-                                            : '#')),
-
-                                'resident' => \Illuminate\Support\Facades\Route::has('resident.announcements.index')
-                                    ? route('resident.announcements.index')
-                                    : (\Illuminate\Support\Facades\Route::has('resident.incidents.index')
-                                        ? route('resident.incidents.index')
-                                        : (\Illuminate\Support\Facades\Route::has('resident.dashboard')
-                                            ? route('resident.dashboard')
-                                            : '#')),
-
-                                default => \Illuminate\Support\Facades\Route::has('dashboard')
-                                    ? route('dashboard')
-                                    : '#',
-                            };
-                        }
-                    @endphp
-
-                    <details class="relative z-[110]">
-                        <summary class="relative inline-flex cursor-pointer list-none items-center justify-center">
-                            <span class="text-xl">🔔</span>
-
-                            @if ($unreadNotificationCount > 0)
-                                <span class="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-                                    {{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}
-                                </span>
-                            @endif
-                        </summary>
-
-                        <div id="notificationBackdrop"
-                             class="fixed bottom-0 left-72 right-0 top-16 z-[100] bg-slate-950/20 backdrop-blur-[1px] transition-[left] duration-300 ease-in-out"
-                             onclick="this.closest('details').removeAttribute('open')"
-                             aria-hidden="true">
-                        </div>
-
-                        <div class="fixed right-8 top-[4.5rem] z-[120] flex w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-900/10">
-                            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                                <div>
-                                    <p class="text-sm font-bold text-slate-900">
-                                        Unread Notifications
-                                    </p>
-
-                                    <p class="text-xs text-slate-500">
-                                        Latest updates for your account
-                                    </p>
-                                </div>
-
-                                <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
-                                    {{ $unreadNotificationCount }}
-                                </span>
-                            </div>
-
-                            <div class="max-h-80 divide-y divide-slate-200 overflow-y-scroll overscroll-contain pr-1"
-                                 style="scrollbar-gutter: stable;">
-                                @forelse ($latestUnreadNotifications as $notification)
-                                    @php
-                                        $type = strtolower((string) ($notification->type ?? 'notification'));
-
-                                        $typeLabel = $notificationTypeLabels[$type]
-                                            ?? ucwords(str_replace('_', ' ', $type));
-
-                                        $notificationMessage = $notification->message
-                                            ?? $notification->title
-                                            ?? 'No notification message provided.';
-
-                                        try {
-                                            $notificationAge = ! empty($notification->created_at)
-                                                ? \Carbon\Carbon::parse($notification->created_at)->diffForHumans()
-                                                : 'No date';
-                                        } catch (\Throwable $e) {
-                                            $notificationAge = 'No date';
-                                        }
-
-                                        $notificationId = $notification->id ?? null;
-
-                                        $canOpenNotification = $notificationId
-                                            && \Illuminate\Support\Facades\Route::has('notifications.open');
-                                    @endphp
-
-                                    @if ($canOpenNotification)
-                                        <form method="POST"
-                                              action="{{ route('notifications.open', $notificationId) }}"
-                                              class="m-0">
-                                            @csrf
-
-                                            <button type="submit"
-                                                    class="block w-full px-4 py-3 text-left transition hover:bg-slate-50">
-                                                <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
-                                                    {{ $typeLabel }}
-                                                </span>
-
-                                                <p class="mt-2 text-xs leading-5 text-slate-600">
-                                                    {{ $notificationMessage }}
-                                                </p>
-
-                                                <div class="mt-2 flex items-center justify-between gap-3">
-                                                    <p class="text-[11px] text-slate-400">
-                                                        {{ $notificationAge }}
-                                                    </p>
-
-                                                    <span class="text-[11px] font-bold text-blue-700">
-                                                        Open →
-                                                    </span>
-                                                </div>
-                                            </button>
-                                        </form>
-                                    @else
-                                        <a href="{{ $notificationUrl }}"
-                                           class="block px-4 py-3 transition hover:bg-slate-50">
-                                            <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-blue-700">
-                                                {{ $typeLabel }}
-                                            </span>
-
-                                            <p class="mt-2 text-xs leading-5 text-slate-600">
-                                                {{ $notificationMessage }}
-                                            </p>
-
-                                            <div class="mt-2 flex items-center justify-between gap-3">
-                                                <p class="text-[11px] text-slate-400">
-                                                    {{ $notificationAge }}
-                                                </p>
-
-                                                <span class="text-[11px] font-bold text-blue-700">
-                                                    Open →
-                                                </span>
-                                            </div>
-                                        </a>
-                                    @endif
-                                @empty
-                                    <div class="px-4 py-8 text-center">
-                                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl">
-                                            🔔
-                                        </div>
-
-                                        <p class="mt-3 text-sm font-bold text-slate-900">
-                                            No unread notifications.
-                                        </p>
-
-                                        <p class="mt-1 text-xs text-slate-500">
-                                            New updates will appear here.
-                                        </p>
-                                    </div>
-                                @endforelse
-                            </div>
-
-                        </div>
-                    </details>
-                </div>
-            </header>
-
-            <main class="p-8">
-                @yield('content')
-            </main>
+    <main class="p-8">
+        @yield('content')
+    </main>
+</div>
         </div>
     </div>
 

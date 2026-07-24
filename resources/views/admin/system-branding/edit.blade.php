@@ -95,22 +95,13 @@
                        type="file"
                        name="system_logo"
                        accept="image/jpeg,image/png,image/webp"
+                       data-image-preview="true"
                        class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100">
 
                 <p class="mt-2 text-xs text-slate-500">
                     Accepted formats: JPG, JPEG, PNG, WEBP. Maximum upload size: 50MB. Display copy is optimized automatically.
                 </p>
             </div>
-
-            @if ($logoUrl)
-                <label class="flex items-center gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                    <input type="checkbox"
-                           name="remove_logo"
-                           value="1"
-                           class="rounded border-red-300 text-red-600 focus:ring-red-200">
-                    Remove current logo and use the default shield icon.
-                </label>
-            @endif
 
             <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-5">
                 <a href="{{ route('admin.dashboard') }}"

@@ -114,41 +114,68 @@
                             </td>
 
                             <td class="whitespace-nowrap px-5 py-4 text-right">
-                                <button type="button"
-                                        onclick="openEditCaseModal(this)"
-                                        data-update-url="{{ route('admin.cases.update', $case) }}"
-                                        data-case-number="{{ e($case->case_number) }}"
-                                        data-case-type="{{ e($case->case_type) }}"
-                                        data-subject-name="{{ e($case->subject_name) }}"
-                                        data-contact="{{ e($case->contact) }}"
-                                        data-address="{{ e($case->address) }}"
-                                        data-incident-id="{{ e($case->incident_id) }}"
-                                        data-incident-title="{{ e($case->incident_title) }}"
-                                        data-status="{{ e($case->status) }}"
-                                        data-hearing-date="{{ $case->hearing_date ? $case->hearing_date->format('Y-m-d') : '' }}"
-                                        data-handled-by="{{ e($case->handled_by) }}"
-                                        data-resolution="{{ e($case->resolution) }}"
-                                        data-notes="{{ e($case->notes) }}"
-                                        class="mr-3 text-slate-700 hover:text-blue-700"
-                                        title="Edit case">
-                                    ✎
-                                </button>
+    <div class="flex items-center justify-end gap-2">
+        <button type="button"
+                onclick="openEditCaseModal(this)"
+                data-update-url="{{ route('admin.cases.update', $case) }}"
+                data-case-number="{{ e($case->case_number) }}"
+                data-case-type="{{ e($case->case_type) }}"
+                data-subject-name="{{ e($case->subject_name) }}"
+                data-contact="{{ e($case->contact) }}"
+                data-address="{{ e($case->address) }}"
+                data-incident-id="{{ e($case->incident_id) }}"
+                data-incident-title="{{ e($case->incident_title) }}"
+                data-status="{{ e($case->status) }}"
+                data-hearing-date="{{ $case->hearing_date ? $case->hearing_date->format('Y-m-d') : '' }}"
+                data-handled-by="{{ e($case->handled_by) }}"
+                data-resolution="{{ e($case->resolution) }}"
+                data-notes="{{ e($case->notes) }}"
+                title="Edit case"
+                aria-label="Edit case"
+                class="tn-action-icon tn-action-icon-edit inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-200">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="h-5 w-5"
+                 viewBox="0 0 24 24"
+                 fill="none"
+                 stroke="currentColor"
+                 stroke-width="2"
+                 stroke-linecap="round"
+                 stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+        </button>
 
-                                <form method="POST"
-      action="{{ route('admin.cases.destroy', $case) }}"
-      class="inline">
-                                    @csrf
-                                    @method('DELETE')
+        <form method="POST"
+              action="{{ route('admin.cases.destroy', $case) }}"
+              class="m-0">
+            @csrf
+            @method('DELETE')
 
-                                    <button type="submit"
-                                            title="Delete case"
-                                            aria-label="Delete case"
-                                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-white text-lg shadow-sm transition hover:bg-red-50"
-                                            style="border-color: #fca5a5;">
-                                        <span class="leading-none">🗑️</span>
-                                    </button>
-                                </form>
-                            </td>
+            <button type="submit"
+                    title="Delete case"
+                    aria-label="Delete case"
+                    class="tn-action-icon tn-action-icon-delete inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-200">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     class="h-5 w-5"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                </svg>
+            </button>
+        </form>
+    </div>
+</td>
                         </tr>
                     @empty
                         <tr>

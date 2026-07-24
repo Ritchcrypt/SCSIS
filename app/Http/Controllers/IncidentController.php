@@ -315,9 +315,7 @@ class IncidentController extends Controller
 
             $this->storeIncidentLocation($incident, $validated);
 
-            if ($request->hasFile('evidence')) {
-                $this->storeIncidentEvidence($request, $incident);
-            }
+$this->storeIncidentEvidence($request, $incident);
 
             IncidentStatusHistory::create([
                 'incident_id' => $incident->id,
@@ -1073,86 +1071,103 @@ IncidentStatusHistory::create([
     }
 
     private function storeIncidentEvidence(Request $request, Incident $incident): void
-    {
-        $evidenceTable = null;
+{
+    $evidenceTable = null;
 
-        if (Schema::hasTable('evidence')) {
-            $evidenceTable = 'evidence';
-        } elseif (Schema::hasTable('incident_evidence')) {
-            $evidenceTable = 'incident_evidence';
-        } elseif (Schema::hasTable('incident_evidences')) {
-            $evidenceTable = 'incident_evidences';
-        } elseif (Schema::hasTable('incident_attachments')) {
-            $evidenceTable = 'incident_attachments';
+    if (Schema::hasTable('evidence')) {
+        $evidenceTable = 'evidence';
+    } elseif (Schema::hasTable('incident_evidence')) {
+        $evidenceTable = 'incident_evidence';
+    } elseif (Schema::hasTable('incident_evidences')) {
+        $evidenceTable = 'incident_evidences';
+    } elseif (Schema::hasTable('incident_attachments')) {
+        $evidenceTable = 'incident_attachments';
+    }
+
+    if (! $evidenceTable) {
+        return;
+    }
+
+    $uploadedFiles = $request->file('evidence', []);
+
+    if ($uploadedFiles instanceof \Illuminate\Http\UploadedFile) {
+        $uploadedFiles = [$uploadedFiles];
+    }
+
+    if (! is_array($uploadedFiles)) {
+        $uploadedFiles = [];
+    }
+
+    $uploadedFiles = collect($uploadedFiles)
+        ->flatten()
+        ->filter(fn ($file) => $file instanceof \Illuminate\Http\UploadedFile && $file->isValid())
+        ->take(5)
+        ->values();
+
+    if ($uploadedFiles->isEmpty()) {
+        return;
+    }
+
+    $columns = Schema::getColumnListing($evidenceTable);
+
+    foreach ($uploadedFiles as $file) {
+        $path = $file->store('incidents/evidence', 'public');
+
+        $evidenceData = [];
+
+        if (in_array('incident_id', $columns, true)) {
+            $evidenceData['incident_id'] = $incident->id;
         }
 
-        if (! $evidenceTable) {
-            return;
+        if (in_array('uploaded_by', $columns, true)) {
+            $evidenceData['uploaded_by'] = $request->user()->id;
         }
 
-        $columns = Schema::getColumnListing($evidenceTable);
+        if (in_array('user_id', $columns, true)) {
+            $evidenceData['user_id'] = $request->user()->id;
+        }
 
-        foreach ($request->file('evidence', []) as $file) {
-            if (! $file || ! $file->isValid()) {
-                continue;
-            }
+        if (in_array('file_path', $columns, true)) {
+            $evidenceData['file_path'] = $path;
+        }
 
-            $path = $file->store('incidents/evidence', 'public');
-            $evidenceData = [];
+        if (in_array('path', $columns, true)) {
+            $evidenceData['path'] = $path;
+        }
 
-            if (in_array('incident_id', $columns, true)) {
-                $evidenceData['incident_id'] = $incident->id;
-            }
+        if (in_array('file_name', $columns, true)) {
+            $evidenceData['file_name'] = $file->getClientOriginalName();
+        }
 
-            if (in_array('uploaded_by', $columns, true)) {
-                $evidenceData['uploaded_by'] = $request->user()->id;
-            }
+        if (in_array('name', $columns, true)) {
+            $evidenceData['name'] = $file->getClientOriginalName();
+        }
 
-            if (in_array('user_id', $columns, true)) {
-                $evidenceData['user_id'] = $request->user()->id;
-            }
+        if (in_array('file_type', $columns, true)) {
+            $evidenceData['file_type'] = $file->getClientOriginalExtension();
+        }
 
-            if (in_array('file_path', $columns, true)) {
-                $evidenceData['file_path'] = $path;
-            }
+        if (in_array('mime_type', $columns, true)) {
+            $evidenceData['mime_type'] = $file->getMimeType();
+        }
 
-            if (in_array('path', $columns, true)) {
-                $evidenceData['path'] = $path;
-            }
+        if (in_array('file_size', $columns, true)) {
+            $evidenceData['file_size'] = $file->getSize();
+        }
 
-            if (in_array('file_name', $columns, true)) {
-                $evidenceData['file_name'] = $file->getClientOriginalName();
-            }
+        if (in_array('created_at', $columns, true)) {
+            $evidenceData['created_at'] = now();
+        }
 
-            if (in_array('name', $columns, true)) {
-                $evidenceData['name'] = $file->getClientOriginalName();
-            }
+        if (in_array('updated_at', $columns, true)) {
+            $evidenceData['updated_at'] = now();
+        }
 
-            if (in_array('file_type', $columns, true)) {
-                $evidenceData['file_type'] = $file->getClientOriginalExtension();
-            }
-
-            if (in_array('mime_type', $columns, true)) {
-                $evidenceData['mime_type'] = $file->getMimeType();
-            }
-
-            if (in_array('file_size', $columns, true)) {
-                $evidenceData['file_size'] = $file->getSize();
-            }
-
-            if (in_array('created_at', $columns, true)) {
-                $evidenceData['created_at'] = now();
-            }
-
-            if (in_array('updated_at', $columns, true)) {
-                $evidenceData['updated_at'] = now();
-            }
-
-            if (! empty($evidenceData)) {
-                DB::table($evidenceTable)->insert($evidenceData);
-            }
+        if (! empty($evidenceData)) {
+            DB::table($evidenceTable)->insert($evidenceData);
         }
     }
+}
 
     private function notifyIncidentCreated(Incident $incident): void
     {

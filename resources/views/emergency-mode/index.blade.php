@@ -80,6 +80,20 @@
                 </button>
             @endif
         </div>
+        </div>
+
+        <div class="tn-hotline-guidance mt-5 rounded-2xl border px-5 py-4">
+            <div class="flex items-start gap-3">
+                <div class="mt-0.5 text-lg">
+                    ⚠️
+                </div>
+
+                <p class="text-sm font-semibold leading-6">
+                    Use these hotline numbers only for emergencies that require immediate response beyond what the barangay can handle alone.
+                    Please also inform the barangay through this system so the incident can be monitored and documented.
+                </p>
+            </div>
+        </div>
 
         @if (session('success'))
             <div class="mt-5 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-semibold text-green-700">
@@ -176,24 +190,40 @@
                                 </h2>
                             </div>
 
-                            <p class="mt-7 text-3xl font-black tracking-wide text-blue-950">
-                                {{ $hotline->hotline_number }}
-                            </p>
+                            <p class="tn-hotline-number mt-7 text-3xl font-black tracking-wide">
+    {{ $hotline->hotline_number }}
+</p>
                         </div>
 
                         @if ($canManageHotlines && $destroyRoute)
-                            <form method="POST"
-      action="{{ route($destroyRoute, $hotline) }}">
-                                @csrf
-                                @method('DELETE')
+    <form method="POST"
+          action="{{ route($destroyRoute, $hotline) }}"
+          class="m-0">
+        @csrf
+        @method('DELETE')
 
-                                <button type="submit"
-                                        title="Remove hotline"
-                                        class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-sm text-red-600 hover:bg-red-100">
-                                    🗑
-                                </button>
-                            </form>
-                        @endif
+        <button type="submit"
+                title="Remove hotline"
+                aria-label="Remove hotline"
+                class="tn-action-icon tn-action-icon-delete inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-200">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="h-5 w-5"
+                 viewBox="0 0 24 24"
+                 fill="none"
+                 stroke="currentColor"
+                 stroke-width="2"
+                 stroke-linecap="round"
+                 stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+            </svg>
+        </button>
+    </form>
+@endif
                     </div>
                 </div>
             @empty

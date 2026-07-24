@@ -164,27 +164,30 @@
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div>
-                <h2 class="text-lg font-bold text-slate-900">Incident Reports</h2>
+                <h2 class="text-lg font-bold text-slate-900">
+                    Incident Reports
+                </h2>
+
                 <p class="mt-1 text-sm text-slate-500">
                     Latest incident reports based on your access level.
                 </p>
             </div>
 
             <div class="flex items-center gap-2">
-    <button id="incidentReportsScrollUp"
-            type="button"
-            class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        <span>▲</span>
-        <span>Up</span>
-    </button>
+                <button id="incidentReportsScrollUp"
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                    <span>▲</span>
+                    <span>Up</span>
+                </button>
 
-    <button id="incidentReportsScrollDown"
-            type="button"
-            class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-        <span>▼</span>
-        <span>Down</span>
-    </button>
-</div>
+                <button id="incidentReportsScrollDown"
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                    <span>▼</span>
+                    <span>Down</span>
+                </button>
+            </div>
         </div>
 
         <div id="incidentReportsBody" class="max-h-[560px] overflow-y-auto">
@@ -192,8 +195,9 @@
                 <thead class="sticky top-0 z-10 bg-slate-50">
                     <tr class="border-b border-slate-200">
                         <th class="min-w-[110px] whitespace-nowrap px-6 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-700">
-    ID No.
-</th>
+                            ID No.
+                        </th>
+
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-700">
                             Incident
                         </th>
@@ -242,14 +246,14 @@
                                 ?? '—';
 
                             $locationText = data_get($incident, 'location.location_address')
-    ?? data_get($incident, 'location.address')
-    ?? data_get($incident, 'location.location_name')
-    ?? data_get($incident, 'location.name')
-    ?? data_get($incident, 'location_address')
-    ?? data_get($incident, 'address')
-    ?? data_get($incident, 'location')
-    ?? data_get($incident, 'map_location_name')
-    ?? 'No exact location provided';
+                                ?? data_get($incident, 'location.address')
+                                ?? data_get($incident, 'location.location_name')
+                                ?? data_get($incident, 'location.name')
+                                ?? data_get($incident, 'location_address')
+                                ?? data_get($incident, 'address')
+                                ?? data_get($incident, 'location')
+                                ?? data_get($incident, 'map_location_name')
+                                ?? 'No exact location provided';
 
                             $statusText = data_get($incident, 'currentStatus.status_name')
                                 ?? data_get($incident, 'status.status_name')
@@ -279,13 +283,13 @@
                         @endphp
 
                         <tr class="border-b border-slate-200 hover:bg-slate-50">
-    <td class="min-w-[110px] whitespace-nowrap px-6 py-4 align-top">
-    <span class="text-sm font-bold text-slate-700">
-        #{{ $incident->id }}
-    </span>
-</td>
+                            <td class="min-w-[110px] whitespace-nowrap px-6 py-4 align-top">
+                                <span class="text-sm font-bold text-slate-700">
+                                    #{{ $incident->id }}
+                                </span>
+                            </td>
 
-    <td class="px-5 py-4 align-top">
+                            <td class="px-5 py-4 align-top">
                                 <p class="font-semibold text-slate-900">
                                     {{ $incidentTitle }}
                                 </p>
@@ -332,28 +336,44 @@
                                         {{ $reportedAt->diffForHumans() }}
                                     </p>
                                 @else
-                                    <p class="text-sm text-slate-500">—</p>
+                                    <p class="text-sm text-slate-500">
+                                        —
+                                    </p>
                                 @endif
                             </td>
 
                             <td class="px-5 py-4 align-top">
-                                <div class="flex justify-end gap-2">
-                                    <a href="{{ $showUrl }}"
-                                       title="View incident"
-                                       class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
-                                        👁
-                                    </a>
+                                <div class="flex items-center justify-end gap-2">
+                                    <x-action-icon type="view"
+                                                   :href="$showUrl"
+                                                   label="View incident" />
 
                                     @if ($deleteUrl)
                                         <form method="POST"
-      action="{{ $deleteUrl }}">
+                                              action="{{ $deleteUrl }}"
+                                              class="m-0">
                                             @csrf
                                             @method('DELETE')
 
                                             <button type="submit"
                                                     title="Delete incident"
-                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">
-                                                🗑
+                                                    aria-label="Delete incident"
+                                                    class="tn-action-icon tn-action-icon-delete inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-200">
+                                                <svg xmlns="http://www.w3.org/2000/svg"
+                                                     class="h-5 w-5"
+                                                     viewBox="0 0 24 24"
+                                                     fill="none"
+                                                     stroke="currentColor"
+                                                     stroke-width="2"
+                                                     stroke-linecap="round"
+                                                     stroke-linejoin="round"
+                                                     aria-hidden="true">
+                                                    <path d="M3 6h18" />
+                                                    <path d="M8 6V4h8v2" />
+                                                    <path d="M19 6l-1 14H6L5 6" />
+                                                    <path d="M10 11v6" />
+                                                    <path d="M14 11v6" />
+                                                </svg>
                                             </button>
                                         </form>
                                     @endif
@@ -391,25 +411,23 @@
         const scrollDownButton = document.getElementById('incidentReportsScrollDown');
         const reportsBody = document.getElementById('incidentReportsBody');
 
-
         if (scrollUpButton && reportsBody) {
-    scrollUpButton.addEventListener('click', function () {
-        reportsBody.scrollBy({
-            top: -260,
-            behavior: 'smooth'
-        });
-    });
-}
-
+            scrollUpButton.addEventListener('click', function () {
+                reportsBody.scrollBy({
+                    top: -260,
+                    behavior: 'smooth'
+                });
+            });
+        }
 
         if (scrollDownButton && reportsBody) {
-    scrollDownButton.addEventListener('click', function () {
-        reportsBody.scrollBy({
-            top: 260,
-            behavior: 'smooth'
-        });
-    });
-}
+            scrollDownButton.addEventListener('click', function () {
+                reportsBody.scrollBy({
+                    top: 260,
+                    behavior: 'smooth'
+                });
+            });
+        }
 
         function formatRelativeTime(dateString) {
             const date = new Date(dateString);

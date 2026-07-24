@@ -1,0 +1,232 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\User;
+use App\Models\UserNotification;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
+
+class NotificationBellService
+{
+    public function forUser(?User $user): array
+    {
+        if (! $user || ! Schema::hasTable('notifications')) {
+            return [
+                'unread_count' => 0,
+                'notifications' => collect(),
+                'fallback_url' => url('/'),
+                'can_open' => false,
+            ];
+        }
+
+        $notifications = $this->latestUnreadNotifications($user);
+
+        return [
+            'unread_count' => $notifications->count(),
+            'notifications' => $notifications
+                ->take(20)
+                ->map(fn (UserNotification $notification) => $this->formatNotification($notification, $user))
+                ->values(),
+            'fallback_url' => $this->dashboardUrl($user),
+            'can_open' => Route::has('notifications.open'),
+        ];
+    }
+
+    private function latestUnreadNotifications(User $user): Collection
+    {
+        if (! Schema::hasColumn('notifications', 'user_id')) {
+            return collect();
+        }
+
+        $query = UserNotification::query()
+            ->where('user_id', (int) $user->id);
+
+        if (Schema::hasColumn('notifications', 'is_read')) {
+            $query->where(function ($unreadQuery) {
+                $unreadQuery->where('is_read', false)
+                    ->orWhere('is_read', 0)
+                    ->orWhereNull('is_read');
+            });
+        }
+
+        if (Schema::hasColumn('notifications', 'created_at')) {
+            $query->orderByDesc('created_at');
+        }
+
+        $query->orderByDesc('id');
+
+        return $query
+            ->get()
+            ->unique(function (UserNotification $notification) {
+                $type = strtolower((string) ($notification->type ?? 'notification'));
+                $sourceId = $notification->source_id ?? null;
+
+                return $sourceId
+                    ? $type . ':source:' . $sourceId
+                    : $type . ':notification:' . $notification->id;
+            })
+            ->values();
+    }
+
+    private function formatNotification(UserNotification $notification, User $user): array
+    {
+        $type = strtolower((string) ($notification->type ?? 'notification'));
+
+        return [
+            'id' => $notification->id,
+            'type' => $type,
+            'type_label' => $this->typeLabel($type),
+            'title' => $notification->title ?: $this->typeLabel($type),
+            'message' => $notification->message
+                ?: $notification->title
+                ?: 'No notification message provided.',
+            'age' => $this->notificationAge($notification),
+            'fallback_url' => $this->fallbackUrlForType($user, $type),
+            'openable' => Route::has('notifications.open') && ! empty($notification->id),
+        ];
+    }
+
+    private function notificationAge(UserNotification $notification): string
+    {
+        try {
+            return $notification->created_at
+                ? $notification->created_at->diffForHumans()
+                : 'No date';
+        } catch (\Throwable $e) {
+            return 'No date';
+        }
+    }
+
+    private function typeLabel(string $type): string
+    {
+        return [
+            'resident_complaint' => 'Resident Complaint',
+            'resident_complaint_update' => 'Complaint Update',
+
+            'incident' => 'Incident',
+            'incident_reported' => 'Incident Report',
+            'incident_update' => 'Incident Update',
+            'incident_updated' => 'Incident Update',
+            'incident_status_update' => 'Incident Status Update',
+            'status_update' => 'Status Update',
+
+            'assigned_incident' => 'Assigned Incident',
+            'incident_assigned' => 'Assigned Incident',
+            'new_assigned_incident' => 'Assigned Incident',
+
+            'dispatch' => 'Dispatch',
+            'escalation' => 'Escalation',
+            'emergency' => 'Emergency',
+            'resolved' => 'Resolved',
+
+            'announcement' => 'Announcement',
+            'calamity' => 'Calamity',
+
+            'tanod_alert' => 'Tanod Alert',
+            'tanod_task' => 'Tanod Task',
+            'tanod_task_assigned' => 'Tanod Task',
+            'tanod_task_update' => 'Tanod Task Update',
+            'task_assigned' => 'Tanod Task',
+            'task_update' => 'Tanod Task Update',
+
+            'community_problem' => 'Community Problem',
+            'community' => 'Community',
+
+            'system' => 'System',
+        ][$type] ?? ucwords(str_replace('_', ' ', $type));
+    }
+
+    private function fallbackUrlForType(User $user, string $type): string
+    {
+        $role = strtolower((string) $user->role);
+
+        if (in_array($type, ['announcement', 'calamity'], true)) {
+            return $this->roleRouteUrl($role, 'announcements.index');
+        }
+
+        if (in_array($type, ['resident_complaint', 'resident_complaint_update'], true)) {
+            return $this->roleRouteUrl($role, 'resident-complaints.index');
+        }
+
+        if (in_array($type, [
+            'tanod_task',
+            'tanod_task_assigned',
+            'tanod_task_update',
+            'task_assigned',
+            'task_update',
+        ], true)) {
+            return $this->roleRouteUrl($role, 'tanod-tasks.index');
+        }
+
+        if (in_array($type, [
+            'tanod_alert',
+            'community_problem',
+            'community',
+        ], true)) {
+            return $this->roleRouteUrl($role, 'tanod-alerts.index');
+        }
+
+        if (in_array($type, [
+            'incident',
+            'incident_reported',
+            'incident_update',
+            'incident_updated',
+            'incident_status_update',
+            'status_update',
+            'assigned_incident',
+            'incident_assigned',
+            'new_assigned_incident',
+            'dispatch',
+            'escalation',
+            'emergency',
+            'resolved',
+        ], true)) {
+            return $this->roleRouteUrl($role, 'incidents.index');
+        }
+
+        return $this->dashboardUrl($user);
+    }
+
+    private function roleRouteUrl(string $role, string $suffix): string
+    {
+        $prefix = match ($role) {
+            'admin' => 'admin',
+            'official', 'dao' => 'official',
+            'tanod' => 'tanod',
+            'resident' => 'resident',
+            default => null,
+        };
+
+        if (! $prefix) {
+            return Route::has('dashboard') ? route('dashboard') : url('/');
+        }
+
+        $routeName = $prefix . '.' . $suffix;
+
+        if (Route::has($routeName)) {
+            return route($routeName);
+        }
+
+        return $this->dashboardUrlByRole($role);
+    }
+
+    private function dashboardUrl(User $user): string
+    {
+        return $this->dashboardUrlByRole(strtolower((string) $user->role));
+    }
+
+    private function dashboardUrlByRole(string $role): string
+    {
+        $routeName = match ($role) {
+            'admin' => Route::has('admin.dashboard') ? 'admin.dashboard' : null,
+            'official', 'dao' => Route::has('official.dashboard') ? 'official.dashboard' : null,
+            'tanod' => Route::has('tanod.dashboard') ? 'tanod.dashboard' : null,
+            'resident' => Route::has('resident.dashboard') ? 'resident.dashboard' : null,
+            default => Route::has('dashboard') ? 'dashboard' : null,
+        };
+
+        return $routeName ? route($routeName) : url('/');
+    }
+}

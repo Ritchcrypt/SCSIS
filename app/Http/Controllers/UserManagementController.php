@@ -487,55 +487,119 @@ $users = $this->filteredUsersQuery($request)
     }
 
     private function syncEmployeeProfile(User $user): void
-    {
-        if (! Schema::hasTable('employees') || ! Schema::hasColumn('employees', 'user_id')) {
-            return;
-        }
-
-        $employee = Employee::query()
-            ->where('user_id', $user->id)
-            ->first();
-
-        if (! in_array($user->role, ['official', 'tanod'], true)) {
-            if ($employee && Schema::hasColumn('employees', 'is_active')) {
-                $employee->forceFill([
-                    'is_active' => false,
-                ])->save();
-            }
-
-            return;
-        }
-
-        if (! $employee) {
-            $employee = new Employee();
-        }
-
-        $data = [
-            'user_id' => $user->id,
-        ];
-
-        if (Schema::hasColumn('employees', 'barangay_id')) {
-            $data['barangay_id'] = $user->barangay_id ?? null;
-        }
-
-        if (Schema::hasColumn('employees', 'employee_type')) {
-            $data['employee_type'] = $user->role;
-        }
-
-        if (Schema::hasColumn('employees', 'position')) {
-            $data['position'] = $user->role === 'tanod' ? 'Tanod' : 'Barangay Official';
-        }
-
-        if (Schema::hasColumn('employees', 'department')) {
-            $data['department'] = $user->role === 'tanod' ? 'Barangay Tanod' : 'Barangay Office';
-        }
-
-        if (Schema::hasColumn('employees', 'is_active')) {
-            $data['is_active'] = $this->isUserActive($user);
-        }
-
-        $employee->forceFill($data)->save();
+{
+    if (! Schema::hasTable('employees') || ! Schema::hasColumn('employees', 'user_id')) {
+        return;
     }
+
+    $employee = Employee::query()
+        ->where('user_id', $user->id)
+        ->first();
+
+    if (! in_array($user->role, ['official', 'tanod'], true)) {
+        if ($employee && Schema::hasColumn('employees', 'is_active')) {
+            $employee->forceFill([
+                'is_active' => false,
+            ])->save();
+        }
+
+        return;
+    }
+
+    if (! $employee) {
+        $employee = new Employee();
+    }
+
+    $data = [
+        'user_id' => $user->id,
+    ];
+
+    if (Schema::hasColumn('employees', 'barangay_id')) {
+        $data['barangay_id'] = $user->barangay_id ?? null;
+    }
+
+    if (Schema::hasColumn('employees', 'employee_type')) {
+        $data['employee_type'] = $user->role;
+    }
+
+    if (Schema::hasColumn('employees', 'position')) {
+        $data['position'] = $user->role === 'tanod' ? 'Tanod' : 'Barangay Official';
+    }
+
+    if (Schema::hasColumn('employees', 'department')) {
+        $data['department'] = $user->role === 'tanod' ? 'Barangay Tanod' : 'Barangay Office';
+    }
+
+    if (Schema::hasColumn('employees', 'is_active')) {
+        $data['is_active'] = $this->isUserActive($user);
+    }
+
+    $employee->forceFill($data)->save();
+    $employee->refresh();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Auto-create Tanod Roster placeholder
+    |--------------------------------------------------------------------------
+    | When a user is created as Tanod from User Management, this creates the
+    | linked tanod profile automatically. Remaining roster details can be filled
+    | later from the Tanod Roster module.
+    */
+
+    if ($user->role !== 'tanod') {
+        return;
+    }
+
+    if (! Schema::hasTable('tanod_profiles')) {
+        return;
+    }
+
+    $profileData = [];
+
+    if (Schema::hasColumn('tanod_profiles', 'user_id')) {
+        $profileData['user_id'] = $user->id;
+    }
+
+    if (Schema::hasColumn('tanod_profiles', 'employee_id')) {
+        $profileData['employee_id'] = $employee->id;
+    }
+
+    if (Schema::hasColumn('tanod_profiles', 'badge_number')) {
+        $profileData['badge_number'] = 'TND-' . str_pad((string) $user->id, 4, '0', STR_PAD_LEFT);
+    }
+
+    if (Schema::hasColumn('tanod_profiles', 'duty_status')) {
+        $profileData['duty_status'] = 'off_duty';
+    }
+
+    if (Schema::hasColumn('tanod_profiles', 'created_at')) {
+        $profileData['created_at'] = now();
+    }
+
+    if (Schema::hasColumn('tanod_profiles', 'updated_at')) {
+        $profileData['updated_at'] = now();
+    }
+
+    if (empty($profileData)) {
+        return;
+    }
+
+    if (Schema::hasColumn('tanod_profiles', 'user_id')) {
+        DB::table('tanod_profiles')->updateOrInsert(
+            ['user_id' => $user->id],
+            $profileData
+        );
+
+        return;
+    }
+
+    if (Schema::hasColumn('tanod_profiles', 'employee_id')) {
+        DB::table('tanod_profiles')->updateOrInsert(
+            ['employee_id' => $employee->id],
+            $profileData
+        );
+    }
+}
 
     private function deletedUserId(): int
     {
@@ -632,9 +696,9 @@ $users = $this->filteredUsersQuery($request)
     }
 
     private function removeAccountSpecificRecords(
-        User $user,
-        $employeeIds
-    ): void {
+    User $user,
+    \Illuminate\Support\Collection $employeeIds
+): void {
         $userDeleteReferences = [
             ['notifications', 'user_id'],
             ['tanod_task_responses', 'user_id'],

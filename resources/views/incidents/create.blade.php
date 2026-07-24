@@ -396,47 +396,31 @@
 </div>
 
                 {{-- Evidence --}}
-                <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div class="border-b border-slate-200 px-6 py-4">
-                        <h2 class="text-base font-bold text-slate-900">
-                            Evidence
-                        </h2>
+                <div>
+    <label for="evidence" class="block text-sm font-bold text-slate-700">
+        Upload Evidence <span class="font-normal text-slate-500">(optional)</span>
+    </label>
 
-                        <p class="mt-1 text-sm text-slate-500">
-                            Upload photos or PDF evidence if available.
-                        </p>
-                    </div>
+    <input id="evidence"
+           type="file"
+           name="evidence[]"
+           accept="image/jpeg,image/png,image/webp,application/pdf"
+           multiple
+           data-image-preview="true"
+           class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100">
 
-                    <div class="space-y-5 p-6">
-                        <div>
-                            <label for="evidence" class="mb-2 block text-sm font-semibold text-slate-700">
-                                Upload Evidence <span class="font-normal text-slate-400">(optional)</span>
-                            </label>
+    <p class="mt-2 text-xs text-slate-500">
+        Maximum 5 files. JPG, PNG, WEBP, or PDF only. Max 50MB each.
+    </p>
 
-                            <input
-                                id="evidence"
-                                type="file"
-                                name="evidence[]"
-                                multiple
-                                accept=".jpg,.jpeg,.png,.webp,.pdf"
-                                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            >
+    @error('evidence')
+        <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p>
+    @enderror
 
-                            <p class="mt-2 text-xs text-slate-500">
-                                Maximum 5 files. JPG, PNG, WEBP, or PDF only. Max 50MB each.
-                            </p>
-
-                            @error('evidence')
-                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                            @enderror
-
-                            @error('evidence.*')
-                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-                    </div>
-                </div>
-            </div>
+    @error('evidence.*')
+        <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p>
+    @enderror
+</div>
 
             {{-- Right Panel --}}
             <div class="space-y-6">

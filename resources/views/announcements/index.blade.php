@@ -194,43 +194,36 @@
                     </div>
 
                     @if ($canManageAnnouncements && $destroyRouteName)
-                        <div class="flex shrink-0 items-center gap-3">
-                            <form method="POST"
-                                  action="{{ route($destroyRouteName, $announcement) }}">
-                                @csrf
-                                @method('DELETE')
+    <div class="flex shrink-0 items-center gap-3">
+        <form method="POST"
+              action="{{ route($destroyRouteName, $announcement) }}"
+              class="m-0">
+            @csrf
+            @method('DELETE')
 
-                                <button type="submit"
-                                        title="Delete announcement"
-                                        aria-label="Delete announcement"
-                                        style="
-                                            width: 40px;
-                                            height: 40px;
-                                            display: inline-flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            vertical-align: middle;
-                                            border: 1px solid #fca5a5;
-                                            border-radius: 10px;
-                                            background-color: #fff7f7;
-                                            font-size: 17px;
-                                            line-height: 1;
-                                            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-                                            cursor: pointer;
-                                        "
-                                        onmouseover="
-                                            this.style.backgroundColor='#fff1f1';
-                                            this.style.borderColor='#fb923c';
-                                        "
-                                        onmouseout="
-                                            this.style.backgroundColor='#fff7f7';
-                                            this.style.borderColor='#fca5a5';
-                                        ">
-                                    <span style="display:block; line-height:1;">🗑️</span>
-                                </button>
-                            </form>
-                        </div>
-                    @endif
+            <button type="submit"
+                    title="Delete announcement"
+                    aria-label="Delete announcement"
+                    class="tn-action-icon tn-action-icon-delete inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-200">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     class="h-5 w-5"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                </svg>
+            </button>
+        </form>
+    </div>
+@endif
                 </div>
             </div>
         @empty

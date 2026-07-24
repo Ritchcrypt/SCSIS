@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
@@ -29,7 +30,13 @@ class NotificationOpenController extends Controller
             return redirect()->to($this->residentComplaintUrl($role, $notification));
         }
 
-        if ($type === 'tanod_task') {
+        if (in_array($type, [
+            'tanod_task',
+            'tanod_task_assigned',
+            'tanod_task_update',
+            'task_assigned',
+            'task_update',
+        ], true)) {
             return redirect()->to($this->tanodTaskUrl($role, $notification));
         }
 
@@ -41,10 +48,18 @@ class NotificationOpenController extends Controller
             'incident',
             'incident_reported',
             'incident_update',
+            'incident_updated',
+            'incident_status_update',
+            'status_update',
+            'assigned_incident',
+            'incident_assigned',
+            'new_assigned_incident',
             'dispatch',
             'escalation',
             'emergency',
             'resolved',
+            'community_problem',
+            'community',
         ], true)) {
             return redirect()->to($this->incidentUrl($role, $notification));
         }
@@ -73,15 +88,26 @@ class NotificationOpenController extends Controller
         }
 
         $query = UserNotification::query()
-            ->where('user_id', $notification->user_id)
-            ->where('type', $notification->type);
+            ->where('user_id', $notification->user_id);
 
-        if (Schema::hasColumn('notifications', 'source_id')) {
-            if (! empty($notification->source_id)) {
-                $query->where('source_id', $notification->source_id);
-            } else {
-                $query->whereNull('source_id');
-            }
+        /*
+        |--------------------------------------------------------------------------
+        | Group-read rule
+        |--------------------------------------------------------------------------
+        | If notification has source_id, mark same user + same type + same source.
+        | If source_id is empty, mark only this notification ID.
+        |
+        | This prevents old generic/system notifications from being accidentally
+        | marked read together just because they share the same type.
+        */
+        if (
+            Schema::hasColumn('notifications', 'source_id')
+            && ! empty($notification->source_id)
+        ) {
+            $query->where('type', $notification->type)
+                ->where('source_id', $notification->source_id);
+        } else {
+            $query->where('id', $notification->id);
         }
 
         $query->update($updates);
@@ -114,7 +140,9 @@ class NotificationOpenController extends Controller
 
     private function residentComplaintUrl(string $role, UserNotification $notification): string
     {
-        if (! empty($notification->source_id)) {
+        $sourceId = $this->sourceId($notification);
+
+        if ($sourceId && $this->recordExists('resident_complaints', $sourceId)) {
             $routeName = match ($role) {
                 'admin' => Route::has('admin.resident-complaints.show')
                     ? 'admin.resident-complaints.show'
@@ -132,7 +160,7 @@ class NotificationOpenController extends Controller
             };
 
             if ($routeName) {
-                return route($routeName, $notification->source_id);
+                return route($routeName, $sourceId);
             }
         }
 
@@ -157,7 +185,9 @@ class NotificationOpenController extends Controller
 
     private function incidentUrl(string $role, UserNotification $notification): string
     {
-        if (! empty($notification->source_id)) {
+        $sourceId = $this->sourceId($notification);
+
+        if ($sourceId && $this->recordExists('incidents', $sourceId)) {
             $routeName = match ($role) {
                 'admin' => Route::has('admin.incidents.show')
                     ? 'admin.incidents.show'
@@ -179,7 +209,7 @@ class NotificationOpenController extends Controller
             };
 
             if ($routeName) {
-                return route($routeName, $notification->source_id);
+                return route($routeName, $sourceId);
             }
         }
 
@@ -206,8 +236,15 @@ class NotificationOpenController extends Controller
 
     private function tanodTaskUrl(string $role, UserNotification $notification): string
     {
-        if ($role === 'admin' && ! empty($notification->source_id) && Route::has('admin.tanod-tasks.show')) {
-            return route('admin.tanod-tasks.show', $notification->source_id);
+        $sourceId = $this->sourceId($notification);
+
+        if (
+            $role === 'admin'
+            && $sourceId
+            && $this->recordExists('tanod_tasks', $sourceId)
+            && Route::has('admin.tanod-tasks.show')
+        ) {
+            return route('admin.tanod-tasks.show', $sourceId);
         }
 
         if ($role === 'admin' && Route::has('admin.tanod-tasks.index')) {
@@ -267,5 +304,28 @@ class NotificationOpenController extends Controller
         };
 
         return $routeName ? route($routeName) : url('/');
+    }
+
+    private function sourceId(UserNotification $notification): ?int
+    {
+        if (empty($notification->source_id)) {
+            return null;
+        }
+
+        return (int) $notification->source_id;
+    }
+
+    private function recordExists(string $table, int $id): bool
+    {
+        if (
+            ! Schema::hasTable($table)
+            || ! Schema::hasColumn($table, 'id')
+        ) {
+            return false;
+        }
+
+        return DB::table($table)
+            ->where('id', $id)
+            ->exists();
     }
 }

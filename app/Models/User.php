@@ -24,6 +24,8 @@ class User extends Authenticatable
         'barangay_id',
         'address',
         'is_active',
+        'theme_mode',
+        'theme_custom_color',
     ];
 
     protected $hidden = [
@@ -44,6 +46,10 @@ class User extends Authenticatable
 
             if (Schema::hasColumn('users', 'status') && $user->status === null) {
                 $user->status = true;
+            }
+
+            if (Schema::hasColumn('users', 'theme_mode') && empty($user->theme_mode)) {
+                $user->theme_mode = 'system';
             }
         });
     }

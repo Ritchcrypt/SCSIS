@@ -29,7 +29,7 @@ class TanodAlertController extends Controller
             ->latest();
 
         if ($selectedType !== 'all') {
-            $query->where('type', $selectedType);
+            $query->whereIn('type', $this->filterTypeAliases($selectedType));
         }
 
         $alerts = $query->paginate(10)->withQueryString();
@@ -140,7 +140,11 @@ class TanodAlertController extends Controller
         | - calamity
         |
         | Those belong to the Announcements module and notification bell only.
+        |
+        | UI filters are clean grouped labels, but the query still supports older
+        | notification aliases already stored in the database.
         */
+
         return UserNotification::query()
             ->where('user_id', $user->id)
             ->whereNotIn('type', [
@@ -172,66 +176,124 @@ class TanodAlertController extends Controller
 
     private function alertTypesOnly(): array
     {
-        return array_values(array_filter(
-            $this->allowedTypes(),
-            fn ($type) => $type !== 'all'
-        ));
+        return collect($this->filterTypeAliases())
+            ->flatten()
+            ->unique()
+            ->reject(fn ($type) => $type === 'all')
+            ->values()
+            ->all();
+    }
+
+    private function filterTypeAliases(?string $selectedType = null): array
+    {
+        $aliases = [
+            'all' => [
+                'assigned_incident',
+                'incident_assigned',
+                'new_assigned_incident',
+
+                'incident',
+                'incident_reported',
+
+                'incident_update',
+                'incident_updated',
+                'incident_status_update',
+                'status_update',
+
+                'dispatch',
+                'escalation',
+                'emergency',
+                'resolved',
+
+                'tanod_task',
+                'tanod_task_assigned',
+                'task_assigned',
+
+                'tanod_task_update',
+                'task_update',
+
+                'tanod_alert',
+
+                'community_problem',
+                'community',
+            ],
+
+            'assigned_incident' => [
+                'assigned_incident',
+                'incident_assigned',
+                'new_assigned_incident',
+            ],
+
+            'incident' => [
+                'incident',
+                'incident_reported',
+            ],
+
+            'incident_update' => [
+                'incident_update',
+                'incident_updated',
+                'incident_status_update',
+                'status_update',
+            ],
+
+            'dispatch' => [
+                'dispatch',
+            ],
+
+            'escalation' => [
+                'escalation',
+            ],
+
+            'emergency' => [
+                'emergency',
+            ],
+
+            'resolved' => [
+                'resolved',
+            ],
+
+            'tanod_task' => [
+                'tanod_task',
+                'tanod_task_assigned',
+                'task_assigned',
+            ],
+
+            'tanod_task_update' => [
+                'tanod_task_update',
+                'task_update',
+            ],
+
+            'tanod_alert' => [
+                'tanod_alert',
+            ],
+
+            'community' => [
+                'community_problem',
+                'community',
+            ],
+        ];
+
+        if ($selectedType === null) {
+            return $aliases;
+        }
+
+        return $aliases[$selectedType] ?? [$selectedType];
     }
 
     private function alertTypeLabels(): array
     {
         return [
             'all' => 'All Alerts',
-
-            /*
-            |--------------------------------------------------------------------------
-            | Assigned Incident / Incoming Incident Alerts
-            |--------------------------------------------------------------------------
-            */
             'assigned_incident' => 'Assigned Incident',
-            'incident_assigned' => 'Assigned Incident',
-            'new_assigned_incident' => 'Assigned Incident',
             'incident' => 'Incident',
-            'incident_reported' => 'New Incident Report',
-
-            /*
-            |--------------------------------------------------------------------------
-            | Incident Status / Field Operation Updates
-            |--------------------------------------------------------------------------
-            */
             'incident_update' => 'Incident Update',
-            'incident_updated' => 'Incident Update',
-            'incident_status_update' => 'Incident Status Update',
-            'status_update' => 'Status Update',
             'dispatch' => 'Dispatch',
             'escalation' => 'Escalation',
             'emergency' => 'Emergency',
             'resolved' => 'Resolved',
-
-            /*
-            |--------------------------------------------------------------------------
-            | Tanod Task Alerts
-            |--------------------------------------------------------------------------
-            */
             'tanod_task' => 'Tanod Task',
-            'tanod_task_assigned' => 'Tanod Task',
             'tanod_task_update' => 'Tanod Task Update',
-            'task_assigned' => 'Tanod Task',
-            'task_update' => 'Tanod Task Update',
-
-            /*
-            |--------------------------------------------------------------------------
-            | Tanod-specific operational alerts
-            |--------------------------------------------------------------------------
-            */
             'tanod_alert' => 'Tanod Alert',
-
-            /*
-            |--------------------------------------------------------------------------
-            | Backward Compatibility
-            |--------------------------------------------------------------------------
-            */
-            'community_problem' => 'Community Problem',
             'community' => 'Community',
         ];
     }

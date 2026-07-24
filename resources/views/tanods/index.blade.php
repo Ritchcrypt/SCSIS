@@ -56,71 +56,85 @@
     </form>
 
     {{-- Table --}}
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-200">
-                <thead class="bg-slate-50">
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                        #
+                    </th>
+
+                    <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Tanod Member
+                    </th>
+
+                    <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Purok
+                    </th>
+
+                    <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Shift
+                    </th>
+
+                    <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Status
+                    </th>
+
+                    <th class="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-200 bg-white">
+                @forelse ($tanods as $tanod)
+                    @php
+                        $user = $tanod->user;
+                        $rowNumber = ($tanods->currentPage() - 1) * $tanods->perPage() + $loop->iteration;
+                    @endphp
+
                     <tr>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">#</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Tanod Member</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Purok</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Shift</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Status</th>
-                        <th class="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide text-slate-500">Actions</th>
-                    </tr>
-                </thead>
+                        <td class="whitespace-nowrap px-5 py-4 text-sm font-bold text-slate-600">
+                            #{{ $rowNumber }}
+                        </td>
 
-                <tbody class="divide-y divide-slate-200 bg-white">
-                    @forelse ($tanods as $tanod)
-                        @php
-                            $user = $tanod->user;
-                            $rowNumber = ($tanods->currentPage() - 1) * $tanods->perPage() + $loop->iteration;
-                        @endphp
-
-                        <tr>
-                            <td class="whitespace-nowrap px-5 py-4 text-sm font-bold text-slate-600">
-                                #{{ $rowNumber }}
-                            </td>
-
-                            <td class="px-5 py-4">
-                                <div class="flex items-center gap-4">
-                                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-blue-950">
-                                        🛡
-                                    </div>
-
-                                    <div>
-                                        <p class="text-sm font-semibold text-slate-900">
-                                            {{ $user?->name ?: 'Unnamed Tanod' }}
-                                        </p>
-
-                                        <p class="text-xs text-slate-500">
-                                            
-                                        </p>
-
-                                        @if ($tanod->contact_number)
-                                            <p class="text-xs text-slate-500">
-                                                📞 {{ $tanod->contact_number }}
-                                            </p>
-                                        @endif
-                                    </div>
+                        <td class="px-5 py-4">
+                            <div class="flex items-center gap-4">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-blue-950">
+                                    🛡
                                 </div>
-                            </td>
 
-                            <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                                {{ $tanod->purok_assignment ?: '—' }}
-                            </td>
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">
+                                        {{ $user?->name ?: 'Unnamed Tanod' }}
+                                    </p>
 
-                            <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                                {{ $tanod->display_shift }}
-                            </td>
+                                    @if ($tanod->contact_number)
+                                        <p class="text-xs text-slate-500">
+                                            📞 {{ $tanod->contact_number }}
+                                        </p>
+                                    @endif
+                                </div>
+                            </div>
+                        </td>
 
-                            <td class="whitespace-nowrap px-5 py-4">
-                                <span class="rounded-full border px-3 py-1 text-xs font-bold {{ $tanod->status_badge_class }}">
-                                    {{ $tanod->display_status }}
-                                </span>
-                            </td>
+                        <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
+                            {{ $tanod->purok_assignment ?: '—' }}
+                        </td>
 
-                            <td class="whitespace-nowrap px-5 py-4 text-right">
+                        <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
+                            {{ $tanod->display_shift }}
+                        </td>
+
+                        <td class="whitespace-nowrap px-5 py-4">
+                            <span class="rounded-full border px-3 py-1 text-xs font-bold {{ $tanod->status_badge_class }}">
+                                {{ $tanod->display_status }}
+                            </span>
+                        </td>
+
+                        <td class="whitespace-nowrap px-5 py-4 text-right">
+                            <div class="flex items-center justify-end gap-2">
                                 <button type="button"
                                         onclick="openEditTanodModal(this)"
                                         data-update-url="{{ route('admin.tanods.update', $tanod) }}"
@@ -132,63 +146,75 @@
                                         data-shift="{{ e($tanod->shift) }}"
                                         data-status="{{ e($tanod->status) }}"
                                         data-notes="{{ e($tanod->notes) }}"
-                                        class="mr-4 text-slate-700 hover:text-blue-700"
-                                        title="Edit tanod">
-                                    ✎
+                                        title="Edit tanod"
+                                        aria-label="Edit tanod"
+                                        class="tn-action-icon tn-action-icon-edit inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                         class="h-5 w-5"
+                                         viewBox="0 0 24 24"
+                                         fill="none"
+                                         stroke="currentColor"
+                                         stroke-width="2"
+                                         stroke-linecap="round"
+                                         stroke-linejoin="round"
+                                         aria-hidden="true">
+                                        <path d="M12 20h9" />
+                                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                    </svg>
                                 </button>
 
                                 <form method="POST"
-      action="{{ route('admin.tanods.destroy', $tanod) }}"
-      class="inline">
+                                      action="{{ route('admin.tanods.destroy', $tanod) }}"
+                                      class="m-0">
                                     @csrf
                                     @method('DELETE')
 
                                     <button type="submit"
-        title="Delete tanod"
-        aria-label="Delete tanod"
-        style="
-            width: 40px;
-            height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #fca5a5;
-            border-radius: 10px;
-            background: #fff7f7;
-            color: #64748b;
-            font-size: 17px;
-            line-height: 1;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-            cursor: pointer;
-        ">
-    🗑️
-</button>
+                                            title="Delete tanod"
+                                            aria-label="Delete tanod"
+                                            class="tn-action-icon tn-action-icon-delete inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-200">
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                             class="h-5 w-5"
+                                             viewBox="0 0 24 24"
+                                             fill="none"
+                                             stroke="currentColor"
+                                             stroke-width="2"
+                                             stroke-linecap="round"
+                                             stroke-linejoin="round"
+                                             aria-hidden="true">
+                                            <path d="M3 6h18" />
+                                            <path d="M8 6V4h8v2" />
+                                            <path d="M19 6l-1 14H6L5 6" />
+                                            <path d="M10 11v6" />
+                                            <path d="M14 11v6" />
+                                        </svg>
+                                    </button>
                                 </form>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" class="px-5 py-14 text-center">
-                                <p class="text-sm font-semibold text-slate-700">
-                                    No tanod members found.
-                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="6" class="px-5 py-14 text-center">
+                            <p class="text-sm font-semibold text-slate-700">
+                                No tanod members found.
+                            </p>
 
-                                <p class="mt-1 text-xs text-slate-500">
-                                    Add your first tanod member to start building the roster.
-                                </p>
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        @if ($tanods->hasPages())
-            <div class="border-t border-slate-200 px-5 py-4">
-                {{ $tanods->links() }}
-            </div>
-        @endif
+                            <p class="mt-1 text-xs text-slate-500">
+                                Add your first tanod member to start building the roster.
+                            </p>
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
     </div>
+
+    @if ($tanods->hasPages())
+        <div class="border-t border-slate-200 px-5 py-4">
+            {{ $tanods->links() }}
+        </div>
+    @endif
 </div>
 
 {{-- Add Tanod Modal --}}

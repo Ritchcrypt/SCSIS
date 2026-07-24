@@ -279,46 +279,16 @@
 
                             <td class="px-5 py-4">
                                 <div class="flex items-center justify-end gap-2">
-                                    <a href="{{ route('admin.users.show', $userRecord) }}"
-                                       data-user-management-return
-                                       title="View user"
-                                       aria-label="View user"
-                                       class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 hover:text-slate-900">
-                                        <svg xmlns="http://www.w3.org/2000/svg"
-                                             viewBox="0 0 24 24"
-                                             fill="none"
-                                             stroke="currentColor"
-                                             stroke-width="1.8"
-                                             class="h-5 w-5"
-                                             aria-hidden="true">
-                                            <path stroke-linecap="round"
-                                                  stroke-linejoin="round"
-                                                  d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z" />
-                                            <circle cx="12" cy="12" r="2.75" />
-                                        </svg>
-                                    </a>
+    <x-action-icon type="view"
+                   :href="route('admin.users.show', $userRecord)"
+                   label="View user"
+                   data-user-management-return />
 
-                                    <a href="{{ route('admin.users.edit', $userRecord) }}"
-                                       data-user-management-return
-                                       title="Edit user"
-                                       aria-label="Edit user"
-                                       class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100 hover:text-blue-800">
-                                        <svg xmlns="http://www.w3.org/2000/svg"
-                                             viewBox="0 0 24 24"
-                                             fill="none"
-                                             stroke="currentColor"
-                                             stroke-width="1.8"
-                                             class="h-5 w-5"
-                                             aria-hidden="true">
-                                            <path stroke-linecap="round"
-                                                  stroke-linejoin="round"
-                                                  d="M16.862 3.487a2.25 2.25 0 0 1 3.182 3.182L8.25 18.463 3.75 19.5l1.037-4.5L16.862 3.487Z" />
-                                            <path stroke-linecap="round"
-                                                  stroke-linejoin="round"
-                                                  d="m15.75 4.5 3.75 3.75" />
-                                        </svg>
-                                    </a>
-                                </div>
+    <x-action-icon type="edit"
+                   :href="route('admin.users.edit', $userRecord)"
+                   label="Edit user"
+                   data-user-management-return />
+</div>
                             </td>
                         </tr>
                     @empty

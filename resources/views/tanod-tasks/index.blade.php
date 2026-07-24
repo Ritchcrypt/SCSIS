@@ -158,22 +158,36 @@
                             </td>
 
                             <td class="px-5 py-4 text-right align-top">
-                                <div class="flex items-center justify-end gap-3">
-    <a href="{{ route('admin.tanod-tasks.show', $task) }}"
-       class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-       title="View task">
-        👁
-    </a>
+                                <div class="flex items-center justify-end gap-2">
+    <x-action-icon type="view"
+                   :href="route('admin.tanod-tasks.show', $task)"
+                   label="View task" />
 
     <form method="POST"
-      action="{{ route('admin.tanod-tasks.destroy', $task) }}">
+          action="{{ route('admin.tanod-tasks.destroy', $task) }}"
+          class="m-0">
         @csrf
         @method('DELETE')
 
         <button type="submit"
-                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                title="Delete task">
-            🗑
+                title="Delete task"
+                aria-label="Delete task"
+                class="tn-action-icon tn-action-icon-delete inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-200">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="h-5 w-5"
+                 viewBox="0 0 24 24"
+                 fill="none"
+                 stroke="currentColor"
+                 stroke-width="2"
+                 stroke-linecap="round"
+                 stroke-linejoin="round"
+                 aria-hidden="true">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+            </svg>
         </button>
     </form>
 </div>

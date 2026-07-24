@@ -61,12 +61,29 @@
             <table class="min-w-full divide-y divide-slate-200">
                 <thead class="bg-slate-50">
                     <tr>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">#</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Tanod Member</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Purok</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Shift</th>
-                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">Status</th>
-                        <th class="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide text-slate-500">Actions</th>
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                            #
+                        </th>
+
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Tanod Member
+                        </th>
+
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Purok
+                        </th>
+
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Shift
+                        </th>
+
+                        <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Status
+                        </th>
+
+                        <th class="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide text-slate-500">
+                            Actions
+                        </th>
                     </tr>
                 </thead>
 
@@ -93,7 +110,6 @@
                                             {{ $user?->name ?: 'Unnamed Tanod' }}
                                         </p>
 
-
                                         @if ($tanod->contact_number)
                                             <p class="text-xs text-slate-500">
                                                 📞 {{ $tanod->contact_number }}
@@ -118,48 +134,63 @@
                             </td>
 
                             <td class="whitespace-nowrap px-5 py-4 text-right">
-                                <button type="button"
-                                        onclick="openEditTanodModal(this)"
-                                        data-update-url="{{ route('admin.tanods.update', $tanod) }}"
-                                        data-full-name="{{ e($user?->name) }}"
-                                        data-contact-number="{{ e($tanod->contact_number) }}"
-                                        data-email="{{ e($user?->email) }}"
-                                        data-purok-assignment="{{ e($tanod->purok_assignment) }}"
-                                        data-date-appointed="{{ $tanod->date_appointed ? $tanod->date_appointed->format('Y-m-d') : '' }}"
-                                        data-shift="{{ e($tanod->shift) }}"
-                                        data-status="{{ e($tanod->status) }}"
-                                        data-notes="{{ e($tanod->notes) }}"
-                                        class="mr-4 text-slate-700 hover:text-blue-700"
-                                        title="Edit tanod">
-                                    ✎
-                                </button>
+                                <div class="flex items-center justify-end gap-2">
+                                    <button type="button"
+                                            onclick="openEditTanodModal(this)"
+                                            data-update-url="{{ route('admin.tanods.update', $tanod) }}"
+                                            data-full-name="{{ e($user?->name) }}"
+                                            data-contact-number="{{ e($tanod->contact_number) }}"
+                                            data-email="{{ e($user?->email) }}"
+                                            data-purok-assignment="{{ e($tanod->purok_assignment) }}"
+                                            data-date-appointed="{{ $tanod->date_appointed ? $tanod->date_appointed->format('Y-m-d') : '' }}"
+                                            data-shift="{{ e($tanod->shift) }}"
+                                            data-status="{{ e($tanod->status) }}"
+                                            data-notes="{{ e($tanod->notes) }}"
+                                            title="Edit tanod"
+                                            aria-label="Edit tanod"
+                                            class="tn-action-icon tn-action-icon-edit inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-200">
+                                        <svg xmlns="http://www.w3.org/2000/svg"
+                                             class="h-5 w-5"
+                                             viewBox="0 0 24 24"
+                                             fill="none"
+                                             stroke="currentColor"
+                                             stroke-width="2"
+                                             stroke-linecap="round"
+                                             stroke-linejoin="round"
+                                             aria-hidden="true">
+                                            <path d="M12 20h9" />
+                                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                        </svg>
+                                    </button>
 
-                                <form method="POST"
-      action="{{ route('admin.tanods.destroy', $tanod) }}"
-      class="inline"
-      onsubmit="return confirm('Delete this tanod member? This will also remove the linked user account.');">
-    @csrf
-    @method('DELETE')
+                                    <form method="POST"
+                                          action="{{ route('admin.tanods.destroy', $tanod) }}"
+                                          class="m-0">
+                                        @csrf
+                                        @method('DELETE')
 
-    <button type="submit"
-            title="Delete tanod"
-            aria-label="Delete tanod"
-            class="inline-flex items-center justify-center shadow-sm transition"
-            style="
-                width: 40px;
-                height: 40px;
-                border: 1px solid #fecaca;
-                border-radius: 10px;
-                background: #ffffff;
-                color: #64748b;
-                font-size: 17px;
-                line-height: 1;
-            "
-            onmouseover="this.style.background='#fff7f7'; this.style.borderColor='#fca5a5';"
-            onmouseout="this.style.background='#ffffff'; this.style.borderColor='#fecaca';">
-        <span style="display:block; line-height:1;">🗑️</span>
-    </button>
-</form>
+                                        <button type="submit"
+                                                title="Delete tanod"
+                                                aria-label="Delete tanod"
+                                                class="tn-action-icon tn-action-icon-delete inline-flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-200">
+                                            <svg xmlns="http://www.w3.org/2000/svg"
+                                                 class="h-5 w-5"
+                                                 viewBox="0 0 24 24"
+                                                 fill="none"
+                                                 stroke="currentColor"
+                                                 stroke-width="2"
+                                                 stroke-linecap="round"
+                                                 stroke-linejoin="round"
+                                                 aria-hidden="true">
+                                                <path d="M3 6h18" />
+                                                <path d="M8 6V4h8v2" />
+                                                <path d="M19 6l-1 14H6L5 6" />
+                                                <path d="M10 11v6" />
+                                                <path d="M14 11v6" />
+                                            </svg>
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -208,21 +239,28 @@
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Full Name *</label>
-                    <input type="text" name="full_name" required placeholder="Full name"
+                    <input type="text"
+                           name="full_name"
+                           required
+                           placeholder="Full name"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
-
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Contact Number</label>
-                    <input type="text" name="contact_number" placeholder="09XXXXXXXXX"
+                    <input type="text"
+                           name="contact_number"
+                           placeholder="09XXXXXXXXX"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Email</label>
-                    <input type="email" name="email" placeholder="email@example.com"
+                    <input type="email"
+                           name="email"
+                           placeholder="email@example.com"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+
                     <p class="mt-1 text-xs text-slate-500">
                         Leave blank to auto-generate a local tanod email.
                     </p>
@@ -230,13 +268,16 @@
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Purok Assignment</label>
-                    <input type="text" name="purok_assignment" placeholder="Purok 1"
+                    <input type="text"
+                           name="purok_assignment"
+                           placeholder="Purok 1"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Date Appointed</label>
-                    <input type="date" name="date_appointed"
+                    <input type="date"
+                           name="date_appointed"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
@@ -262,7 +303,9 @@
 
                 <div class="md:col-span-2">
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Notes</label>
-                    <textarea name="notes" rows="3" placeholder="Additional notes..."
+                    <textarea name="notes"
+                              rows="3"
+                              placeholder="Additional notes..."
                               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"></textarea>
                 </div>
             </div>
@@ -305,38 +348,49 @@
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Full Name *</label>
-                    <input id="edit_full_name" type="text" name="full_name" required
+                    <input id="edit_full_name"
+                           type="text"
+                           name="full_name"
+                           required
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
-
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Contact Number</label>
-                    <input id="edit_contact_number" type="text" name="contact_number"
+                    <input id="edit_contact_number"
+                           type="text"
+                           name="contact_number"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Email</label>
-                    <input id="edit_email" type="email" name="email"
+                    <input id="edit_email"
+                           type="email"
+                           name="email"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Purok Assignment</label>
-                    <input id="edit_purok_assignment" type="text" name="purok_assignment"
+                    <input id="edit_purok_assignment"
+                           type="text"
+                           name="purok_assignment"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Date Appointed</label>
-                    <input id="edit_date_appointed" type="date" name="date_appointed"
+                    <input id="edit_date_appointed"
+                           type="date"
+                           name="date_appointed"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                 </div>
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Shift</label>
-                    <select id="edit_shift" name="shift"
+                    <select id="edit_shift"
+                            name="shift"
                             class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                         @foreach ($shifts as $value => $label)
                             <option value="{{ $value }}">{{ $label }}</option>
@@ -346,7 +400,8 @@
 
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Status</label>
-                    <select id="edit_status" name="status"
+                    <select id="edit_status"
+                            name="status"
                             class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
                         @foreach ($statuses as $value => $label)
                             <option value="{{ $value }}">{{ $label }}</option>
@@ -356,7 +411,9 @@
 
                 <div class="md:col-span-2">
                     <label class="mb-2 block text-sm font-semibold text-slate-700">Notes</label>
-                    <textarea id="edit_notes" name="notes" rows="3"
+                    <textarea id="edit_notes"
+                              name="notes"
+                              rows="3"
                               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"></textarea>
                 </div>
             </div>
