@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class UserManagementController extends Controller
 {
@@ -283,21 +285,45 @@ $users = $this->filteredUsersQuery($request)
     );
 }
 
-    public function resetPassword(Request $request, User $user): RedirectResponse
-    {
-        $this->authorizeAdmin($request);
+    public function resetPassword(
+    Request $request,
+    User $user
+): RedirectResponse {
+    $this->authorizeAdmin($request);
 
-        $temporaryPassword = 'Temp-' . Str::upper(Str::random(4)) . '-' . random_int(1000, 9999);
-
-        $user->forceFill([
-            'password' => Hash::make($temporaryPassword),
-        ])->save();
-
-        return back()
-            ->with('success', 'Password reset successfully.')
-            ->with('temporary_password', $temporaryPassword)
-            ->with('temporary_password_user', $user->name);
+    if (
+        strtolower((string) $user->email)
+        === self::DELETED_USER_EMAIL
+    ) {
+        return back()->with(
+            'error',
+            'The deleted-user placeholder account cannot receive a password reset.'
+        );
     }
+
+    $status = Password::sendResetLink([
+        'email' => $user->email,
+    ]);
+
+    if ($status === Password::RESET_THROTTLED) {
+        return back()->with(
+            'error',
+            'A password reset link was generated recently. Please wait before trying again.'
+        );
+    }
+
+    if ($status !== Password::RESET_LINK_SENT) {
+        return back()->with(
+            'error',
+            'The password reset instructions could not be generated.'
+        );
+    }
+
+    return back()->with(
+        'success',
+        "Password reset instructions were generated for {$user->email}."
+    );
+}
 
     public function destroy(Request $request, User $user): RedirectResponse
     {
@@ -457,8 +483,17 @@ $users = $this->filteredUsersQuery($request)
             : ['nullable'];
 
         $passwordRule = $user
-            ? ['nullable', 'string', 'min:8']
-            : ['required', 'string', 'min:8'];
+    ? [
+        'nullable',
+        'string',
+        PasswordRule::defaults(),
+    ]
+    : [
+        'required',
+        'string',
+        PasswordRule::defaults(),
+        'confirmed',
+    ];
 
         $rules = [
             'name' => ['required', 'string', 'max:255'],

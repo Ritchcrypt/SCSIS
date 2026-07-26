@@ -41,18 +41,7 @@
         <div class="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
             {{ session('error') }}
         </div>
-    @endif
-
-    @if (session('temporary_password'))
-        <div class="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-medium text-blue-800">
-            Temporary password for
-            <strong>{{ session('temporary_password_user') }}</strong>:
-
-            <span class="font-mono font-bold">
-                {{ session('temporary_password') }}
-            </span>
-        </div>
-    @endif
+    @endif 
 
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <form method="POST"
@@ -328,30 +317,48 @@
             </div>
 
             @if (! $isEdit)
-                <div>
-                    <label for="password"
-                           class="mb-2 block text-sm font-semibold text-slate-700">
-                        Temporary Password
-                    </label>
+    <div class="grid gap-5 md:grid-cols-2">
+        <div>
+            <label for="password"
+                   class="mb-2 block text-sm font-semibold text-slate-700">
+                Initial Password
+            </label>
 
-                    <input id="password"
-                           type="text"
-                           name="password"
-                           required
-                           placeholder="Minimum 8 characters"
-                           class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+            <input id="password"
+                   type="password"
+                   name="password"
+                   required
+                   autocomplete="new-password"
+                   placeholder="Minimum 12 characters"
+                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
-                    <p class="mt-2 text-xs text-slate-500">
-                        Give this temporary password to the user after account creation.
-                    </p>
+            <p class="mt-2 text-xs text-slate-500">
+                Use uppercase and lowercase letters, a number, and a symbol.
+            </p>
 
-                    @error('password')
-                        <p class="mt-2 text-sm font-medium text-red-600">
-                            {{ $message }}
-                        </p>
-                    @enderror
-                </div>
-            @endif
+            @error('password')
+                <p class="mt-2 text-sm font-medium text-red-600">
+                    {{ $message }}
+                </p>
+            @enderror
+        </div>
+
+        <div>
+            <label for="password_confirmation"
+                   class="mb-2 block text-sm font-semibold text-slate-700">
+                Confirm Initial Password
+            </label>
+
+            <input id="password_confirmation"
+                   type="password"
+                   name="password_confirmation"
+                   required
+                   autocomplete="new-password"
+                   placeholder="Repeat the initial password"
+                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+        </div>
+    </div>
+@endif
 
             <div class="flex justify-end gap-3">
                 <a href="{{ route('admin.users.index') }}"
@@ -422,17 +429,17 @@
                         @endif
 
                         <form method="POST"
-                              action="{{ route('admin.users.reset-password', $userRecord) }}"
-                              onsubmit="return confirm('Reset this user’s password?');">
+      action="{{ route('admin.users.reset-password', $userRecord) }}"
+      onsubmit="return confirm('Generate and send a password reset link for this user?');">
 
-                            @csrf
-                            @method('PATCH')
+    @csrf
+    @method('PATCH')
 
-                            <button type="submit"
-                                    class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
-                                Reset Password
-                            </button>
-                        </form>
+    <button type="submit"
+            class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
+        Send Password Reset Link
+    </button>
+</form>
 
                         <form method="POST"
                               action="{{ route('admin.users.destroy', $userRecord) }}"

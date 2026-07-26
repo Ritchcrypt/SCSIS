@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class ProfileController extends Controller
 {
@@ -90,30 +92,92 @@ class ProfileController extends Controller
             ->with('success', 'Profile updated successfully.');
     }
 
-    public function updatePassword(Request $request): RedirectResponse
-    {
-        $user = $request->user();
+public function updatePassword(Request $request): RedirectResponse
+{
+    $user = $request->user();
 
-        abort_unless($user && in_array(strtolower((string) $user->role), [
-            'official',
-            'dao',
-            'tanod',
-            'resident',
-        ], true), 403);
+    abort_unless(
+        $user && in_array(
+            strtolower((string) $user->role),
+            [
+                'admin',
+                'official',
+                'dao',
+                'tanod',
+                'resident',
+            ],
+            true
+        ),
+        403
+    );
 
-        $validated = $request->validateWithBag('updatePassword', [
-            'current_password' => ['required', 'current_password'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-        ]);
+    $validated = $request->validateWithBag('updatePassword', [
+        'current_password' => [
+            'required',
+            'string',
+            'current_password',
+        ],
 
+        'password' => [
+            'required',
+            'string',
+            Password::defaults(),
+            'confirmed',
+            'different:current_password',
+        ],
+    ]);
+
+    $currentSessionId = $request->session()->getId();
+
+    DB::transaction(function () use (
+        $validated,
+        $user,
+        $currentSessionId
+    ): void {
         $user->forceFill([
             'password' => Hash::make($validated['password']),
+            'remember_token' => Str::random(60),
         ])->save();
 
-        return redirect()
-            ->route('profile.edit')
-            ->with('success', 'Password updated successfully.');
-    }
+        /*
+        |--------------------------------------------------------------------------
+        | Invalidate the user's other database sessions
+        |--------------------------------------------------------------------------
+        |
+        | Keep the current browser session active, but remove sessions from
+        | other browsers or devices.
+        |
+        */
+
+        if (
+            Schema::hasTable('sessions')
+            && Schema::hasColumn('sessions', 'id')
+            && Schema::hasColumn('sessions', 'user_id')
+        ) {
+            DB::table('sessions')
+                ->where('user_id', $user->id)
+                ->where('id', '!=', $currentSessionId)
+                ->delete();
+        }
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rotate current-session security values
+    |--------------------------------------------------------------------------
+    */
+
+    $request->session()->forget('auth.password_confirmed_at');
+    $request->session()->regenerate();
+    $request->session()->regenerateToken();
+
+    return redirect()
+        ->route('profile.edit')
+        ->with(
+            'success',
+            'Password updated successfully. Other active sessions were signed out.'
+        );
+}
 
     public function destroyOwnAccount(Request $request): RedirectResponse
     {
