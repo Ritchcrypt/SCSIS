@@ -19,7 +19,9 @@
         </h1>
 
         <p class="mt-2 text-sm text-slate-600">
-            {{ $isEdit ? 'Update account information and access level.' : 'Create an account for admin, official, tanod, or resident users.' }}
+            {{ $isEdit
+                ? 'Update account information and access level.'
+                : 'Create an account for admin, official, tanod, or resident users.' }}
         </p>
     </div>
 
@@ -43,16 +45,23 @@
 
     @if (session('temporary_password'))
         <div class="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-medium text-blue-800">
-            Temporary password for <strong>{{ session('temporary_password_user') }}</strong>:
-            <span class="font-mono font-bold">{{ session('temporary_password') }}</span>
+            Temporary password for
+            <strong>{{ session('temporary_password_user') }}</strong>:
+
+            <span class="font-mono font-bold">
+                {{ session('temporary_password') }}
+            </span>
         </div>
     @endif
 
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <form method="POST"
-              action="{{ $isEdit ? route('admin.users.update', $userRecord) : route('admin.users.store') }}"
+              action="{{ $isEdit
+                    ? route('admin.users.update', $userRecord)
+                    : route('admin.users.store') }}"
               enctype="multipart/form-data"
               class="space-y-6 p-6">
+
             @csrf
 
             @if ($isEdit)
@@ -61,10 +70,18 @@
 
             @php
                 $profilePhotoPath = $userRecord->profile_photo_path ?? null;
-                $profilePhotoUrl = $profilePhotoPath && $userRecord && Route::has('users.profile-photo')
-                    ? route('users.profile-photo', $userRecord) . '?v=' . optional($userRecord->updated_at)->timestamp
-                    : null;
-                $profileInitial = strtoupper(mb_substr($userRecord->name ?? 'U', 0, 1));
+
+                $profilePhotoUrl = $profilePhotoPath
+                    && $userRecord
+                    && Route::has('users.profile-photo')
+                        ? route('users.profile-photo', $userRecord)
+                            . '?v='
+                            . optional($userRecord->updated_at)->timestamp
+                        : null;
+
+                $profileInitial = strtoupper(
+                    mb_substr($userRecord->name ?? 'U', 0, 1)
+                );
             @endphp
 
             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -87,7 +104,8 @@
                     </div>
 
                     <div class="flex-1">
-                        <label for="profile_photo" class="mb-2 block text-sm font-semibold text-slate-700">
+                        <label for="profile_photo"
+                               class="mb-2 block text-sm font-semibold text-slate-700">
                             Profile Picture
                         </label>
 
@@ -99,13 +117,16 @@
 
                         <p class="mt-2 text-xs text-slate-500">
                             Accepted formats: JPG, PNG, or WEBP. Maximum size: 50 MB.
+
                             @if ($isEdit && $profilePhotoUrl)
                                 Uploading a new image will replace the current profile picture.
                             @endif
                         </p>
 
                         @error('profile_photo')
-                            <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                            <p class="mt-2 text-sm font-medium text-red-600">
+                                {{ $message }}
+                            </p>
                         @enderror
                     </div>
                 </div>
@@ -113,7 +134,8 @@
 
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
-                    <label for="name" class="mb-2 block text-sm font-semibold text-slate-700">
+                    <label for="name"
+                           class="mb-2 block text-sm font-semibold text-slate-700">
                         Full Name
                     </label>
 
@@ -125,12 +147,15 @@
                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
                     @error('name')
-                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                        <p class="mt-2 text-sm font-medium text-red-600">
+                            {{ $message }}
+                        </p>
                     @enderror
                 </div>
 
                 <div>
-                    <label for="email" class="mb-2 block text-sm font-semibold text-slate-700">
+                    <label for="email"
+                           class="mb-2 block text-sm font-semibold text-slate-700">
                         Email
                     </label>
 
@@ -142,14 +167,17 @@
                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
                     @error('email')
-                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                        <p class="mt-2 text-sm font-medium text-red-600">
+                            {{ $message }}
+                        </p>
                     @enderror
                 </div>
             </div>
 
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
-                    <label for="contact_number" class="mb-2 block text-sm font-semibold text-slate-700">
+                    <label for="contact_number"
+                           class="mb-2 block text-sm font-semibold text-slate-700">
                         Contact Number
                     </label>
 
@@ -161,12 +189,15 @@
                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
                     @error('contact_number')
-                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                        <p class="mt-2 text-sm font-medium text-red-600">
+                            {{ $message }}
+                        </p>
                     @enderror
                 </div>
 
                 <div>
-                    <label for="address" class="mb-2 block text-sm font-semibold text-slate-700">
+                    <label for="address"
+                           class="mb-2 block text-sm font-semibold text-slate-700">
                         Address
                     </label>
 
@@ -178,14 +209,17 @@
                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
                     @error('address')
-                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                        <p class="mt-2 text-sm font-medium text-red-600">
+                            {{ $message }}
+                        </p>
                     @enderror
                 </div>
             </div>
 
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
-                    <label for="role" class="mb-2 block text-sm font-semibold text-slate-700">
+                    <label for="role"
+                           class="mb-2 block text-sm font-semibold text-slate-700">
                         Role
                     </label>
 
@@ -193,46 +227,110 @@
                             name="role"
                             required
                             class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
                         @foreach ($roles as $value => $label)
                             <option value="{{ $value }}"
-                                @selected(old('role', $userRecord->role ?? 'resident') === $value)>
+                                @selected(
+                                    old(
+                                        'role',
+                                        $userRecord->role ?? 'resident'
+                                    ) === $value
+                                )>
                                 {{ $label }}
                             </option>
                         @endforeach
                     </select>
 
                     @error('role')
-                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                        <p class="mt-2 text-sm font-medium text-red-600">
+                            {{ $message }}
+                        </p>
                     @enderror
                 </div>
 
-                <div>
-                    <label for="is_active" class="mb-2 block text-sm font-semibold text-slate-700">
-                        Status
-                    </label>
+                @if ($isEdit)
+                    @php
+                        $accountIsActive = (bool) (
+                            $userRecord->is_active ?? false
+                        );
+                    @endphp
 
-                    <select id="is_active"
-                            name="is_active"
-                            required
-                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                        <option value="1" @selected((string) old('is_active', $userRecord->is_active ?? '1') === '1')>
-                            Active
-                        </option>
+                    <div>
+                        <label class="mb-2 block text-sm font-semibold text-slate-700">
+                            Account Access
+                        </label>
 
-                        <option value="0" @selected((string) old('is_active', $userRecord->is_active ?? '1') === '0')>
-                            Inactive
-                        </option>
-                    </select>
+                        <input type="hidden"
+                               name="is_active"
+                               value="{{ $accountIsActive ? '1' : '0' }}">
 
-                    @error('is_active')
-                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                    @enderror
-                </div>
+                        <div class="flex min-h-[42px] items-center justify-between gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 shadow-sm">
+                            <div>
+                                <p class="text-sm font-semibold text-slate-900">
+                                    {{ $accountIsActive
+                                        ? 'Active Account'
+                                        : 'Pending / Inactive Account' }}
+                                </p>
+
+                                <p class="mt-0.5 text-xs text-slate-500">
+                                    {{ $accountIsActive
+                                        ? 'This user is currently allowed to log in.'
+                                        : 'This user cannot log in until an administrator activates the account.' }}
+                                </p>
+                            </div>
+
+                            <span class="inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-bold
+                                {{ $accountIsActive
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-amber-100 text-amber-800' }}">
+                                {{ $accountIsActive ? 'ACTIVE' : 'PENDING' }}
+                            </span>
+                        </div>
+                    </div>
+                @else
+                    <div>
+                        <label for="is_active"
+                               class="mb-2 block text-sm font-semibold text-slate-700">
+                            Account Access
+                        </label>
+
+                        <select id="is_active"
+                                name="is_active"
+                                required
+                                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                            <option value="1"
+                                @selected(
+                                    (string) old('is_active', '1') === '1'
+                                )>
+                                Active
+                            </option>
+
+                            <option value="0"
+                                @selected(
+                                    (string) old('is_active', '1') === '0'
+                                )>
+                                Inactive
+                            </option>
+                        </select>
+
+                        <p class="mt-2 text-xs text-slate-500">
+                            Inactive accounts cannot log in to TabangNow.
+                        </p>
+
+                        @error('is_active')
+                            <p class="mt-2 text-sm font-medium text-red-600">
+                                {{ $message }}
+                            </p>
+                        @enderror
+                    </div>
+                @endif
             </div>
 
             @if (! $isEdit)
                 <div>
-                    <label for="password" class="mb-2 block text-sm font-semibold text-slate-700">
+                    <label for="password"
+                           class="mb-2 block text-sm font-semibold text-slate-700">
                         Temporary Password
                     </label>
 
@@ -248,7 +346,9 @@
                     </p>
 
                     @error('password')
-                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                        <p class="mt-2 text-sm font-medium text-red-600">
+                            {{ $message }}
+                        </p>
                     @enderror
                 </div>
             @endif
@@ -267,29 +367,86 @@
         </form>
 
         @if ($isEdit)
+            @php
+                $accountIsActive = (bool) (
+                    $userRecord->is_active ?? false
+                );
+
+                $editingOwnAccount =
+                    (int) auth()->id() === (int) $userRecord->id;
+            @endphp
+
             <div class="border-t border-slate-200 px-6 py-5">
-                <div class="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                    <form method="POST"
-                          action="{{ route('admin.users.reset-password', $userRecord) }}">
-                        @csrf
-                        @method('PATCH')
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">
+                            Account Security Actions
+                        </h2>
 
-                        <button type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
-                            Reset Password
-                        </button>
-                    </form>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Activation controls whether this user is permitted to log in.
+                        </p>
+                    </div>
 
-                    <form method="POST"
-                          action="{{ route('admin.users.destroy', $userRecord) }}">
-                        @csrf
-                        @method('DELETE')
+                    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+                        @if (! $accountIsActive)
+                            <form method="POST"
+                                  action="{{ route('admin.users.activate', $userRecord) }}"
+                                  onsubmit="return confirm('Activate this account and allow the user to log in?');">
 
-                        <button type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-xl border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto">
-                            Permanent Delete
-                        </button>
-                    </form>
+                                @csrf
+                                @method('PATCH')
+
+                                <button type="submit"
+                                        class="inline-flex w-full items-center justify-center rounded-xl border border-green-300 bg-green-50 px-5 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 sm:w-auto">
+                                    Activate Account
+                                </button>
+                            </form>
+                        @elseif (! $editingOwnAccount)
+                            <form method="POST"
+                                  action="{{ route('admin.users.deactivate', $userRecord) }}"
+                                  onsubmit="return confirm('Deactivate this account and block the user from logging in?');">
+
+                                @csrf
+                                @method('PATCH')
+
+                                <button type="submit"
+                                        class="inline-flex w-full items-center justify-center rounded-xl border border-orange-300 bg-orange-50 px-5 py-2.5 text-sm font-semibold text-orange-800 hover:bg-orange-100 sm:w-auto">
+                                    Deactivate Account
+                                </button>
+                            </form>
+                        @else
+                            <div class="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-600">
+                                You cannot deactivate your own administrator account.
+                            </div>
+                        @endif
+
+                        <form method="POST"
+                              action="{{ route('admin.users.reset-password', $userRecord) }}"
+                              onsubmit="return confirm('Reset this user’s password?');">
+
+                            @csrf
+                            @method('PATCH')
+
+                            <button type="submit"
+                                    class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
+                                Reset Password
+                            </button>
+                        </form>
+
+                        <form method="POST"
+                              action="{{ route('admin.users.destroy', $userRecord) }}"
+                              onsubmit="return confirm('Permanently delete this user? This action cannot be undone.');">
+
+                            @csrf
+                            @method('DELETE')
+
+                            <button type="submit"
+                                    class="inline-flex w-full items-center justify-center rounded-xl border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto">
+                                Permanent Delete
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         @endif

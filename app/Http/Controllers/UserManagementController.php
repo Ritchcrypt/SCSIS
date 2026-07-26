@@ -210,34 +210,78 @@ $users = $this->filteredUsersQuery($request)
     }
 
     public function activate(Request $request, User $user): RedirectResponse
-    {
-        $this->authorizeAdmin($request);
+{
+    $this->authorizeAdmin($request);
 
-        if (Schema::hasColumn('users', 'is_active')) {
-            $user->forceFill([
-                'is_active' => true,
-            ])->save();
-        }
+    $statusChanges = [];
 
-        return back()->with('success', 'User account activated successfully.');
+    if (Schema::hasColumn('users', 'is_active')) {
+        $statusChanges['is_active'] = true;
     }
+
+    if (Schema::hasColumn('users', 'status')) {
+        $statusChanges['status'] = true;
+    }
+
+    if (! empty($statusChanges)) {
+        $user->forceFill($statusChanges)->save();
+    }
+
+    return back()->with(
+        'success',
+        "{$user->name}'s account was activated successfully."
+    );
+}
 
     public function deactivate(Request $request, User $user): RedirectResponse
-    {
-        $this->authorizeAdmin($request);
+{
+    $this->authorizeAdmin($request);
 
-        if ((int) $request->user()->id === (int) $user->id) {
-            return back()->with('error', 'You cannot deactivate your own account.');
-        }
-
-        if (Schema::hasColumn('users', 'is_active')) {
-            $user->forceFill([
-                'is_active' => false,
-            ])->save();
-        }
-
-        return back()->with('success', 'User account deactivated successfully.');
+    if ((int) $request->user()->id === (int) $user->id) {
+        return back()->with(
+            'error',
+            'You cannot deactivate your own account.'
+        );
     }
+
+    $statusChanges = [];
+
+    if (Schema::hasColumn('users', 'is_active')) {
+        $statusChanges['is_active'] = false;
+    }
+
+    if (Schema::hasColumn('users', 'status')) {
+        $statusChanges['status'] = false;
+    }
+
+    if (! empty($statusChanges)) {
+        $user->forceFill($statusChanges)->save();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Terminate existing database sessions
+    |--------------------------------------------------------------------------
+    |
+    | A deactivated user should not remain logged in through an existing
+    | session.
+    |
+    */
+
+    if (
+        Schema::hasTable('sessions')
+        && Schema::hasColumn('sessions', 'user_id')
+    ) {
+        DB::table('sessions')
+            ->where('user_id', $user->id)
+            ->delete();
+    }
+
+    return back()->with(
+        'success',
+        "{$user->name}'s account was deactivated successfully."
+    );
+}
 
     public function resetPassword(Request $request, User $user): RedirectResponse
     {
