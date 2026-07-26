@@ -1,8 +1,18 @@
 <?php
 
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Livewire\Actions\Logout;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
+
+/*
+|--------------------------------------------------------------------------
+| Guest Authentication Routes
+|--------------------------------------------------------------------------
+|
+| These routes are only available while the user is logged out.
+|
+*/
 
 Route::middleware('guest')->group(function () {
     Volt::route('login', 'auth.login')
@@ -16,10 +26,19 @@ Route::middleware('guest')->group(function () {
 
     Volt::route('reset-password/{token}', 'auth.reset-password')
         ->name('password.reset');
-
 });
 
-Route::middleware('auth')->group(function () {
+/*
+|--------------------------------------------------------------------------
+| Authenticated Account Security Routes
+|--------------------------------------------------------------------------
+|
+| Users must be authenticated and active before accessing account
+| verification and password-confirmation pages.
+|
+*/
+
+Route::middleware(['auth', 'active.user'])->group(function () {
     Volt::route('verify-email', 'auth.verify-email')
         ->name('verification.notice');
 
@@ -31,5 +50,16 @@ Route::middleware('auth')->group(function () {
         ->name('password.confirm');
 });
 
-Route::post('logout', App\Livewire\Actions\Logout::class)
+/*
+|--------------------------------------------------------------------------
+| Logout
+|--------------------------------------------------------------------------
+|
+| Logout requires an authenticated session. The Logout action invalidates
+| the session and regenerates the CSRF token.
+|
+*/
+
+Route::post('logout', Logout::class)
+    ->middleware('auth')
     ->name('logout');

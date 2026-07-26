@@ -60,10 +60,12 @@ Route::get('/dashboard', function () {
 | Shared Authenticated Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->get('/users/{user}/profile-photo', [UserManagementController::class, 'profilePhoto'])
+Route::middleware(['auth', 'active.user'])
+    ->get('/users/{user}/profile-photo', [UserManagementController::class, 'profilePhoto'])
     ->name('users.profile-photo');
 
-Route::patch('/theme-preference', [ThemePreferenceController::class, 'update'])
+Route::middleware(['auth', 'active.user'])
+    ->patch('/theme-preference', [ThemePreferenceController::class, 'update'])
     ->name('theme-preference.update');
 
 Route::middleware(['auth', 'active.user'])
@@ -520,19 +522,7 @@ Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintControl
             ->name('incidents.messages.store');
     });
 
-/*
-|--------------------------------------------------------------------------
-| Authentication / Logout
-|--------------------------------------------------------------------------
-*/
-Route::post('/logout', function () {
-    Auth::logout();
 
-    request()->session()->invalidate();
-    request()->session()->regenerateToken();
-
-    return redirect()->route('login');
-})->middleware('auth')->name('logout');
 
 if (file_exists(__DIR__ . '/auth.php')) {
     require __DIR__ . '/auth.php';
