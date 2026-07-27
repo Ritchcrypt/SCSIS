@@ -3,6 +3,7 @@
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -142,9 +143,10 @@ new #[Layout('components.layouts.auth')] class extends Component {
     />
 
     <form wire:submit="login" class="flex flex-col gap-6">
+        {{-- Email Address --}}
         <flux:input
             wire:model="email"
-            label="{{ __('Email address') }}"
+            :label="__('Email address')"
             type="email"
             name="email"
             required
@@ -153,15 +155,17 @@ new #[Layout('components.layouts.auth')] class extends Component {
             placeholder="email@example.com"
         />
 
+        {{-- Password --}}
         <div class="relative">
             <flux:input
                 wire:model="password"
-                label="{{ __('Password') }}"
+                :label="__('Password')"
                 type="password"
                 name="password"
                 required
                 autocomplete="current-password"
-                placeholder="Password"
+                :placeholder="__('Password')"
+                viewable
             />
 
             @if (Route::has('password.request'))
@@ -174,10 +178,21 @@ new #[Layout('components.layouts.auth')] class extends Component {
             @endif
         </div>
 
-        <flux:checkbox
-            wire:model="remember"
-            label="{{ __('Remember me') }}"
-        />
+        {{-- Remember Me --}}
+        <label for="remember" class="tn-auth-remember">
+            <input
+                id="remember"
+                name="remember"
+                type="checkbox"
+                value="1"
+                wire:model="remember"
+                class="tn-auth-remember-input"
+            >
+
+            <span class="tn-auth-remember-label">
+                {{ __('Remember me') }}
+            </span>
+        </label>
 
         <div class="flex items-center justify-end">
             <flux:button
@@ -191,10 +206,10 @@ new #[Layout('components.layouts.auth')] class extends Component {
     </form>
 
     <div class="space-x-1 text-center text-sm text-zinc-600 dark:text-zinc-400">
-        Don't have an account?
+        <span>Don't have an account?</span>
 
         <x-text-link href="{{ route('register') }}">
-            Sign up
+            {{ __('Sign up') }}
         </x-text-link>
     </div>
 </div>

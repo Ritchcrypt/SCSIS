@@ -26,13 +26,36 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         ->name('presence.heartbeat');
 });
 
+/*
+|--------------------------------------------------------------------------
+| TabangNow Entry Route
+|--------------------------------------------------------------------------
+|
+| Authenticated users proceed to their role dashboard.
+| Guests proceed directly to the TabangNow login page.
+|
+*/
+
 Route::get('/', function () {
     if (Auth::check()) {
         return redirect()->route('dashboard');
     }
 
-    return view('welcome');
+    return redirect()->route('login');
 })->name('home');
+
+/*
+|--------------------------------------------------------------------------
+| Public System Branding Asset
+|--------------------------------------------------------------------------
+|
+| The logo is displayed on public authentication pages. Only the configured
+| logo file is exposed; branding management remains restricted to admins.
+|
+*/
+
+Route::get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
+    ->name('system-branding.logo');
 
 /*
 |--------------------------------------------------------------------------
@@ -71,10 +94,6 @@ Route::middleware(['auth', 'active.user'])
 Route::middleware(['auth', 'active.user'])
     ->get('/incident-evidence/{evidenceId}/file', [IncidentController::class, 'showEvidenceFile'])
     ->name('incident-evidence.file');
-
-Route::middleware(['auth', 'active.user'])
-    ->get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
-    ->name('system-branding.logo');
 
 Route::middleware(['auth', 'active.user'])
     ->post('/notifications/{notification}/open', [NotificationOpenController::class, 'open'])
