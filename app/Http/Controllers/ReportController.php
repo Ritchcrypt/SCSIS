@@ -12,22 +12,35 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class ReportController extends Controller
 {
+
     public function index(Request $request): View
     {
-        return view('reports.index', $this->reportData($request));
+        Gate::authorize('viewReports');
+
+        return view(
+            'reports.index',
+            $this->reportData($request)
+        );
     }
+
 
     public function downloadPdf(Request $request)
     {
+        Gate::authorize('viewReports');
+
         $data = $this->reportData($request);
 
         $fileName = 'barangay-report-'
-            . strtolower(str_replace(' ', '-', $data['periodLabel']))
+            . $this->safeFileToken(
+                $data['periodLabel'] ?? 'report',
+                'report'
+            )
             . '-'
             . now()->format('Ymd-His')
             . '.pdf';
@@ -37,12 +50,22 @@ class ReportController extends Controller
             ->download($fileName);
     }
 
-    public function downloadIncidentPdf(Request $request, Incident $incident)
-    {
+
+    public function downloadIncidentPdf(
+        Request $request,
+        Incident $incident
+    ) {
+        Gate::authorize('viewReports');
+        Gate::authorize('view', $incident);
+
         $data = $this->specificIncidentReportData($incident);
 
         $fileName = 'incident-report-'
-            . strtolower(str_replace(' ', '-', $data['incidentReport']['code']))
+            . $this->safeFileToken(
+                $data['incidentReport']['code']
+                    ?? ('incident-' . $incident->id),
+                'incident-' . $incident->id
+            )
             . '-'
             . now()->format('Ymd-His')
             . '.pdf';
@@ -52,49 +75,64 @@ class ReportController extends Controller
             ->download($fileName);
     }
 
-    public function downloadCasePdf(Request $request, CaseRecord $caseRecord)
-{
-    $data = $this->specificCaseReportData($caseRecord);
 
-    $code = $data['caseReport']['case_number'] ?? 'case-' . $caseRecord->id;
+    public function downloadCasePdf(
+        Request $request,
+        CaseRecord $caseRecord
+    ) {
+        Gate::authorize('viewReports');
+        Gate::authorize('view', $caseRecord);
 
-    $safeCode = trim(
-        preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $code)),
-        '-'
-    );
+        $data = $this->specificCaseReportData($caseRecord);
 
-    $fileName = 'case-report-'
-        . ($safeCode !== '' ? $safeCode : 'case-' . $caseRecord->id)
-        . '-'
-        . now()->format('Ymd-His')
-        . '.pdf';
+        $code = $data['caseReport']['case_number']
+            ?? ('case-' . $caseRecord->id);
 
-    return Pdf::loadHTML($this->casePdfHtml($data))
-        ->setPaper('a4', 'portrait')
-        ->download($fileName);
-}
-
-    public function downloadComplaintPdf(Request $request, ResidentComplaint $residentComplaint)
-    {
-        $data = $this->specificComplaintReportData($residentComplaint);
-
-        $code = $data['complaintReport']['code'] ?? 'complaint-' . $residentComplaint->id;
-
-        $safeCode = trim(
-            preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $code)),
-            '-'
-        );
-
-        $fileName = 'complaint-report-'
-            . ($safeCode !== '' ? $safeCode : 'complaint-' . $residentComplaint->id)
+        $fileName = 'case-report-'
+            . $this->safeFileToken(
+                $code,
+                'case-' . $caseRecord->id
+            )
             . '-'
             . now()->format('Ymd-His')
             . '.pdf';
 
-        return Pdf::loadHTML($this->complaintPdfHtml($data))
+        return Pdf::loadHTML($this->casePdfHtml($data))
             ->setPaper('a4', 'portrait')
             ->download($fileName);
     }
+
+
+    public function downloadComplaintPdf(
+        Request $request,
+        ResidentComplaint $residentComplaint
+    ) {
+        Gate::authorize('viewReports');
+        Gate::authorize('view', $residentComplaint);
+
+        $data = $this->specificComplaintReportData(
+            $residentComplaint
+        );
+
+        $code = $data['complaintReport']['code']
+            ?? ('complaint-' . $residentComplaint->id);
+
+        $fileName = 'complaint-report-'
+            . $this->safeFileToken(
+                $code,
+                'complaint-' . $residentComplaint->id
+            )
+            . '-'
+            . now()->format('Ymd-His')
+            . '.pdf';
+
+        return Pdf::loadHTML(
+            $this->complaintPdfHtml($data)
+        )
+            ->setPaper('a4', 'portrait')
+            ->download($fileName);
+    }
+
 
     private function casePdfHtml(array $data): string
 {
@@ -1495,6 +1533,38 @@ class ReportController extends Controller
         }
 
         return round($size, 2) . ' ' . $units[$unitIndex];
+    }
+
+
+    private function safeFileToken(
+        mixed $value,
+        string $fallback
+    ): string {
+        $token = strtolower(trim((string) $value));
+
+        $token = preg_replace(
+            '/[^a-z0-9]+/',
+            '-',
+            $token
+        );
+
+        $token = trim((string) $token, '-');
+
+        if ($token === '') {
+            $token = strtolower(trim($fallback));
+            $token = preg_replace(
+                '/[^a-z0-9]+/',
+                '-',
+                $token
+            );
+            $token = trim((string) $token, '-');
+        }
+
+        return mb_substr(
+            $token !== '' ? $token : 'report',
+            0,
+            80
+        );
     }
 
     private function validPeriod(?string $period): string

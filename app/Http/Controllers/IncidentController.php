@@ -654,45 +654,83 @@ $this->storeIncidentEvidence($request, $incident);
         );
     }
 
-    public function quickStoreBarangay(Request $request): RedirectResponse
-    {
-        $user = $request->user();
-
-        if (! $user || ! in_array($user->role, ['admin', 'official', 'dao'], true)) {
-            abort(403, 'Only admin or official can add barangays.');
-        }
+    public function quickStoreBarangay(
+        Request $request
+    ): RedirectResponse {
+        Gate::authorize('manageBarangays');
 
         if (! Schema::hasTable('barangays')) {
-            return back()->with('error', 'Barangays table does not exist.');
+            return back()->with(
+                'error',
+                'Barangays table does not exist.'
+            );
         }
 
         $validated = $request->validate([
-            'barangay_name' => ['required', 'string', 'max:255'],
+            'barangay_name' => [
+                'required',
+                'string',
+                'max:255',
+                'not_regex:/^\s*$/',
+            ],
+        ], [
+            'barangay_name.not_regex' => 'Barangay name is required.',
         ]);
 
-        $barangayName = trim($validated['barangay_name']);
+        $barangayName = trim(
+            $validated['barangay_name']
+        );
+
         $columns = Schema::getColumnListing('barangays');
 
+        $nameColumn = in_array(
+            'barangay_name',
+            $columns,
+            true
+        )
+            ? 'barangay_name'
+            : (
+                in_array('name', $columns, true)
+                    ? 'name'
+                    : null
+            );
+
+        if (! $nameColumn) {
+            return back()->with(
+                'error',
+                'No barangay name column was found.'
+            );
+        }
+
         $exists = DB::table('barangays')
-            ->when(in_array('barangay_name', $columns, true), function ($query) use ($barangayName) {
-                $query->whereRaw('LOWER(barangay_name) = ?', [strtolower($barangayName)]);
-            })
-            ->when(! in_array('barangay_name', $columns, true) && in_array('name', $columns, true), function ($query) use ($barangayName) {
-                $query->whereRaw('LOWER(name) = ?', [strtolower($barangayName)]);
-            })
+            ->whereRaw(
+                "LOWER({$nameColumn}) = ?",
+                [mb_strtolower($barangayName)]
+            )
             ->exists();
 
         if ($exists) {
-            return back()->with('error', 'Barangay already exists.');
+            return back()->with(
+                'error',
+                'Barangay already exists.'
+            );
         }
 
-        $data = [];
+        $data = [
+            $nameColumn => $barangayName,
+        ];
 
-        if (in_array('barangay_name', $columns, true)) {
+        if (
+            $nameColumn !== 'barangay_name'
+            && in_array('barangay_name', $columns, true)
+        ) {
             $data['barangay_name'] = $barangayName;
         }
 
-        if (in_array('name', $columns, true)) {
+        if (
+            $nameColumn !== 'name'
+            && in_array('name', $columns, true)
+        ) {
             $data['name'] = $barangayName;
         }
 
@@ -704,37 +742,93 @@ $this->storeIncidentEvidence($request, $incident);
             $data['updated_at'] = now();
         }
 
-        DB::table('barangays')->insert($data);
+        DB::transaction(function () use (
+            $nameColumn,
+            $barangayName,
+            $data
+        ): void {
+            $duplicate = DB::table('barangays')
+                ->whereRaw(
+                    "LOWER({$nameColumn}) = ?",
+                    [mb_strtolower($barangayName)]
+                )
+                ->lockForUpdate()
+                ->exists();
 
-        return back()->with('success', 'Barangay added successfully.');
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'barangay_name' => 'Barangay already exists.',
+                ]);
+            }
+
+            DB::table('barangays')->insert($data);
+        });
+
+        return back()->with(
+            'success',
+            'Barangay added successfully.'
+        );
     }
 
-    public function quickDeleteBarangay(Request $request, int $barangayId): RedirectResponse
-    {
-        $user = $request->user();
 
-        if (! $user || ! in_array($user->role, ['admin', 'official', 'dao'], true)) {
-            abort(403, 'Only admin or official can remove barangays.');
-        }
+    public function quickDeleteBarangay(
+        Request $request,
+        int $barangayId
+    ): RedirectResponse {
+        Gate::authorize('manageBarangays');
 
         if (! Schema::hasTable('barangays')) {
-            return back()->with('error', 'Barangays table does not exist.');
+            return back()->with(
+                'error',
+                'Barangays table does not exist.'
+            );
         }
 
-        if (
-            Schema::hasTable('incidents')
-            && Schema::hasColumn('incidents', 'barangay_id')
-            && DB::table('incidents')->where('barangay_id', $barangayId)->exists()
-        ) {
-            return back()->with('error', 'This barangay cannot be removed because incidents are already linked to it.');
-        }
-
-        DB::table('barangays')
+        $barangayExists = DB::table('barangays')
             ->where('id', $barangayId)
-            ->delete();
+            ->exists();
 
-        return back()->with('success', 'Barangay removed successfully.');
+        if (! $barangayExists) {
+            return back()->with(
+                'error',
+                'Barangay record was not found.'
+            );
+        }
+
+        if ($this->barangayIsReferenced($barangayId)) {
+            return back()->with(
+                'error',
+                'This barangay cannot be removed because system records are already linked to it.'
+            );
+        }
+
+        DB::transaction(function () use ($barangayId): void {
+            $barangay = DB::table('barangays')
+                ->where('id', $barangayId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $barangay) {
+                return;
+            }
+
+            if ($this->barangayIsReferenced($barangayId)) {
+                throw ValidationException::withMessages([
+                    'barangay' => 'This barangay is already linked to system records and cannot be removed.',
+                ]);
+            }
+
+            DB::table('barangays')
+                ->where('id', $barangayId)
+                ->delete();
+        });
+
+        return back()->with(
+            'success',
+            'Barangay removed successfully.'
+        );
     }
+
 
     public function showEvidenceFile(Request $request, int $evidenceId)
     {
@@ -1438,6 +1532,33 @@ $this->storeIncidentEvidence($request, $incident);
             ->unique()
             ->values()
             ->all();
+    }
+
+
+    private function barangayIsReferenced(
+        int $barangayId
+    ): bool {
+        $references = [
+            ['incidents', 'barangay_id'],
+            ['users', 'barangay_id'],
+            ['employees', 'barangay_id'],
+            ['residents', 'barangay_id'],
+            ['incident_locations', 'barangay_id'],
+        ];
+
+        foreach ($references as [$table, $column]) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn($table, $column)
+                && DB::table($table)
+                    ->where($column, $barangayId)
+                    ->exists()
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function incidentNotificationType(Incident $incident): string
