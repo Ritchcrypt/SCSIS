@@ -8,6 +8,7 @@ use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -17,217 +18,309 @@ use Illuminate\View\View;
 class ResidentComplaintController extends Controller
 {
     public function index(Request $request): View
-    {
-        $user = $request->user();
-        $role = strtolower((string) $user->role);
+{
+    Gate::authorize('viewAny', ResidentComplaint::class);
 
-        $complaints = ResidentComplaint::query()
-            ->with('resident')
-            ->when($role === 'resident', function ($query) use ($user) {
-                $query->where('resident_id', $user->id);
-            })
-            ->latest('submitted_at')
-            ->latest()
-            ->paginate(10)
-            ->withQueryString();
+    $user = $request->user();
+    $role = strtolower(trim((string) $user->role));
 
-        return view('resident-complaints.index', [
-            'complaints' => $complaints,
-            'canCreateComplaint' => $role === 'resident',
-            'canManageComplaints' => in_array($role, ['admin', 'official', 'dao'], true),
-        ]);
-    }
+    $complaints = ResidentComplaint::query()
+        ->with('resident')
+        ->when($user->isResident(), function ($query) use ($user) {
+            /*
+            |--------------------------------------------------------------------------
+            | Resident record isolation
+            |--------------------------------------------------------------------------
+            |
+            | Residents receive only their own complaint records from the
+            | database query. Other complaints are never loaded into memory.
+            |
+            */
+
+            $query->where('resident_id', $user->id);
+        })
+        ->latest('submitted_at')
+        ->latest()
+        ->paginate(10)
+        ->withQueryString();
+
+    return view('resident-complaints.index', [
+        'complaints' => $complaints,
+        'canCreateComplaint' => Gate::allows(
+            'create',
+            ResidentComplaint::class
+        ),
+        'canManageComplaints' => $user->isAdmin()
+            || $user->isOfficial(),
+    ]);
+}
 
     public function create(Request $request): View
-    {
-        $user = $request->user();
+{
+    Gate::authorize('create', ResidentComplaint::class);
 
-        abort_unless(strtolower((string) $user->role) === 'resident', 403);
-
-        return view('resident-complaints.create', [
-            'user' => $user,
-        ]);
-    }
+    return view('resident-complaints.create', [
+        'user' => $request->user(),
+    ]);
+}
 
     public function store(Request $request): RedirectResponse
-    {
-        $user = $request->user();
+{
+    Gate::authorize('create', ResidentComplaint::class);
 
-        abort_unless(strtolower((string) $user->role) === 'resident', 403);
+    $user = $request->user();
 
-        $validated = $request->validate([
-            'complainant_name' => ['required', 'string', 'max:255'],
-            'contact_number' => ['nullable', 'string', 'max:30'],
-            'complaint_address' => ['required', 'string', 'max:500'],
-            'complaint_description' => ['required', 'string', 'max:3000'],
-            'evidence' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:51200'],
-        ], [
-            'complainant_name.required' => 'Please enter the complainant full name.',
-            'complaint_address.required' => 'Please enter the address of the complaint.',
-            'complaint_description.required' => 'Please describe the complaint.',
-            'evidence.image' => 'The evidence attachment must be an image.',
-            'evidence.mimes' => 'The evidence picture must be JPG, JPEG, PNG, or WEBP.',
-            'evidence.max' => 'The evidence picture must not exceed 50MB.',
-        ]);
+    $validated = $request->validate([
+        'complainant_name' => [
+            'required',
+            'string',
+            'max:255',
+        ],
+        'contact_number' => [
+            'nullable',
+            'string',
+            'max:30',
+        ],
+        'complaint_address' => [
+            'required',
+            'string',
+            'max:500',
+        ],
+        'complaint_description' => [
+            'required',
+            'string',
+            'max:3000',
+        ],
+        'evidence' => [
+            'nullable',
+            'image',
+            'mimes:jpg,jpeg,png,webp',
+            'max:51200',
+        ],
+    ], [
+        'complainant_name.required' =>
+            'Please enter the complainant full name.',
 
-        $evidencePath = null;
+        'complaint_address.required' =>
+            'Please enter the address of the complaint.',
 
-        if ($request->hasFile('evidence')) {
-            $evidencePath = $request->file('evidence')->store('resident-complaints', 'public');
-        }
+        'complaint_description.required' =>
+            'Please describe the complaint.',
 
-        $complaint = ResidentComplaint::create([
-            'resident_id' => $user->id,
-            'complainant_name' => $validated['complainant_name'],
-            'contact_number' => $validated['contact_number'] ?? null,
-            'complaint_description' => $validated['complaint_description'],
-            'complaint_address' => $validated['complaint_address'],
-            'evidence_path' => $evidencePath,
-            'status' => 'submitted',
-            'submitted_at' => now(),
-        ]);
+        'evidence.image' =>
+            'The evidence attachment must be an image.',
 
-        $this->notifyAdminsAndOfficials($complaint);
+        'evidence.mimes' =>
+            'The evidence picture must be JPG, JPEG, PNG, or WEBP.',
 
-        return redirect()
-            ->to($this->complaintIndexUrl($user))
-            ->with('success', 'Complaint submitted successfully.');
+        'evidence.max' =>
+            'The evidence picture must not exceed 50MB.',
+    ]);
+
+    $evidencePath = null;
+
+    if ($request->hasFile('evidence')) {
+        $evidencePath = $request
+            ->file('evidence')
+            ->store('resident-complaints', 'public');
     }
 
-    public function show(Request $request, ResidentComplaint $residentComplaint): View
-    {
-        $user = $request->user();
-        $role = strtolower((string) $user->role);
+    $complaint = ResidentComplaint::create([
+        /*
+        |--------------------------------------------------------------------------
+        | Server-controlled ownership
+        |--------------------------------------------------------------------------
+        |
+        | Ownership comes from the authenticated account. The request cannot
+        | select or overwrite resident_id.
+        |
+        */
 
-        if ($role === 'resident' && (int) $residentComplaint->resident_id !== (int) $user->id) {
-            abort(403);
-        }
+        'resident_id' => $user->id,
+        'complainant_name' => $validated['complainant_name'],
+        'contact_number' => $validated['contact_number'] ?? null,
+        'complaint_description' => $validated['complaint_description'],
+        'complaint_address' => $validated['complaint_address'],
+        'evidence_path' => $evidencePath,
+        'status' => 'submitted',
+        'submitted_at' => now(),
+    ]);
 
-        return view('resident-complaints.show', [
-            'complaint' => $residentComplaint->load('resident'),
-            'canManageComplaints' => in_array($role, ['admin', 'official', 'dao'], true),
-            'statuses' => $this->statuses(),
-            'proofs' => $this->complaintProofs($residentComplaint),
-        ]);
+    $this->notifyAdminsAndOfficials($complaint);
+
+    return redirect()
+        ->to($this->complaintIndexUrl($user))
+        ->with('success', 'Complaint submitted successfully.');
+}
+
+    public function show(
+    Request $request,
+    ResidentComplaint $residentComplaint
+): View {
+    Gate::authorize('view', $residentComplaint);
+
+    return view('resident-complaints.show', [
+        'complaint' => $residentComplaint->load('resident'),
+        'canManageComplaints' => Gate::allows(
+            'update',
+            $residentComplaint
+        ),
+        'statuses' => $this->statuses(),
+        'proofs' => $this->complaintProofs($residentComplaint),
+    ]);
+}
+
+    public function updateStatus(
+    Request $request,
+    ResidentComplaint $residentComplaint
+): RedirectResponse {
+    Gate::authorize('update', $residentComplaint);
+
+    $validated = $request->validate([
+        'status' => [
+            'required',
+            Rule::in(array_keys($this->statuses())),
+        ],
+    ]);
+
+    $residentComplaint->update([
+        'status' => $validated['status'],
+    ]);
+
+    $this->notifyResidentStatusUpdated($residentComplaint);
+
+    return back()->with(
+        'success',
+        'Complaint status updated successfully.'
+    );
+}
+
+    public function storeProof(
+    Request $request,
+    ResidentComplaint $residentComplaint
+): RedirectResponse {
+    Gate::authorize('update', $residentComplaint);
+
+    $user = $request->user();
+
+    if (! Schema::hasTable('resident_complaint_proofs')) {
+        return back()->with(
+            'error',
+            'Complaint proof table is missing. Please run the migration first.'
+        );
     }
 
-    public function updateStatus(Request $request, ResidentComplaint $residentComplaint): RedirectResponse
-    {
-        $user = $request->user();
-        $role = strtolower((string) $user->role);
+    $validated = $request->validate([
+        'proof_picture' => [
+            'required',
+            'image',
+            'mimes:jpg,jpeg,png,webp',
+            'max:51200',
+        ],
+        'proof_note' => [
+            'nullable',
+            'string',
+            'max:1000',
+        ],
+    ], [
+        'proof_picture.required' =>
+            'Please attach a proof picture.',
 
-        abort_unless(in_array($role, ['admin', 'official', 'dao'], true), 403);
+        'proof_picture.image' =>
+            'The proof must be an image.',
 
-        $validated = $request->validate([
-            'status' => ['required', Rule::in(array_keys($this->statuses()))],
-        ]);
+        'proof_picture.mimes' =>
+            'The proof picture must be JPG, JPEG, PNG, or WEBP.',
 
-        $residentComplaint->update([
-            'status' => $validated['status'],
-        ]);
+        'proof_picture.max' =>
+            'The proof picture must not exceed 50MB.',
+    ]);
 
-        $this->notifyResidentStatusUpdated($residentComplaint);
+    $proofPath = $request
+        ->file('proof_picture')
+        ->store('resident-complaints/proofs', 'public');
 
-        return back()->with('success', 'Complaint status updated successfully.');
-    }
+    DB::table('resident_complaint_proofs')->insert([
+        'resident_complaint_id' => $residentComplaint->id,
+        'uploaded_by' => $user->id,
+        'proof_path' => $proofPath,
+        'proof_note' => $validated['proof_note'] ?? null,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 
-    public function storeProof(Request $request, ResidentComplaint $residentComplaint): RedirectResponse
-    {
-        $user = $request->user();
-        $role = strtolower((string) $user?->role);
+    $this->notifyResidentProofUploaded($residentComplaint);
 
-        abort_unless(in_array($role, ['admin', 'official', 'dao'], true), 403);
-
-        if (! Schema::hasTable('resident_complaint_proofs')) {
-            return back()->with('error', 'Complaint proof table is missing. Please run the migration first.');
-        }
-
-        $validated = $request->validate([
-            'proof_picture' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:51200'],
-            'proof_note' => ['nullable', 'string', 'max:1000'],
-        ], [
-            'proof_picture.required' => 'Please attach a proof picture.',
-            'proof_picture.image' => 'The proof must be an image.',
-            'proof_picture.mimes' => 'The proof picture must be JPG, JPEG, PNG, or WEBP.',
-            'proof_picture.max' => 'The proof picture must not exceed 50MB.',
-        ]);
-
-        $proofPath = $request->file('proof_picture')->store('resident-complaints/proofs', 'public');
-
-        DB::table('resident_complaint_proofs')->insert([
-            'resident_complaint_id' => $residentComplaint->id,
-            'uploaded_by' => $user->id,
-            'proof_path' => $proofPath,
-            'proof_note' => $validated['proof_note'] ?? null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $this->notifyResidentProofUploaded($residentComplaint);
-
-        return back()->with('success', 'Proof picture sent to resident successfully.');
-    }
+    return back()->with(
+        'success',
+        'Proof picture sent to resident successfully.'
+    );
+}
 
     public function proofFile(Request $request, int $proof)
-    {
-        if (! Schema::hasTable('resident_complaint_proofs')) {
-            abort(404, 'Complaint proof table not found.');
-        }
-
-        $proofRecord = DB::table('resident_complaint_proofs')
-            ->where('id', $proof)
-            ->first();
-
-        if (! $proofRecord) {
-            abort(404, 'Proof picture not found.');
-        }
-
-        $complaint = ResidentComplaint::query()
-            ->where('id', $proofRecord->resident_complaint_id)
-            ->first();
-
-        if (! $complaint) {
-            abort(404, 'Related complaint not found.');
-        }
-
-        $user = $request->user();
-        $role = strtolower((string) $user?->role);
-
-        $canView = in_array($role, ['admin', 'official', 'dao'], true);
-
-        if ($role === 'resident') {
-            $canView = (int) $complaint->resident_id === (int) $user->id;
-        }
-
-        if (! $canView) {
-            abort(403, 'Unauthorized access.');
-        }
-
-        return $this->servePublicStorageFile((string) $proofRecord->proof_path, 'Proof picture file is missing.');
+{
+    if (! Schema::hasTable('resident_complaint_proofs')) {
+        abort(404, 'Complaint proof table not found.');
     }
 
-    public function destroy(Request $request, ResidentComplaint $residentComplaint): RedirectResponse
-    {
-        $user = $request->user();
-        $role = strtolower((string) $user->role);
+    $proofRecord = DB::table('resident_complaint_proofs')
+        ->where('id', $proof)
+        ->first();
 
-        abort_unless(in_array($role, ['admin', 'official', 'dao'], true), 403);
-
-        DB::transaction(function () use ($residentComplaint): void {
-            $this->deleteComplaintNotifications($residentComplaint);
-            $this->deleteComplaintProofs($residentComplaint);
-
-            if ($residentComplaint->evidence_path) {
-                Storage::disk('public')->delete($residentComplaint->evidence_path);
-            }
-
-            $residentComplaint->delete();
-        });
-
-        return redirect()
-            ->to($this->complaintIndexUrl($user))
-            ->with('success', 'Complaint deleted successfully.');
+    if (! $proofRecord) {
+        abort(404, 'Proof picture not found.');
     }
+
+    $complaint = ResidentComplaint::query()
+        ->find((int) $proofRecord->resident_complaint_id);
+
+    if (! $complaint) {
+        abort(404, 'Related complaint not found.');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Proof ownership authorization
+    |--------------------------------------------------------------------------
+    |
+    | The proof route is shared by authenticated roles, so the related
+    | complaint must be authorized before its file path is accessed.
+    |
+    */
+
+    Gate::authorize('view', $complaint);
+
+    return $this->servePublicStorageFile(
+        (string) $proofRecord->proof_path,
+        'Proof picture file is missing.'
+    );
+}
+
+    public function destroy(
+    Request $request,
+    ResidentComplaint $residentComplaint
+): RedirectResponse {
+    Gate::authorize('delete', $residentComplaint);
+
+    $user = $request->user();
+
+    DB::transaction(function () use ($residentComplaint): void {
+        $this->deleteComplaintNotifications($residentComplaint);
+        $this->deleteComplaintProofs($residentComplaint);
+
+        if ($residentComplaint->evidence_path) {
+            Storage::disk('public')->delete(
+                $residentComplaint->evidence_path
+            );
+        }
+
+        $residentComplaint->delete();
+    });
+
+    return redirect()
+        ->to($this->complaintIndexUrl($user))
+        ->with('success', 'Complaint deleted successfully.');
+}
 
     private function notifyAdminsAndOfficials(ResidentComplaint $complaint): void
     {
@@ -392,27 +485,26 @@ class ResidentComplaintController extends Controller
         ];
     }
 
-    public function evidence(Request $request, ResidentComplaint $residentComplaint)
-    {
-        $user = $request->user();
-        $role = strtolower((string) $user->role);
+    public function evidence(
+    Request $request,
+    ResidentComplaint $residentComplaint
+) {
+    Gate::authorize('view', $residentComplaint);
 
-        if ($role === 'resident' && (int) $residentComplaint->resident_id !== (int) $user->id) {
-            abort(403);
-        }
+    $path = $residentComplaint->evidence_path;
 
-        if (! in_array($role, ['admin', 'official', 'dao', 'resident'], true)) {
-            abort(403);
-        }
-
-        $path = $residentComplaint->evidence_path;
-
-        if (! $path || str_starts_with((string) $path, 'http')) {
-            abort(404, 'Evidence file not found.');
-        }
-
-        return $this->servePublicStorageFile((string) $path, 'Evidence file not found.');
+    if (
+        ! $path
+        || str_starts_with((string) $path, 'http')
+    ) {
+        abort(404, 'Evidence file not found.');
     }
+
+    return $this->servePublicStorageFile(
+        (string) $path,
+        'Evidence file not found.'
+    );
+}
 
     private function servePublicStorageFile(string $path, string $missingMessage)
     {

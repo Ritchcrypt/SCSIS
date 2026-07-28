@@ -4,7 +4,7 @@ namespace Tests\Feature\Settings;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class ProfileUpdateTest extends TestCase
@@ -13,77 +13,160 @@ class ProfileUpdateTest extends TestCase
 
     public function test_profile_page_is_displayed(): void
     {
-        $this->actingAs($user = User::factory()->create());
+        $user = $this->activeResident();
 
-        $this->get('/settings/profile')->assertOk();
+        $response = $this
+            ->actingAs($user)
+            ->get(route('profile.edit'));
+
+        $response->assertOk();
     }
 
     public function test_profile_information_can_be_updated(): void
     {
-        $user = User::factory()->create();
+        $user = $this->activeResident();
 
-        $this->actingAs($user);
+        $response = $this
+            ->actingAs($user)
+            ->from(route('profile.edit'))
+            ->patch(route('profile.update'), [
+                'name' => 'Updated Resident',
+                'email' => 'updated.resident@example.com',
+                'contact_number' => '09987654321',
+                'address' => 'Updated Address, Dao, Capiz',
+            ]);
 
-        $response = Volt::test('settings.profile')
-            ->set('name', 'Test User')
-            ->set('email', 'test@example.com')
-            ->call('updateProfileInformation');
-
-        $response->assertHasNoErrors();
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
 
         $user->refresh();
 
-        $this->assertEquals('Test User', $user->name);
-        $this->assertEquals('test@example.com', $user->email);
-        $this->assertNull($user->email_verified_at);
+        $this->assertSame(
+            'Updated Resident',
+            $user->name
+        );
+
+        $this->assertSame(
+            'updated.resident@example.com',
+            $user->email
+        );
+
+        $this->assertSame(
+            '09987654321',
+            $user->contact_number
+        );
+
+        $this->assertSame(
+            'Updated Address, Dao, Capiz',
+            $user->address
+        );
     }
 
     public function test_email_verification_status_is_unchanged_when_email_address_is_unchanged(): void
     {
-        $user = User::factory()->create();
+        $verifiedAt = now()->subDay()->startOfSecond();
 
-        $this->actingAs($user);
+        /** @var User $user */
+        $user = User::factory()->create([
+            'name' => 'Verified Resident',
+            'email' => 'verified.resident@example.com',
+            'email_verified_at' => $verifiedAt,
+            'role' => 'resident',
+            'is_active' => true,
+            'status' => true,
+            'contact_number' => '09123456789',
+            'address' => 'Dao, Capiz',
+        ]);
 
-        $response = Volt::test('settings.profile')
-            ->set('name', 'Test User')
-            ->set('email', $user->email)
-            ->call('updateProfileInformation');
+        $response = $this
+            ->actingAs($user)
+            ->from(route('profile.edit'))
+            ->patch(route('profile.update'), [
+                'name' => 'Updated Verified Resident',
+                'email' => $user->email,
+                'contact_number' => $user->contact_number,
+                'address' => $user->address,
+            ]);
 
-        $response->assertHasNoErrors();
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
 
-        $this->assertNotNull($user->refresh()->email_verified_at);
+        $user->refresh();
+
+        $this->assertNotNull($user->email_verified_at);
+
+        $this->assertSame(
+            $verifiedAt->toDateTimeString(),
+            $user->email_verified_at->toDateTimeString()
+        );
     }
 
     public function test_user_can_delete_their_account(): void
     {
-        $user = User::factory()->create();
+        $password = 'DeleteTabang#2026';
 
-        $this->actingAs($user);
+        /** @var User $user */
+        $user = User::factory()->create([
+            'role' => 'resident',
+            'is_active' => true,
+            'status' => true,
+            'password' => Hash::make($password),
+        ]);
 
-        $response = Volt::test('settings.delete-user-form')
-            ->set('password', 'password')
-            ->call('deleteUser');
+        $response = $this
+            ->actingAs($user)
+            ->delete(route('profile.self-delete'), [
+                'password' => $password,
+            ]);
 
-        $response
-            ->assertHasNoErrors()
-            ->assertRedirect('/');
+        $response->assertRedirect();
 
-        $this->assertNull($user->fresh());
-        $this->assertFalse(auth()->check());
+        $this->assertGuest();
+
+        $this->assertDatabaseMissing('users', [
+            'id' => $user->id,
+        ]);
     }
 
     public function test_correct_password_must_be_provided_to_delete_account(): void
     {
-        $user = User::factory()->create();
+        $password = 'DeleteTabang#2026';
 
-        $this->actingAs($user);
+        /** @var User $user */
+        $user = User::factory()->create([
+            'role' => 'resident',
+            'is_active' => true,
+            'status' => true,
+            'password' => Hash::make($password),
+        ]);
 
-        $response = Volt::test('settings.delete-user-form')
-            ->set('password', 'wrong-password')
-            ->call('deleteUser');
+        $response = $this
+            ->actingAs($user)
+            ->from(route('profile.edit'))
+            ->delete(route('profile.self-delete'), [
+                'password' => 'IncorrectPassword#2026',
+            ]);
 
-        $response->assertHasErrors(['password']);
+        $response->assertRedirect();
 
-        $this->assertNotNull($user->fresh());
+        $this->assertAuthenticatedAs($user);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+        ]);
+    }
+
+    private function activeResident(): User
+    {
+        /** @var User $user */
+        $user = User::factory()->create([
+            'role' => 'resident',
+            'is_active' => true,
+            'status' => true,
+            'contact_number' => '09123456789',
+            'address' => 'Dao, Capiz',
+        ]);
+
+        return $user;
     }
 }

@@ -6,16 +6,17 @@ use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password as PasswordBroker;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rules\Password as PasswordRule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class UserManagementController extends Controller
 {
@@ -24,18 +25,18 @@ class UserManagementController extends Controller
 
     public function index(Request $request): View
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('viewAny', User::class);
 
         $perPage = (int) $request->query('per_page', 10);
 
-if (! in_array($perPage, [10, 25, 50, 100], true)) {
-    $perPage = 10;
-}
+        if (! in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 10;
+        }
 
-$users = $this->filteredUsersQuery($request)
-    ->orderByDesc('created_at')
-    ->paginate($perPage)
-    ->withQueryString();
+        $users = $this->filteredUsersQuery($request)
+            ->orderByDesc('created_at')
+            ->paginate($perPage)
+            ->withQueryString();
 
         return view('admin.users.index', [
             'users' => $users,
@@ -51,7 +52,7 @@ $users = $this->filteredUsersQuery($request)
 
     public function create(Request $request): View
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('create', User::class);
 
         return view('admin.users.form', [
             'userRecord' => null,
@@ -63,44 +64,53 @@ $users = $this->filteredUsersQuery($request)
 
     public function store(Request $request): RedirectResponse
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('create', User::class);
 
         $validated = $this->validateUser($request);
         $profilePhotoPath = $this->storeProfilePhoto($request);
 
-        DB::transaction(function () use ($validated, $profilePhotoPath) {
-            $user = new User();
+        try {
+            DB::transaction(function () use ($validated, $profilePhotoPath): void {
+                $user = new User();
 
-            $user->name = $validated['name'];
-            $user->email = $validated['email'];
-            $user->password = Hash::make($validated['password']);
-            $user->role = $validated['role'];
+                $user->name = $validated['name'];
+                $user->email = strtolower(trim($validated['email']));
+                $user->password = Hash::make($validated['password']);
+                $user->role = strtolower(trim($validated['role']));
 
-            if (Schema::hasColumn('users', 'profile_photo_path')) {
-                $user->profile_photo_path = $profilePhotoPath;
-            }
+                if (Schema::hasColumn('users', 'profile_photo_path')) {
+                    $user->profile_photo_path = $profilePhotoPath;
+                }
 
-            $user->contact_number = $this->normalizeContactNumber(
-                $validated['contact_number'] ?? null
-            );
+                if (Schema::hasColumn('users', 'contact_number')) {
+                    $user->contact_number = $this->normalizeContactNumber(
+                        $validated['contact_number'] ?? null
+                    );
+                }
 
-            if (Schema::hasColumn('users', 'barangay_id')) {
-                $user->barangay_id = $validated['barangay_id'] ?? null;
-            }
+                if (Schema::hasColumn('users', 'barangay_id')) {
+                    $user->barangay_id = $validated['barangay_id'] ?? null;
+                }
 
-            if (Schema::hasColumn('users', 'address')) {
-                $user->address = $validated['address'] ?? null;
-            }
+                if (Schema::hasColumn('users', 'address')) {
+                    $user->address = $validated['address'] ?? null;
+                }
 
-            if (Schema::hasColumn('users', 'is_active')) {
-                $user->is_active = (bool) ($validated['is_active'] ?? true);
-            }
+                $this->setUserActiveState(
+                    $user,
+                    (bool) ($validated['is_active'] ?? true)
+                );
 
-            $user->save();
-            $user->refresh();
+                $user->save();
+                $user->refresh();
 
-            $this->syncEmployeeProfile($user);
-        });
+                $this->syncEmployeeProfile($user);
+            });
+        } catch (\Throwable $exception) {
+            $this->deletePublicFile($profilePhotoPath);
+
+            throw $exception;
+        }
 
         return redirect()
             ->route('admin.users.index')
@@ -109,7 +119,8 @@ $users = $this->filteredUsersQuery($request)
 
     public function show(Request $request, User $user): View
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('view', $user);
+        $this->ensureNotDeletedPlaceholder($user);
 
         $user->refresh();
 
@@ -126,28 +137,45 @@ $users = $this->filteredUsersQuery($request)
 
     public function profilePhoto(Request $request, User $user)
     {
-        $authUser = $request->user();
+        Gate::authorize('viewProfilePhoto', $user);
+        $this->ensureNotDeletedPlaceholder($user);
 
-        if (! $authUser) {
-            abort(403, 'Unauthorized access.');
+        $profilePhotoPath = $this->normalizeProfilePhotoPath(
+            $user->profile_photo_path ?? null
+        );
+
+        if (
+            ! $profilePhotoPath
+            || ! Storage::disk('public')->exists($profilePhotoPath)
+        ) {
+            abort(404, 'Profile photo not found.');
         }
 
-        if ((int) $authUser->id !== (int) $user->id && $authUser->role !== 'admin') {
-            abort(403, 'Unauthorized access.');
+        $absolutePath = Storage::disk('public')->path($profilePhotoPath);
+
+        if (! is_file($absolutePath)) {
+            abort(404, 'Profile photo not found.');
         }
 
-        $profilePhotoPath = $this->normalizeProfilePhotoPath($user->profile_photo_path ?? null);
+        $mimeType = @mime_content_type($absolutePath) ?: 'application/octet-stream';
+        $fileName = preg_replace(
+            '/[^A-Za-z0-9._-]/',
+            '_',
+            basename($profilePhotoPath)
+        );
 
-        if (! $profilePhotoPath || ! Storage::disk('public')->exists($profilePhotoPath)) {
-            abort(404);
-        }
-
-        return response()->file(Storage::disk('public')->path($profilePhotoPath));
+        return response()->file($absolutePath, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+            'Cache-Control' => 'private, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function edit(Request $request, User $user): View
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('update', $user);
+        $this->ensureNotDeletedPlaceholder($user);
 
         $user->refresh();
 
@@ -161,49 +189,131 @@ $users = $this->filteredUsersQuery($request)
 
     public function update(Request $request, User $user): RedirectResponse
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('update', $user);
+        $this->ensureNotDeletedPlaceholder($user);
 
         $validated = $this->validateUser($request, $user);
-        $oldProfilePhotoPath = $user->profile_photo_path ?? null;
+        $newRole = strtolower(trim($validated['role']));
+        $newActive = (bool) $validated['is_active'];
+
+        /*
+        |--------------------------------------------------------------------------
+        | Fast validation before storing a replacement profile photo
+        |--------------------------------------------------------------------------
+        */
+        $this->assertSafeAdministratorStateChange(
+            $request->user(),
+            $user,
+            $newRole,
+            $newActive,
+            false
+        );
+
+        $oldProfilePhotoPath = $this->normalizeProfilePhotoPath(
+            $user->profile_photo_path ?? null
+        );
         $newProfilePhotoPath = $this->storeProfilePhoto($request);
 
-        DB::transaction(function () use ($validated, $user, $newProfilePhotoPath) {
-            $user->name = $validated['name'];
-            $user->email = $validated['email'];
-            $user->role = $validated['role'];
+        try {
+            DB::transaction(function () use (
+                $request,
+                $user,
+                $validated,
+                $newRole,
+                $newActive,
+                $newProfilePhotoPath
+            ): void {
+                $lockedUser = User::query()
+                    ->whereKey($user->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-            if ($newProfilePhotoPath && Schema::hasColumn('users', 'profile_photo_path')) {
-                $user->profile_photo_path = $newProfilePhotoPath;
-            }
+                $this->ensureNotDeletedPlaceholder($lockedUser);
 
-            $user->contact_number = $this->normalizeContactNumber(
-                $validated['contact_number'] ?? null
-            );
+                /*
+                |------------------------------------------------------------------
+                | Race-safe administrator protection
+                |------------------------------------------------------------------
+                */
+                $this->assertSafeAdministratorStateChange(
+                    $request->user(),
+                    $lockedUser,
+                    $newRole,
+                    $newActive,
+                    true
+                );
 
-            if (Schema::hasColumn('users', 'barangay_id')) {
-                $user->barangay_id = $validated['barangay_id'] ?? null;
-            }
+                $oldRole = strtolower(trim((string) $lockedUser->role));
+                $oldActive = $this->isUserActive($lockedUser);
+                $oldEmail = (string) $lockedUser->email;
+                $passwordChanged = array_key_exists('password', $validated);
 
-            if (Schema::hasColumn('users', 'address')) {
-                $user->address = $validated['address'] ?? null;
-            }
+                $lockedUser->name = $validated['name'];
+                $lockedUser->email = strtolower(trim($validated['email']));
+                $lockedUser->role = $newRole;
 
-            if (Schema::hasColumn('users', 'is_active')) {
-                $user->is_active = (bool) ($validated['is_active'] ?? true);
-            }
+                if ($passwordChanged) {
+                    $lockedUser->password = Hash::make($validated['password']);
+                    $lockedUser->remember_token = null;
+                }
 
-            $user->save();
-            $user->refresh();
+                if (
+                    $newProfilePhotoPath
+                    && Schema::hasColumn('users', 'profile_photo_path')
+                ) {
+                    $lockedUser->profile_photo_path = $newProfilePhotoPath;
+                }
 
-            $this->syncEmployeeProfile($user);
-        });
+                if (Schema::hasColumn('users', 'contact_number')) {
+                    $lockedUser->contact_number = $this->normalizeContactNumber(
+                        $validated['contact_number'] ?? null
+                    );
+                }
+
+                if (Schema::hasColumn('users', 'barangay_id')) {
+                    $lockedUser->barangay_id = $validated['barangay_id'] ?? null;
+                }
+
+                if (Schema::hasColumn('users', 'address')) {
+                    $lockedUser->address = $validated['address'] ?? null;
+                }
+
+                $this->setUserActiveState($lockedUser, $newActive);
+
+                if (! $newActive && Schema::hasColumn('users', 'last_seen_at')) {
+                    $lockedUser->last_seen_at = null;
+                }
+
+                if (! $newActive) {
+                    $lockedUser->remember_token = null;
+                }
+
+                $lockedUser->save();
+                $lockedUser->refresh();
+
+                $this->syncEmployeeProfile($lockedUser);
+
+                $roleChanged = $oldRole !== $newRole;
+                $activeStateChanged = $oldActive !== $newActive;
+                $emailChanged = strcasecmp($oldEmail, (string) $lockedUser->email) !== 0;
+
+                if ($roleChanged || $activeStateChanged || $passwordChanged) {
+                    $this->revokeUserAuthentication(
+                        (int) $lockedUser->id,
+                        $oldEmail
+                    );
+                } elseif ($emailChanged) {
+                    $this->deletePasswordResetTokens($oldEmail);
+                }
+            });
+        } catch (\Throwable $exception) {
+            $this->deletePublicFile($newProfilePhotoPath);
+
+            throw $exception;
+        }
 
         if ($newProfilePhotoPath && $oldProfilePhotoPath) {
-            $oldProfilePhotoPath = $this->normalizeProfilePhotoPath($oldProfilePhotoPath);
-
-            if ($oldProfilePhotoPath && Storage::disk('public')->exists($oldProfilePhotoPath)) {
-                Storage::disk('public')->delete($oldProfilePhotoPath);
-            }
+            $this->deletePublicFile($oldProfilePhotoPath);
         }
 
         return redirect()
@@ -212,184 +322,157 @@ $users = $this->filteredUsersQuery($request)
     }
 
     public function activate(Request $request, User $user): RedirectResponse
-{
-    $this->authorizeAdmin($request);
+    {
+        Gate::authorize('activate', $user);
+        $this->ensureNotDeletedPlaceholder($user);
 
-    $statusChanges = [];
+        DB::transaction(function () use ($user): void {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-    if (Schema::hasColumn('users', 'is_active')) {
-        $statusChanges['is_active'] = true;
+            $this->setUserActiveState($lockedUser, true);
+            $lockedUser->save();
+            $lockedUser->refresh();
+
+            $this->syncEmployeeProfile($lockedUser);
+        });
+
+        return back()->with('success', 'User account activated successfully.');
     }
-
-    if (Schema::hasColumn('users', 'status')) {
-        $statusChanges['status'] = true;
-    }
-
-    if (! empty($statusChanges)) {
-        $user->forceFill($statusChanges)->save();
-    }
-
-    return back()->with(
-        'success',
-        "{$user->name}'s account was activated successfully."
-    );
-}
 
     public function deactivate(Request $request, User $user): RedirectResponse
-{
-    $this->authorizeAdmin($request);
+    {
+        Gate::authorize('deactivate', $user);
+        $this->ensureNotDeletedPlaceholder($user);
 
-    if ((int) $request->user()->id === (int) $user->id) {
+        DB::transaction(function () use ($request, $user): void {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertSafeAdministratorStateChange(
+                $request->user(),
+                $lockedUser,
+                strtolower(trim((string) $lockedUser->role)),
+                false,
+                true
+            );
+
+            $this->setUserActiveState($lockedUser, false);
+            $lockedUser->remember_token = null;
+
+            if (Schema::hasColumn('users', 'last_seen_at')) {
+                $lockedUser->last_seen_at = null;
+            }
+
+            $lockedUser->save();
+            $lockedUser->refresh();
+
+            $this->syncEmployeeProfile($lockedUser);
+            $this->revokeUserAuthentication(
+                (int) $lockedUser->id,
+                (string) $lockedUser->email
+            );
+        });
+
+        return back()->with('success', 'User account deactivated successfully.');
+    }
+
+    public function resetPassword(Request $request, User $user): RedirectResponse
+    {
+        Gate::authorize('resetPassword', $user);
+        $this->ensureNotDeletedPlaceholder($user);
+
+        $status = PasswordBroker::sendResetLink([
+            'email' => $user->email,
+        ]);
+
+        if ($status === PasswordBroker::RESET_LINK_SENT) {
+            return back()->with(
+                'success',
+                'A secure password reset link was sent to ' . $user->email . '.'
+            );
+        }
+
         return back()->with(
             'error',
-            'You cannot deactivate your own account.'
+            'The password reset link could not be sent. Check the mail configuration and try again.'
         );
     }
-
-    $statusChanges = [];
-
-    if (Schema::hasColumn('users', 'is_active')) {
-        $statusChanges['is_active'] = false;
-    }
-
-    if (Schema::hasColumn('users', 'status')) {
-        $statusChanges['status'] = false;
-    }
-
-    if (! empty($statusChanges)) {
-        $user->forceFill($statusChanges)->save();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Terminate existing database sessions
-    |--------------------------------------------------------------------------
-    |
-    | A deactivated user should not remain logged in through an existing
-    | session.
-    |
-    */
-
-    if (
-        Schema::hasTable('sessions')
-        && Schema::hasColumn('sessions', 'user_id')
-    ) {
-        DB::table('sessions')
-            ->where('user_id', $user->id)
-            ->delete();
-    }
-
-    return back()->with(
-        'success',
-        "{$user->name}'s account was deactivated successfully."
-    );
-}
-
-    public function resetPassword(
-    Request $request,
-    User $user
-): RedirectResponse {
-    $this->authorizeAdmin($request);
-
-    if (
-        strtolower((string) $user->email)
-        === self::DELETED_USER_EMAIL
-    ) {
-        return back()->with(
-            'error',
-            'The deleted-user placeholder account cannot receive a password reset.'
-        );
-    }
-
-    $status = Password::sendResetLink([
-        'email' => $user->email,
-    ]);
-
-    if ($status === Password::RESET_THROTTLED) {
-        return back()->with(
-            'error',
-            'A password reset link was generated recently. Please wait before trying again.'
-        );
-    }
-
-    if ($status !== Password::RESET_LINK_SENT) {
-        return back()->with(
-            'error',
-            'The password reset instructions could not be generated.'
-        );
-    }
-
-    return back()->with(
-        'success',
-        "Password reset instructions were generated for {$user->email}."
-    );
-}
 
     public function destroy(Request $request, User $user): RedirectResponse
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('delete', $user);
+        $this->ensureNotDeletedPlaceholder($user);
 
-        if (strtolower((string) $user->email) === self::DELETED_USER_EMAIL) {
-            return redirect()->route('admin.users.index');
-        }
-
-        $deletingCurrentUser = (int) $request->user()->id === (int) $user->id;
         $userName = $user->name;
         $profilePhotoPath = $this->normalizeProfilePhotoPath(
             $user->profile_photo_path ?? null
         );
 
-        DB::transaction(function () use ($user) {
+        DB::transaction(function () use ($request, $user): void {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $this->assertSafeAdministratorStateChange(
+                $request->user(),
+                $lockedUser,
+                strtolower(trim((string) $lockedUser->role)),
+                false,
+                true
+            );
+
             $deletedUserId = $this->deletedUserId();
-            $employeeIds = $this->employeeIdsForUser((int) $user->id);
+            $employeeIds = $this->employeeIdsForUser((int) $lockedUser->id);
 
             $this->reassignHistoricalUserReferences(
-                (int) $user->id,
+                (int) $lockedUser->id,
                 $deletedUserId
             );
 
             $this->removeAccountSpecificRecords(
-                $user,
+                $lockedUser,
                 $employeeIds
             );
 
-            $user->delete();
+            $lockedUser->delete();
         });
 
-        if (
-            $profilePhotoPath
-            && Storage::disk('public')->exists($profilePhotoPath)
-        ) {
-            Storage::disk('public')->delete($profilePhotoPath);
-        }
-
-        if ($deletingCurrentUser) {
-            Auth::guard('web')->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return redirect('/');
-        }
+        $this->deletePublicFile($profilePhotoPath);
 
         return redirect()
             ->route('admin.users.index')
-            ->with('success', "User {$userName} was permanently deleted successfully.");
+            ->with(
+                'success',
+                "User {$userName} was permanently deleted successfully."
+            );
     }
 
     public function export(Request $request)
     {
-        $this->authorizeAdmin($request);
+        Gate::authorize('export', User::class);
 
         $users = $this->filteredUsersQuery($request)
             ->orderByDesc('created_at')
             ->get();
 
         $barangays = $this->barangays();
-
         $fileName = 'users-' . now()->format('Ymd-His') . '.csv';
 
-        return response()->streamDownload(function () use ($users, $barangays) {
+        return response()->streamDownload(function () use ($users, $barangays): void {
             $output = fopen('php://output', 'w');
+
+            if ($output === false) {
+                throw new \RuntimeException('Unable to open the CSV output stream.');
+            }
+
+            /* UTF-8 BOM for spreadsheet compatibility. */
+            fwrite($output, "\xEF\xBB\xBF");
 
             fputcsv($output, [
                 'Name',
@@ -402,14 +485,21 @@ $users = $this->filteredUsersQuery($request)
             ]);
 
             foreach ($users as $user) {
-                $barangay = $barangays->firstWhere('id', $user->barangay_id ?? null);
+                $barangay = $barangays->firstWhere(
+                    'id',
+                    $user->barangay_id ?? null
+                );
 
                 fputcsv($output, [
-                    $user->name,
-                    $user->email,
-                    $user->contact_number ?? '',
-                    $barangay->barangay_name ?? $barangay->name ?? '',
-                    ucfirst((string) $user->role),
+                    $this->csvSafeValue($user->name),
+                    $this->csvSafeValue($user->email),
+                    $this->csvSafeValue($user->contact_number ?? ''),
+                    $this->csvSafeValue(
+                        $barangay->barangay_name
+                            ?? $barangay->name
+                            ?? ''
+                    ),
+                    $this->csvSafeValue(ucfirst((string) $user->role)),
                     $this->isUserOnline($user) ? 'Online' : 'Offline',
                     optional($user->created_at)->format('Y-m-d H:i:s'),
                 ]);
@@ -417,7 +507,8 @@ $users = $this->filteredUsersQuery($request)
 
             fclose($output);
         }, $fileName, [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
@@ -479,40 +570,45 @@ $users = $this->filteredUsersQuery($request)
     private function validateUser(Request $request, ?User $user = null): array
     {
         $barangayRule = Schema::hasTable('barangays')
-            ? ['nullable', 'exists:barangays,id']
+            ? ['nullable', 'integer', 'exists:barangays,id']
             : ['nullable'];
 
         $passwordRule = $user
-    ? [
-        'nullable',
-        'string',
-        PasswordRule::defaults(),
-    ]
-    : [
-        'required',
-        'string',
-        PasswordRule::defaults(),
-        'confirmed',
-    ];
+            ? ['nullable', 'string', PasswordRule::defaults()]
+            : ['required', 'string', PasswordRule::defaults()];
 
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'email' => [
                 'required',
+                'string',
                 'email',
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user?->id),
             ],
-            'contact_number' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+()\-\s]*$/'],
+            'contact_number' => [
+                'nullable',
+                'string',
+                'max:30',
+                'regex:/^[0-9+()\\-\\s]*$/',
+            ],
             'barangay_id' => $barangayRule,
             'address' => ['nullable', 'string', 'max:1000'],
-            'role' => ['required', Rule::in(array_keys($this->roles()))],
+            'role' => ['required', 'string', Rule::in(array_keys($this->roles()))],
             'is_active' => ['required', 'boolean'],
             'password' => $passwordRule,
-            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:51200'],
+            'profile_photo' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
         ];
 
-        $validated = $request->validate($rules);
+        $validated = $request->validate($rules, [
+            'password.required' => 'An initial password is required.',
+            'profile_photo.max' => 'The profile picture must not exceed 5 MB.',
+        ]);
 
         if ($user && empty($validated['password'])) {
             unset($validated['password']);
@@ -696,8 +792,10 @@ $users = $this->filteredUsersQuery($request)
         $deletedUser->password = Hash::make(Str::random(64));
         $deletedUser->role = 'resident';
 
-        if (Schema::hasColumn('users', 'is_active')) {
-            $deletedUser->is_active = false;
+        $this->setUserActiveState($deletedUser, false);
+
+        if (Schema::hasColumn('users', 'remember_token')) {
+            $deletedUser->remember_token = null;
         }
 
         if (Schema::hasColumn('users', 'contact_number')) {
@@ -983,17 +1081,145 @@ $users = $this->filteredUsersQuery($request)
 
     private function isUserActive(User $user): bool
     {
-        if (! Schema::hasColumn('users', 'is_active')) {
-            return true;
+        if (Schema::hasColumn('users', 'is_active')) {
+            return (bool) $user->is_active;
         }
 
-        return (bool) $user->is_active;
+        if (Schema::hasColumn('users', 'status')) {
+            return (bool) $user->status;
+        }
+
+        return true;
     }
 
-    private function authorizeAdmin(Request $request): void
+    private function ensureNotDeletedPlaceholder(User $user): void
     {
-        if ($request->user()?->role !== 'admin') {
+        if (strcasecmp((string) $user->email, self::DELETED_USER_EMAIL) === 0) {
+            abort(404);
+        }
+    }
+
+    private function setUserActiveState(User $user, bool $active): void
+    {
+        if (Schema::hasColumn('users', 'is_active')) {
+            $user->is_active = $active;
+        }
+
+        if (Schema::hasColumn('users', 'status')) {
+            $user->status = $active;
+        }
+    }
+
+    private function assertSafeAdministratorStateChange(
+        ?User $actor,
+        User $target,
+        string $newRole,
+        bool $newActive,
+        bool $lockActiveAdministrators
+    ): void {
+        if (! $actor || ! $actor->isAdmin()) {
             abort(403, 'Unauthorized access.');
         }
+
+        $targetRole = strtolower(trim((string) $target->role));
+        $targetIsActive = $this->isUserActive($target);
+        $isSelf = (int) $actor->id === (int) $target->id;
+
+        if ($isSelf && ($newRole !== 'admin' || ! $newActive)) {
+            throw ValidationException::withMessages([
+                'role' => 'You cannot remove your own administrator access or deactivate your own account.',
+            ]);
+        }
+
+        $removesActiveAdministrator = $targetRole === 'admin'
+            && $targetIsActive
+            && ($newRole !== 'admin' || ! $newActive);
+
+        if (! $removesActiveAdministrator) {
+            return;
+        }
+
+        $activeAdministratorQuery = User::query()
+            ->where('role', 'admin')
+            ->where('email', '!=', self::DELETED_USER_EMAIL);
+
+        if (Schema::hasColumn('users', 'is_active')) {
+            $activeAdministratorQuery->where('is_active', true);
+        } elseif (Schema::hasColumn('users', 'status')) {
+            $activeAdministratorQuery->where('status', true);
+        }
+
+        $activeAdministrators = $lockActiveAdministrators
+            ? $activeAdministratorQuery->lockForUpdate()->get(['id'])
+            : $activeAdministratorQuery->get(['id']);
+
+        if ($activeAdministrators->count() <= 1) {
+            throw ValidationException::withMessages([
+                'role' => 'The final active administrator cannot be demoted, deactivated, or deleted.',
+            ]);
+        }
     }
+
+    private function revokeUserAuthentication(int $userId, string $email): void
+    {
+        if (
+            Schema::hasTable('sessions')
+            && Schema::hasColumn('sessions', 'user_id')
+        ) {
+            DB::table('sessions')
+                ->where('user_id', $userId)
+                ->delete();
+        }
+
+        if (
+            Schema::hasTable('personal_access_tokens')
+            && Schema::hasColumn('personal_access_tokens', 'tokenable_id')
+            && Schema::hasColumn('personal_access_tokens', 'tokenable_type')
+        ) {
+            DB::table('personal_access_tokens')
+                ->where('tokenable_id', $userId)
+                ->where('tokenable_type', User::class)
+                ->delete();
+        }
+
+        $this->deletePasswordResetTokens($email);
+    }
+
+    private function deletePasswordResetTokens(string $email): void
+    {
+        foreach (['password_reset_tokens', 'password_resets'] as $table) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn($table, 'email')
+            ) {
+                DB::table($table)
+                    ->where('email', $email)
+                    ->delete();
+            }
+        }
+    }
+
+    private function deletePublicFile(?string $path): void
+    {
+        $path = $this->normalizeProfilePhotoPath($path);
+
+        if (
+            $path
+            && Storage::disk('public')->exists($path)
+        ) {
+            Storage::disk('public')->delete($path);
+        }
+    }
+
+    private function csvSafeValue(mixed $value): string
+    {
+        $value = (string) ($value ?? '');
+
+        if ($value !== '' && preg_match('/^[=+\-@]/', ltrim($value)) === 1) {
+            return "'" . $value;
+        }
+
+        return $value;
+    }
+
 }

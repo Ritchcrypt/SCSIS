@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use App\Models\Incident;
 use App\Models\Status;
@@ -202,64 +203,228 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
     ]);
 }
 
-public function respond(Request $request, TanodTaskResponse $response): RedirectResponse
-{
+public function respond(
+    Request $request,
+    TanodTaskResponse $response
+): RedirectResponse {
+    /*
+    |--------------------------------------------------------------------------
+    | Resolve the authenticated tanod employee
+    |--------------------------------------------------------------------------
+    */
+
     $employee = $this->getTanodEmployee($request);
+    $user = $request->user();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Initial ownership check
+    |--------------------------------------------------------------------------
+    |
+    | The URL contains the response ID. A tanod must never be able to change
+    | another tanod's response by manually replacing that ID.
+    |
+    */
 
     if ((int) $response->employee_id !== (int) $employee->id) {
-        abort(403, 'Unauthorized access.');
+        abort(403, 'Unauthorized task response.');
     }
 
-    $response->load('task');
-
-    if (! $response->task || $response->task->status !== 'open') {
-        return back()->with('error', 'This task is no longer open for response.');
+    if (
+        Schema::hasColumn('tanod_task_responses', 'user_id')
+        && $response->user_id !== null
+        && (int) $response->user_id !== (int) $user->id
+    ) {
+        abort(403, 'Unauthorized task response.');
     }
 
     $validated = $request->validate([
-        'response_status' => ['required', Rule::in(['accepted', 'declined'])],
-        'response_note' => ['nullable', 'string', 'max:1000'],
+        'response_status' => [
+            'required',
+            Rule::in([
+                'accepted',
+                'declined',
+            ]),
+        ],
+        'response_note' => [
+            'nullable',
+            'string',
+            'max:1000',
+        ],
     ]);
 
-    DB::transaction(function () use ($request, $response, $employee, $validated) {
-        $oldResponseStatus = $response->response_status;
+    DB::transaction(function () use (
+        $request,
+        $response,
+        $employee,
+        $user,
+        $validated
+    ): void {
+        /*
+        |--------------------------------------------------------------------------
+        | Lock the response row
+        |--------------------------------------------------------------------------
+        |
+        | This prevents multiple requests from changing the same response at the
+        | same time.
+        |
+        */
 
-        $response->update([
-            'response_status' => $validated['response_status'],
-            'response_note' => $validated['response_note'] ?? null,
-            'responded_at' => now(),
-        ]);
-
-        $response->refresh();
-        $response->load('task');
+        $lockedResponse = TanodTaskResponse::query()
+            ->whereKey($response->id)
+            ->lockForUpdate()
+            ->firstOrFail();
 
         /*
         |--------------------------------------------------------------------------
-        | Phase D / E
+        | Recheck ownership after locking
         |--------------------------------------------------------------------------
-        | Only run notification and status-history logic when the response status
-        | actually changes. This prevents duplicate notifications if the tanod
-        | submits the same response again.
         */
 
-        if ($oldResponseStatus !== $validated['response_status']) {
-            $this->syncIncidentAfterTanodTaskResponse(
-                request: $request,
-                task: $response->task,
-                employee: $employee,
-                responseStatus: $validated['response_status'],
-                responseNote: $validated['response_note'] ?? null
-            );
-
-            $this->notifyAdminsAboutTanodTaskResponse(
-                task: $response->task,
-                employee: $employee,
-                responseStatus: $validated['response_status']
-            );
+        if ((int) $lockedResponse->employee_id !== (int) $employee->id) {
+            abort(403, 'Unauthorized task response.');
         }
+
+        if (
+            Schema::hasColumn('tanod_task_responses', 'user_id')
+            && $lockedResponse->user_id !== null
+            && (int) $lockedResponse->user_id !== (int) $user->id
+        ) {
+            abort(403, 'Unauthorized task response.');
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Responses are final
+        |--------------------------------------------------------------------------
+        |
+        | A tanod may submit only one decision. This prevents repeated requests,
+        | accidental double submissions, and switching between accepted and
+        | declined after downstream incident updates have already occurred.
+        |
+        */
+
+        $currentResponseStatus = strtolower(
+            trim((string) $lockedResponse->response_status)
+        );
+
+        if (
+            $currentResponseStatus !== ''
+            && $currentResponseStatus !== 'pending'
+        ) {
+            throw ValidationException::withMessages([
+                'response_status' =>
+                    'You have already responded to this task. Your response is final.',
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Lock the related task
+        |--------------------------------------------------------------------------
+        */
+
+        $task = TanodTask::query()
+            ->whereKey($lockedResponse->tanod_task_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $task) {
+            throw ValidationException::withMessages([
+                'response_status' =>
+                    'The related task no longer exists.',
+            ]);
+        }
+
+        if (strtolower(trim((string) $task->status)) !== 'open') {
+            throw ValidationException::withMessages([
+                'response_status' =>
+                    'This task is no longer open for responses.',
+            ]);
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Protect incident assignment
+        |--------------------------------------------------------------------------
+        |
+        | Incident records currently support one assigned tanod. When this task
+        | belongs to an incident, another tanod must not be able to replace the
+        | responder who already accepted it.
+        |
+        */
+
+        if ($validated['response_status'] === 'accepted') {
+            $incident = $this->findIncidentFromTanodTask($task);
+
+            if ($incident) {
+                $lockedIncident = Incident::query()
+                    ->whereKey($incident->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $lockedIncident) {
+                    throw ValidationException::withMessages([
+                        'response_status' =>
+                            'The related incident no longer exists.',
+                    ]);
+                }
+
+                $assignedEmployeeId = $lockedIncident->assigned_to !== null
+                    ? (int) $lockedIncident->assigned_to
+                    : null;
+
+                if (
+                    $assignedEmployeeId !== null
+                    && $assignedEmployeeId !== (int) $employee->id
+                ) {
+                    throw ValidationException::withMessages([
+                        'response_status' =>
+                            'Another tanod has already accepted this incident response task.',
+                    ]);
+                }
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Save the response exactly once
+        |--------------------------------------------------------------------------
+        */
+
+        $lockedResponse->forceFill([
+            'response_status' => $validated['response_status'],
+            'response_note' => $validated['response_note'] ?? null,
+            'responded_at' => now(),
+        ])->save();
+
+        $lockedResponse->setRelation('task', $task);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Synchronise linked incident and notifications
+        |--------------------------------------------------------------------------
+        */
+
+        $this->syncIncidentAfterTanodTaskResponse(
+            request: $request,
+            task: $task,
+            employee: $employee,
+            responseStatus: $validated['response_status'],
+            responseNote: $validated['response_note'] ?? null
+        );
+
+        $this->notifyAdminsAboutTanodTaskResponse(
+            task: $task,
+            employee: $employee,
+            responseStatus: $validated['response_status']
+        );
     });
 
-    return back()->with('success', 'Task response submitted successfully.');
+    return back()->with(
+        'success',
+        'Task response submitted successfully.'
+    );
 }
 
 private function syncIncidentAfterTanodTaskResponse(
@@ -477,20 +642,96 @@ private function getTanodEmployee(Request $request): Employee
 {
     $user = $request->user();
 
-    if (! $user || $user->role !== 'tanod') {
+    /*
+    |--------------------------------------------------------------------------
+    | Defence-in-depth role check
+    |--------------------------------------------------------------------------
+    |
+    | The route already uses role:tanod, but the controller independently
+    | verifies it so this method remains secure if routes are changed later.
+    |
+    */
+
+    if (
+        ! $user
+        || strtolower(trim((string) $user->role)) !== 'tanod'
+    ) {
         abort(403, 'Unauthorized access.');
     }
 
-    $employee = Employee::query()
-        ->where('user_id', $user->id)
-        ->where(function ($query) {
-            $query->where('employee_type', 'tanod')
-                ->orWhere('position', 'tanod');
-        })
-        ->first();
+    $query = Employee::query()
+        ->where('user_id', $user->id);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Require a tanod employee classification
+    |--------------------------------------------------------------------------
+    */
+
+    $hasEmployeeType = Schema::hasColumn(
+        'employees',
+        'employee_type'
+    );
+
+    $hasPosition = Schema::hasColumn(
+        'employees',
+        'position'
+    );
+
+    $query->where(function ($roleQuery) use (
+        $hasEmployeeType,
+        $hasPosition
+    ): void {
+        if ($hasEmployeeType && $hasPosition) {
+            $roleQuery
+                ->whereRaw('LOWER(TRIM(employee_type)) = ?', ['tanod'])
+                ->orWhereRaw('LOWER(TRIM(position)) = ?', ['tanod']);
+
+            return;
+        }
+
+        if ($hasEmployeeType) {
+            $roleQuery->whereRaw(
+                'LOWER(TRIM(employee_type)) = ?',
+                ['tanod']
+            );
+
+            return;
+        }
+
+        if ($hasPosition) {
+            $roleQuery->whereRaw(
+                'LOWER(TRIM(position)) = ?',
+                ['tanod']
+            );
+
+            return;
+        }
+
+        /*
+         * Do not authorise an employee record when no classification column
+         * exists.
+         */
+        $roleQuery->whereRaw('1 = 0');
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reject inactive employee records
+    |--------------------------------------------------------------------------
+    */
+
+    if (Schema::hasColumn('employees', 'is_active')) {
+        $query->where('is_active', true);
+    }
+
+    $employee = $query->first();
 
     if (! $employee) {
-        abort(403, 'No tanod employee profile found for this account.');
+        abort(
+            403,
+            'No active tanod employee profile is linked to this account.'
+        );
     }
 
     return $employee;

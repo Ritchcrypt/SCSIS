@@ -14,23 +14,23 @@ use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class IncidentController extends Controller
 {
-    public function destroy(Request $request, Incident $incident): RedirectResponse
-    {
-        $user = $request->user();
+    public function destroy(
+        Request $request,
+        Incident $incident
+    ): RedirectResponse {
+        Gate::authorize('delete', $incident);
 
-        if (! $user || $user->role !== 'admin') {
-            abort(403, 'Only admin can delete incidents.');
-        }
-
-        DB::transaction(function () use ($incident) {
+        DB::transaction(function () use ($incident): void {
             $this->deleteIncidentRelatedFiles((int) $incident->id);
             $this->deleteIncidentRelatedRows((int) $incident->id);
 
@@ -44,6 +44,8 @@ class IncidentController extends Controller
 
     public function index(Request $request): View
     {
+        Gate::authorize('viewAny', Incident::class);
+
         $user = $request->user();
 
         $query = Incident::query()
@@ -56,7 +58,7 @@ class IncidentController extends Controller
                 'resident.user',
                 'assignedTanod.user',
             ])
-            ->when($user->role === 'tanod', function ($query) use ($user) {
+            ->when($user->isTanod(), function ($query) use ($user) {
                 $employeeId = $user->employee?->id;
 
                 if ($employeeId) {
@@ -65,11 +67,15 @@ class IncidentController extends Controller
                     $query->whereRaw('1 = 0');
                 }
             })
-            ->when($user->role === 'resident', function ($query) use ($user) {
+            ->when($user->isResident(), function ($query) use ($user) {
                 $this->applyResidentIncidentOwnerFilter($query, (int) $user->id);
             })
             ->when($request->filled('search'), function ($query) use ($request) {
-                $search = $request->string('search')->toString();
+                $search = trim($request->string('search')->toString());
+
+                if ($search === '') {
+                    return;
+                }
 
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery
@@ -86,15 +92,27 @@ class IncidentController extends Controller
                         });
                 });
             })
-            ->when($request->filled('type') && $request->type !== 'all', function ($query) use ($request) {
-                $query->where('category_id', $request->integer('type'));
-            })
-            ->when($request->filled('status') && $request->status !== 'all', function ($query) use ($request) {
-                $query->where('status_id', $request->integer('status'));
-            })
-            ->when($request->filled('severity') && $request->severity !== 'all', function ($query) use ($request) {
-                $query->where('priority', $request->string('severity')->toString());
-            });
+            ->when(
+                $request->filled('type') && $request->string('type')->toString() !== 'all',
+                function ($query) use ($request) {
+                    $query->where('category_id', $request->integer('type'));
+                }
+            )
+            ->when(
+                $request->filled('status') && $request->string('status')->toString() !== 'all',
+                function ($query) use ($request) {
+                    $query->where('status_id', $request->integer('status'));
+                }
+            )
+            ->when(
+                $request->filled('severity') && $request->string('severity')->toString() !== 'all',
+                function ($query) use ($request) {
+                    $query->where(
+                        'priority',
+                        $request->string('severity')->toString()
+                    );
+                }
+            );
 
         if (Schema::hasColumn('incidents', 'incident_datetime')) {
             $query->orderByDesc('incident_datetime');
@@ -129,7 +147,7 @@ class IncidentController extends Controller
 
     public function show(Request $request, Incident $incident): View
     {
-        $this->authorizeIncidentAccess($request, $incident);
+        Gate::authorize('view', $incident);
 
         $incident->load([
             'barangay',
@@ -148,19 +166,26 @@ class IncidentController extends Controller
             'statusHistories.updatedBy',
             'escalations.escalatedBy',
             'messages.user',
-            'caseRecords.creator',
         ]);
+
+        if ($request->user()->isAdmin() || $request->user()->isOfficial()) {
+            $incident->load('caseRecords.creator');
+        } else {
+            $incident->setRelation('caseRecords', collect());
+        }
 
         $statuses = Status::active()
             ->ordered()
             ->get();
 
-        $tanods = Employee::query()
-            ->with('user')
-            ->tanods()
-            ->active()
-            ->orderBy('id')
-            ->get();
+        $tanods = Gate::allows('assign', $incident)
+            ? Employee::query()
+                ->with('user')
+                ->tanods()
+                ->active()
+                ->orderBy('id')
+                ->get()
+            : collect();
 
         return view('incidents.show', [
             'incident' => $incident,
@@ -174,11 +199,7 @@ class IncidentController extends Controller
 
     public function create(Request $request): View
     {
-        $user = $request->user();
-
-        if (! in_array($user->role, ['resident', 'admin', 'official', 'dao'], true)) {
-            abort(403, 'Unauthorized access.');
-        }
+        Gate::authorize('create', Incident::class);
 
         $categories = IncidentCategory::active()
             ->orderBy('category_name')
@@ -197,11 +218,9 @@ class IncidentController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $user = $request->user();
+        Gate::authorize('create', Incident::class);
 
-        if (! in_array($user->role, ['resident', 'admin', 'official', 'dao'], true)) {
-            abort(403, 'Unauthorized access.');
-        }
+        $user = $request->user();
 
         $validated = $request->validate([
             'incident_title' => ['required', 'string', 'max:255'],
@@ -399,78 +418,111 @@ $this->storeIncidentEvidence($request, $incident);
         }
     }
 
-    public function updateStatus(Request $request, Incident $incident): RedirectResponse
-    {
-        $this->authorizeIncidentManagement($request, $incident);
+    public function updateStatus(
+        Request $request,
+        Incident $incident
+    ): RedirectResponse {
+        Gate::authorize('update', $incident);
 
         $user = $request->user();
 
         $rules = [
-            'status_id' => ['required', 'exists:statuses,id'],
-            'remarks' => ['nullable', 'string', 'max:3000'],
+            'status_id' => [
+                'required',
+                'integer',
+                Rule::exists('statuses', 'id'),
+            ],
+            'remarks' => [
+                'nullable',
+                'string',
+                'max:3000',
+            ],
         ];
 
-        if ($user->role === 'admin') {
-            $rules['assigned_to'] = ['nullable', 'exists:employees,id'];
+        if ($user->isAdmin()) {
+            $rules['assigned_to'] = [
+                'nullable',
+                'integer',
+                Rule::exists('employees', 'id'),
+            ];
         }
 
         $validated = $request->validate($rules);
 
-        $oldAssignedTo = $incident->assigned_to;
-        $newAssignedTo = $request->has('assigned_to')
-            ? ($validated['assigned_to'] ?? null)
-            : $incident->assigned_to;
+        $status = Status::query()
+            ->findOrFail((int) $validated['status_id']);
 
-        DB::transaction(function () use ($request, $incident, $validated, $oldAssignedTo, $newAssignedTo) {
-            
+        $requestedAssignedTo = null;
+        $assignmentWasSubmitted = false;
 
-            
+        if ($user->isAdmin() && array_key_exists('assigned_to', $validated)) {
+            $assignmentWasSubmitted = true;
 
-$incidentUpdateData = [
-    'status_id' => $validated['status_id'],
-    'assigned_to' => $newAssignedTo,
-];
+            $requestedAssignedTo = $validated['assigned_to'] !== null
+                ? (int) $validated['assigned_to']
+                : null;
 
-if (Schema::hasColumn('incidents', 'status')) {
-    $incidentUpdateData['status'] = $status?->status_name ?? 'Updated';
-}
+            if ($requestedAssignedTo !== null) {
+                $assignedTanodExists = Employee::query()
+                    ->tanods()
+                    ->active()
+                    ->whereKey($requestedAssignedTo)
+                    ->exists();
 
-$incident->update($incidentUpdateData);
+                if (! $assignedTanodExists) {
+                    throw ValidationException::withMessages([
+                        'assigned_to' => 'The selected responder must be an active barangay tanod.',
+                    ]);
+                }
+            }
+        }
+
+        DB::transaction(function () use (
+            $request,
+            $incident,
+            $status,
+            $validated,
+            $assignmentWasSubmitted,
+            $requestedAssignedTo
+        ): void {
+            $lockedIncident = Incident::query()
+                ->whereKey($incident->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            Gate::authorize('update', $lockedIncident);
+
+            $oldAssignedTo = $lockedIncident->assigned_to !== null
+                ? (int) $lockedIncident->assigned_to
+                : null;
+
+            $newAssignedTo = $assignmentWasSubmitted
+                ? $requestedAssignedTo
+                : $oldAssignedTo;
+
+            $incidentUpdateData = [
+                'status_id' => $status->id,
+            ];
 
             if (Schema::hasColumn('incidents', 'status')) {
-                $incidentUpdates['status'] = $status?->status_name ?? 'Updated';
+                $incidentUpdateData['status'] = $status->status_name;
             }
 
-            $status = Status::find($validated['status_id']);
+            if (Schema::hasColumn('incidents', 'assigned_to')) {
+                $incidentUpdateData['assigned_to'] = $newAssignedTo;
+            }
 
-$incidentUpdateData = [
-    'status_id' => $validated['status_id'],
-    'assigned_to' => $newAssignedTo,
-];
-
-if (Schema::hasColumn('incidents', 'status')) {
-    $incidentUpdateData['status'] = $status?->status_name ?? 'Updated';
-}
-
-$incident->update($incidentUpdateData);
-
-IncidentStatusHistory::create([
-    'incident_id' => $incident->id,
-    'status_id' => $validated['status_id'],
-    'updated_by' => $request->user()->id,
-    'remarks' => $validated['remarks'] ?? null,
-    'status_changed_at' => now(),
-]);
+            $lockedIncident->update($incidentUpdateData);
 
             IncidentStatusHistory::create([
-                'incident_id' => $incident->id,
-                'status_id' => $validated['status_id'],
+                'incident_id' => $lockedIncident->id,
+                'status_id' => $status->id,
                 'updated_by' => $request->user()->id,
                 'remarks' => $validated['remarks'] ?? null,
                 'status_changed_at' => now(),
             ]);
 
-            $freshIncident = $incident->fresh([
+            $freshIncident = $lockedIncident->fresh([
                 'reporter',
                 'assignedTanod.user',
                 'currentStatus',
@@ -478,28 +530,44 @@ IncidentStatusHistory::create([
                 'barangay',
             ]);
 
+            if (! $freshIncident) {
+                throw new \RuntimeException(
+                    'Incident could not be reloaded after the status update.'
+                );
+            }
+
+            $statusName = $status->status_name ?: 'Updated';
+
             $this->notifyIncidentUsers(
                 incident: $freshIncident,
                 title: 'Incident status updated',
-                message: 'Incident status changed to ' . ($status?->status_name ?? 'Updated') . '.'
+                message: 'Incident status changed to ' . $statusName . '.'
             );
 
-            if ($newAssignedTo && (int) $oldAssignedTo !== (int) $newAssignedTo) {
+            if (
+                $newAssignedTo !== null
+                && $oldAssignedTo !== $newAssignedTo
+            ) {
                 $this->createTanodAlert(
                     incident: $freshIncident,
                     type: 'dispatch',
                     title: 'Tanod Dispatch Alert',
-                    message: 'You have been assigned to respond to incident: ' . $freshIncident->display_title . '.'
+                    message: 'You have been assigned to respond to incident: '
+                        . $freshIncident->display_title
+                        . '.'
                 );
             }
         });
 
-        return back()->with('success', 'Incident status updated successfully.');
+        return back()->with(
+            'success',
+            'Incident status updated successfully.'
+        );
     }
 
     public function escalate(Request $request, Incident $incident): RedirectResponse
     {
-        $this->authorizeIncidentEscalation($request, $incident);
+        Gate::authorize('escalate', $incident);
 
         $validated = $request->validate([
             'agency' => ['required', 'string', 'max:100'],
@@ -560,12 +628,18 @@ IncidentStatusHistory::create([
         return back()->with('success', 'Incident escalated successfully.');
     }
 
-    public function storeMessage(Request $request, Incident $incident): RedirectResponse
-    {
-        $this->authorizeIncidentAccess($request, $incident);
+    public function storeMessage(
+        Request $request,
+        Incident $incident
+    ): RedirectResponse {
+        Gate::authorize('addMessage', $incident);
 
         $validated = $request->validate([
-            'message' => ['required', 'string', 'max:3000'],
+            'message' => [
+                'required',
+                'string',
+                'max:3000',
+            ],
         ]);
 
         IncidentMessage::create([
@@ -574,7 +648,10 @@ IncidentStatusHistory::create([
             'message' => $validated['message'],
         ]);
 
-        return back()->with('success', 'Message added successfully.');
+        return back()->with(
+            'success',
+            'Message added successfully.'
+        );
     }
 
     public function quickStoreBarangay(Request $request): RedirectResponse
@@ -700,7 +777,7 @@ IncidentStatusHistory::create([
             abort(404, 'Related incident not found.');
         }
 
-        $this->authorizeIncidentAccess($request, $incident);
+        Gate::authorize('view', $incident);
 
         $filePath = $evidenceRecord->file_path
             ?? $evidenceRecord->path
@@ -742,7 +819,8 @@ IncidentStatusHistory::create([
             ?? $evidenceRecord->name
             ?? basename($cleanFilePath);
 
-        $fileName = str_replace('"', '', (string) $fileName);
+        $fileName = basename(str_replace('\\', '/', (string) $fileName));
+        $fileName = str_replace(["\r", "\n", '"'], '', $fileName);
 
         return response()->file($absolutePath, [
             'Content-Type' => (string) $mimeType,
@@ -750,58 +828,7 @@ IncidentStatusHistory::create([
         ]);
     }
 
-    private function authorizeIncidentAccess(Request $request, Incident $incident): void
-    {
-        $user = $request->user();
 
-        if (in_array($user->role, ['admin', 'official', 'dao'], true)) {
-            return;
-        }
-
-        if ($user->role === 'tanod') {
-            $employeeId = $user->employee?->id;
-
-            if ($employeeId && (int) $incident->assigned_to === (int) $employeeId) {
-                return;
-            }
-        }
-
-        if ($user->role === 'resident' && $this->residentOwnsIncident($incident, (int) $user->id)) {
-            return;
-        }
-
-        abort(403, 'Unauthorized access.');
-    }
-
-    private function authorizeIncidentManagement(Request $request, Incident $incident): void
-    {
-        $user = $request->user();
-
-        if (in_array($user->role, ['admin', 'official', 'dao'], true)) {
-            return;
-        }
-
-        if ($user->role === 'tanod') {
-            $employeeId = $user->employee?->id;
-
-            if ($employeeId && (int) $incident->assigned_to === (int) $employeeId) {
-                return;
-            }
-        }
-
-        abort(403, 'Unauthorized access.');
-    }
-
-    private function authorizeIncidentEscalation(Request $request, Incident $incident): void
-    {
-        $user = $request->user();
-
-        if (in_array($user->role, ['admin', 'official', 'dao'], true)) {
-            return;
-        }
-
-        abort(403, 'Unauthorized access.');
-    }
 
     private function notifyIncidentUsers(
         Incident $incident,
