@@ -5,12 +5,28 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
 use App\Models\Status;
+use App\Support\SafeDatabaseIdentifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
+    private const TANOD_SOURCE_TABLES = [
+        'tanod_profiles',
+        'employees',
+        'tanods',
+        'tanod_rosters',
+        'users',
+    ];
+
+    private const TANOD_STATUS_COLUMNS = [
+        'duty_status',
+        'status',
+        'availability_status',
+        'duty_state',
+    ];
+
     /**
      * Display the admin dashboard.
      */
@@ -67,9 +83,15 @@ class DashboardController extends Controller
 
         $criticalIncidents = Incident::query()
             ->where('priority', 'critical')
-            ->when(! empty($resolvedStatusIds), function ($query) use ($resolvedStatusIds) {
-                $query->whereNotIn('status_id', $resolvedStatusIds);
-            })
+            ->when(
+                ! empty($resolvedStatusIds),
+                function ($query) use ($resolvedStatusIds): void {
+                    $query->whereNotIn(
+                        'status_id',
+                        $resolvedStatusIds
+                    );
+                }
+            )
             ->count();
 
         /*
@@ -89,12 +111,12 @@ class DashboardController extends Controller
         */
 
         $recentIncidents = Incident::with([
-                'reporter',
-                'assignedTanod.user',
-                'category',
-                'currentStatus',
-                'barangay',
-            ])
+            'reporter',
+            'assignedTanod.user',
+            'category',
+            'currentStatus',
+            'barangay',
+        ])
             ->orderByDesc('reported_at')
             ->orderByDesc('incident_datetime')
             ->orderByDesc('created_at')
@@ -139,12 +161,7 @@ class DashboardController extends Controller
 
         $tanodProfilesCount = $this->countOnDutyFromTable(
             table: 'tanod_profiles',
-            statusColumns: [
-                'duty_status',
-                'status',
-                'availability_status',
-                'duty_state',
-            ],
+            statusColumns: self::TANOD_STATUS_COLUMNS,
             tanodOnly: false,
             onDutyValues: $onDutyValues
         );
@@ -162,12 +179,7 @@ class DashboardController extends Controller
 
         $employeesCount = $this->countOnDutyFromTable(
             table: 'employees',
-            statusColumns: [
-                'duty_status',
-                'status',
-                'availability_status',
-                'duty_state',
-            ],
+            statusColumns: self::TANOD_STATUS_COLUMNS,
             tanodOnly: true,
             onDutyValues: $onDutyValues
         );
@@ -185,12 +197,7 @@ class DashboardController extends Controller
 
         $tanodsCount = $this->countOnDutyFromTable(
             table: 'tanods',
-            statusColumns: [
-                'duty_status',
-                'status',
-                'availability_status',
-                'duty_state',
-            ],
+            statusColumns: self::TANOD_STATUS_COLUMNS,
             tanodOnly: false,
             onDutyValues: $onDutyValues
         );
@@ -208,12 +215,7 @@ class DashboardController extends Controller
 
         $tanodRostersCount = $this->countOnDutyFromTable(
             table: 'tanod_rosters',
-            statusColumns: [
-                'duty_status',
-                'status',
-                'availability_status',
-                'duty_state',
-            ],
+            statusColumns: self::TANOD_STATUS_COLUMNS,
             tanodOnly: false,
             onDutyValues: $onDutyValues
         );
@@ -231,12 +233,7 @@ class DashboardController extends Controller
 
         return $this->countOnDutyFromTable(
             table: 'users',
-            statusColumns: [
-                'duty_status',
-                'status',
-                'availability_status',
-                'duty_state',
-            ],
+            statusColumns: self::TANOD_STATUS_COLUMNS,
             tanodOnly: true,
             onDutyValues: $onDutyValues
         );
@@ -248,16 +245,47 @@ class DashboardController extends Controller
         bool $tanodOnly,
         array $onDutyValues
     ): int {
+        /*
+        |--------------------------------------------------------------------------
+        | Internal identifier allowlists
+        |--------------------------------------------------------------------------
+        |
+        | SQL bindings cannot bind table or column names. The table and every
+        | status column are restricted to fixed application-controlled lists
+        | before they are used in Schema, Query Builder, or raw expressions.
+        |
+        */
+
+        $table = SafeDatabaseIdentifier::approved(
+            $table,
+            self::TANOD_SOURCE_TABLES
+        );
+
+        $statusColumns = array_map(
+            static fn (string $column): string =>
+                SafeDatabaseIdentifier::approved(
+                    $column,
+                    self::TANOD_STATUS_COLUMNS
+                ),
+            $statusColumns
+        );
+
         if (! Schema::hasTable($table)) {
             return 0;
         }
 
-        $existingStatusColumns = array_values(array_filter(
-            $statusColumns,
-            fn ($column) => Schema::hasColumn($table, $column)
-        ));
+        $existingStatusColumns = array_values(
+            array_filter(
+                $statusColumns,
+                fn (string $column): bool =>
+                    Schema::hasColumn(
+                        $table,
+                        $column
+                    )
+            )
+        );
 
-        if (empty($existingStatusColumns)) {
+        if ($existingStatusColumns === []) {
             return 0;
         }
 
@@ -271,11 +299,38 @@ class DashboardController extends Controller
 
         if ($tanodOnly) {
             if (Schema::hasColumn($table, 'role')) {
-                $query->whereRaw("LOWER({$table}.role) = ?", ['tanod']);
+                $query->whereRaw(
+                    'LOWER('
+                        . SafeDatabaseIdentifier::wrap(
+                            $table . '.role'
+                        )
+                        . ') = ?',
+                    [
+                        'tanod',
+                    ]
+                );
             } elseif (Schema::hasColumn($table, 'employee_type')) {
-                $query->whereRaw("LOWER({$table}.employee_type) = ?", ['tanod']);
+                $query->whereRaw(
+                    'LOWER('
+                        . SafeDatabaseIdentifier::wrap(
+                            $table . '.employee_type'
+                        )
+                        . ') = ?',
+                    [
+                        'tanod',
+                    ]
+                );
             } elseif (Schema::hasColumn($table, 'position')) {
-                $query->whereRaw("LOWER({$table}.position) LIKE ?", ['%tanod%']);
+                $query->whereRaw(
+                    'LOWER('
+                        . SafeDatabaseIdentifier::wrap(
+                            $table . '.position'
+                        )
+                        . ') LIKE ?',
+                    [
+                        '%tanod%',
+                    ]
+                );
             }
         }
 
@@ -286,7 +341,10 @@ class DashboardController extends Controller
         */
 
         if (Schema::hasColumn($table, 'is_active')) {
-            $query->where("{$table}.is_active", true);
+            $query->where(
+                $table . '.is_active',
+                true
+            );
         }
 
         /*
@@ -300,14 +358,28 @@ class DashboardController extends Controller
         | inactive
         */
 
-        $query->where(function ($statusQuery) use ($table, $existingStatusColumns, $onDutyValues) {
-            foreach ($existingStatusColumns as $column) {
-                $statusQuery->orWhereIn(
-                    DB::raw("LOWER(REPLACE(REPLACE(TRIM({$table}.{$column}), ' ', '_'), '-', '_'))"),
-                    $onDutyValues
-                );
+        $query->where(
+            function ($statusQuery) use (
+                $table,
+                $existingStatusColumns,
+                $onDutyValues
+            ): void {
+                foreach ($existingStatusColumns as $column) {
+                    $wrappedColumn = SafeDatabaseIdentifier::wrap(
+                        $table . '.' . $column
+                    );
+
+                    $statusQuery->orWhereIn(
+                        DB::raw(
+                            'LOWER(REPLACE(REPLACE(TRIM('
+                                . $wrappedColumn
+                                . "), ' ', '_'), '-', '_'))"
+                        ),
+                        $onDutyValues
+                    );
+                }
             }
-        });
+        );
 
         return $query->count();
     }
