@@ -1,4 +1,3 @@
-cat > routes/console.php <<'PHP'
 <?php
 
 use Illuminate\Support\Facades\Schedule;
