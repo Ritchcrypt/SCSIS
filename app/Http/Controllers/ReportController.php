@@ -7,27 +7,67 @@ use App\Models\CaseRecord;
 use App\Models\Employee;
 use App\Models\Incident;
 use App\Models\ResidentComplaint;
+use App\Support\SafeDatabaseIdentifier;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class ReportController extends Controller
 {
+    private const COUNTABLE_REPORT_TABLES = [
+        'case_records',
+        'announcements',
+    ];
+
+    private const INCIDENT_EVIDENCE_TABLES = [
+        'evidence',
+        'incident_evidence',
+        'incident_evidences',
+        'incident_attachments',
+    ];
+
+    private const COMPLAINT_PROOF_TABLES = [
+        'resident_complaint_proofs',
+        'resident_complaint_evidence',
+        'resident_complaint_evidences',
+        'complaint_proofs',
+        'complaint_evidence',
+        'complaint_evidences',
+    ];
+
+    private const COMPLAINT_FOREIGN_KEYS = [
+        'resident_complaint_id',
+        'complaint_id',
+    ];
+
+
     public function index(Request $request): View
     {
-        return view('reports.index', $this->reportData($request));
+        Gate::authorize('viewReports');
+
+        return view(
+            'reports.index',
+            $this->reportData($request)
+        );
     }
+
 
     public function downloadPdf(Request $request)
     {
+        Gate::authorize('viewReports');
+
         $data = $this->reportData($request);
 
         $fileName = 'barangay-report-'
-            . strtolower(str_replace(' ', '-', $data['periodLabel']))
+            . $this->safeFileToken(
+                $data['periodLabel'] ?? 'report',
+                'report'
+            )
             . '-'
             . now()->format('Ymd-His')
             . '.pdf';
@@ -37,12 +77,22 @@ class ReportController extends Controller
             ->download($fileName);
     }
 
-    public function downloadIncidentPdf(Request $request, Incident $incident)
-    {
+
+    public function downloadIncidentPdf(
+        Request $request,
+        Incident $incident
+    ) {
+        Gate::authorize('viewReports');
+        Gate::authorize('view', $incident);
+
         $data = $this->specificIncidentReportData($incident);
 
         $fileName = 'incident-report-'
-            . strtolower(str_replace(' ', '-', $data['incidentReport']['code']))
+            . $this->safeFileToken(
+                $data['incidentReport']['code']
+                    ?? ('incident-' . $incident->id),
+                'incident-' . $incident->id
+            )
             . '-'
             . now()->format('Ymd-His')
             . '.pdf';
@@ -52,49 +102,64 @@ class ReportController extends Controller
             ->download($fileName);
     }
 
-    public function downloadCasePdf(Request $request, CaseRecord $caseRecord)
-{
-    $data = $this->specificCaseReportData($caseRecord);
 
-    $code = $data['caseReport']['case_number'] ?? 'case-' . $caseRecord->id;
+    public function downloadCasePdf(
+        Request $request,
+        CaseRecord $caseRecord
+    ) {
+        Gate::authorize('viewReports');
+        Gate::authorize('view', $caseRecord);
 
-    $safeCode = trim(
-        preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $code)),
-        '-'
-    );
+        $data = $this->specificCaseReportData($caseRecord);
 
-    $fileName = 'case-report-'
-        . ($safeCode !== '' ? $safeCode : 'case-' . $caseRecord->id)
-        . '-'
-        . now()->format('Ymd-His')
-        . '.pdf';
+        $code = $data['caseReport']['case_number']
+            ?? ('case-' . $caseRecord->id);
 
-    return Pdf::loadHTML($this->casePdfHtml($data))
-        ->setPaper('a4', 'portrait')
-        ->download($fileName);
-}
-
-    public function downloadComplaintPdf(Request $request, ResidentComplaint $residentComplaint)
-    {
-        $data = $this->specificComplaintReportData($residentComplaint);
-
-        $code = $data['complaintReport']['code'] ?? 'complaint-' . $residentComplaint->id;
-
-        $safeCode = trim(
-            preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $code)),
-            '-'
-        );
-
-        $fileName = 'complaint-report-'
-            . ($safeCode !== '' ? $safeCode : 'complaint-' . $residentComplaint->id)
+        $fileName = 'case-report-'
+            . $this->safeFileToken(
+                $code,
+                'case-' . $caseRecord->id
+            )
             . '-'
             . now()->format('Ymd-His')
             . '.pdf';
 
-        return Pdf::loadHTML($this->complaintPdfHtml($data))
+        return Pdf::loadHTML($this->casePdfHtml($data))
             ->setPaper('a4', 'portrait')
             ->download($fileName);
     }
+
+
+    public function downloadComplaintPdf(
+        Request $request,
+        ResidentComplaint $residentComplaint
+    ) {
+        Gate::authorize('viewReports');
+        Gate::authorize('view', $residentComplaint);
+
+        $data = $this->specificComplaintReportData(
+            $residentComplaint
+        );
+
+        $code = $data['complaintReport']['code']
+            ?? ('complaint-' . $residentComplaint->id);
+
+        $fileName = 'complaint-report-'
+            . $this->safeFileToken(
+                $code,
+                'complaint-' . $residentComplaint->id
+            )
+            . '-'
+            . now()->format('Ymd-His')
+            . '.pdf';
+
+        return Pdf::loadHTML(
+            $this->complaintPdfHtml($data)
+        )
+            ->setPaper('a4', 'portrait')
+            ->download($fileName);
+    }
+
 
     private function casePdfHtml(array $data): string
 {
@@ -1071,14 +1136,14 @@ class ReportController extends Controller
 
     private function specificIncidentEvidenceRecords(Incident $incident)
     {
-        $candidateTables = [
-            'evidence',
-            'incident_evidence',
-            'incident_evidences',
-            'incident_attachments',
-        ];
+        $candidateTables = self::INCIDENT_EVIDENCE_TABLES;
 
         foreach ($candidateTables as $table) {
+            $table = SafeDatabaseIdentifier::approved(
+                $table,
+                self::INCIDENT_EVIDENCE_TABLES
+            );
+
             if (
                 ! Schema::hasTable($table)
                 || ! Schema::hasColumn($table, 'incident_id')
@@ -1086,9 +1151,24 @@ class ReportController extends Controller
                 continue;
             }
 
+            $orderColumn = Schema::hasColumn(
+                $table,
+                'created_at'
+            )
+                ? 'created_at'
+                : 'id';
+
+            $orderColumn = SafeDatabaseIdentifier::approved(
+                $orderColumn,
+                [
+                    'created_at',
+                    'id',
+                ]
+            );
+
             return DB::table($table)
                 ->where('incident_id', $incident->id)
-                ->orderByDesc(Schema::hasColumn($table, 'created_at') ? 'created_at' : 'id')
+                ->orderByDesc($orderColumn)
                 ->get()
                 ->map(function ($record) use ($table) {
                     return [
@@ -1114,33 +1194,47 @@ class ReportController extends Controller
 
     private function specificComplaintProofRecords(ResidentComplaint $complaint)
     {
-        $candidateTables = [
-            'resident_complaint_proofs',
-            'resident_complaint_evidence',
-            'resident_complaint_evidences',
-            'complaint_proofs',
-            'complaint_evidence',
-            'complaint_evidences',
-        ];
-
-        $candidateForeignKeys = [
-            'resident_complaint_id',
-            'complaint_id',
-        ];
+        $candidateTables = self::COMPLAINT_PROOF_TABLES;
+        $candidateForeignKeys = self::COMPLAINT_FOREIGN_KEYS;
 
         foreach ($candidateTables as $table) {
+            $table = SafeDatabaseIdentifier::approved(
+                $table,
+                self::COMPLAINT_PROOF_TABLES
+            );
+
             if (! Schema::hasTable($table)) {
                 continue;
             }
 
             foreach ($candidateForeignKeys as $foreignKey) {
+                $foreignKey = SafeDatabaseIdentifier::approved(
+                    $foreignKey,
+                    self::COMPLAINT_FOREIGN_KEYS
+                );
+
                 if (! Schema::hasColumn($table, $foreignKey)) {
                     continue;
                 }
 
+                $orderColumn = Schema::hasColumn(
+                    $table,
+                    'created_at'
+                )
+                    ? 'created_at'
+                    : 'id';
+
+                $orderColumn = SafeDatabaseIdentifier::approved(
+                    $orderColumn,
+                    [
+                        'created_at',
+                        'id',
+                    ]
+                );
+
                 return DB::table($table)
                     ->where($foreignKey, $complaint->id)
-                    ->orderByDesc(Schema::hasColumn($table, 'created_at') ? 'created_at' : 'id')
+                    ->orderByDesc($orderColumn)
                     ->get()
                     ->map(function ($record) {
                         return [
@@ -1278,7 +1372,8 @@ class ReportController extends Controller
     private function statusSummary(Carbon $startDate, Carbon $endDate): array
     {
         return Incident::query()
-            ->select('status_id', DB::raw('COUNT(*) as total'))
+            ->select('status_id')
+            ->selectRaw('COUNT(*) as total')
             ->with('currentStatus')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('status_id')
@@ -1300,10 +1395,24 @@ class ReportController extends Controller
         }
 
         return Incident::query()
-            ->select('priority', DB::raw('COUNT(*) as total'))
+            ->select('priority')
+            ->selectRaw('COUNT(*) as total')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('priority')
-            ->orderByRaw("FIELD(priority, 'critical', 'high', 'moderate', 'low')")
+            ->orderByRaw(
+                'CASE priority '
+                    . 'WHEN ? THEN 1 '
+                    . 'WHEN ? THEN 2 '
+                    . 'WHEN ? THEN 3 '
+                    . 'WHEN ? THEN 4 '
+                    . 'ELSE 5 END',
+                [
+                    'critical',
+                    'high',
+                    'moderate',
+                    'low',
+                ]
+            )
             ->get()
             ->map(function ($row) {
                 return [
@@ -1318,7 +1427,8 @@ class ReportController extends Controller
     private function barangaySummary(Carbon $startDate, Carbon $endDate): array
     {
         return Incident::query()
-            ->select('barangay_id', DB::raw('COUNT(*) as total'))
+            ->select('barangay_id')
+            ->selectRaw('COUNT(*) as total')
             ->with('barangay')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('barangay_id')
@@ -1399,8 +1509,16 @@ class ReportController extends Controller
             ->values();
     }
 
-    private function countTableByDate(string $table, Carbon $startDate, Carbon $endDate): int
-    {
+    private function countTableByDate(
+        string $table,
+        Carbon $startDate,
+        Carbon $endDate
+    ): int {
+        $table = SafeDatabaseIdentifier::approved(
+            $table,
+            self::COUNTABLE_REPORT_TABLES
+        );
+
         if (! Schema::hasTable($table)) {
             return 0;
         }
@@ -1495,6 +1613,38 @@ class ReportController extends Controller
         }
 
         return round($size, 2) . ' ' . $units[$unitIndex];
+    }
+
+
+    private function safeFileToken(
+        mixed $value,
+        string $fallback
+    ): string {
+        $token = strtolower(trim((string) $value));
+
+        $token = preg_replace(
+            '/[^a-z0-9]+/',
+            '-',
+            $token
+        );
+
+        $token = trim((string) $token, '-');
+
+        if ($token === '') {
+            $token = strtolower(trim($fallback));
+            $token = preg_replace(
+                '/[^a-z0-9]+/',
+                '-',
+                $token
+            );
+            $token = trim((string) $token, '-');
+        }
+
+        return mb_substr(
+            $token !== '' ? $token : 'report',
+            0,
+            80
+        );
     }
 
     private function validPeriod(?string $period): string

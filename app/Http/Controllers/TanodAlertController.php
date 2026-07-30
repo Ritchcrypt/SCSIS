@@ -2,23 +2,27 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class TanodAlertController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
-        $user = Auth::user();
+        Gate::authorize('viewAny', UserNotification::class);
+
+        $user = $request->user();
 
         $allowedTypes = $this->allowedTypes();
-
-        $selectedType = strtolower((string) $request->query('type', 'all'));
+        $selectedType = strtolower(trim((string) $request->query('type', 'all')));
 
         if (! in_array($selectedType, $allowedTypes, true)) {
             $selectedType = 'all';
@@ -32,14 +36,17 @@ class TanodAlertController extends Controller
             $query->whereIn('type', $this->filterTypeAliases($selectedType));
         }
 
-        $alerts = $query->paginate(10)->withQueryString();
+        $alerts = $query
+            ->paginate(10)
+            ->withQueryString();
 
         $totalAlerts = $this->baseAlertQuery($user)->count();
-
         $unreadAlerts = $this->unreadAlertQuery($user)->count();
 
         $acknowledgedAlerts = Schema::hasColumn('notifications', 'acknowledged_at')
-            ? $this->baseAlertQuery($user)->whereNotNull('acknowledged_at')->count()
+            ? $this->baseAlertQuery($user)
+                ->whereNotNull('acknowledged_at')
+                ->count()
             : 0;
 
         return view('tanod-alerts.index', [
@@ -52,23 +59,44 @@ class TanodAlertController extends Controller
         ]);
     }
 
-    public function acknowledge(UserNotification $notification): RedirectResponse
-    {
-        $user = Auth::user();
+    public function acknowledge(
+        Request $request,
+        UserNotification $notification
+    ): RedirectResponse {
+        Gate::authorize('acknowledge', $notification);
+        $this->ensureOperationalAlert($notification);
 
-        $this->authorizeNotificationAccess($user, $notification);
+        $notification->acknowledge((int) $request->user()->id);
 
-        $notification->acknowledge($user->id);
+        $this->recordOperationalActivity(
+            event: 'tanod_alert.acknowledged',
+            category: 'tanod_alert',
+            description: 'A tanod alert was acknowledged.',
+            metadata: [
+                'notification_id' => (int) $notification->id,
+                'notification_type' => $notification->type,
+                'source_id' => $notification->source_id,
+            ],
+            request: $request,
+        );
 
-        return back()->with('success', 'Alert acknowledged successfully.');
+        return back()->with(
+            'success',
+            'Alert acknowledged successfully.'
+        );
     }
 
-    public function markAllRead(): RedirectResponse
+    public function markAllRead(Request $request): RedirectResponse
     {
-        $user = Auth::user();
+        Gate::authorize('markAllRead', UserNotification::class);
+
+        $user = $request->user();
 
         if (! Schema::hasColumn('notifications', 'is_read')) {
-            return back()->with('success', 'No unread alert field found.');
+            return back()->with(
+                'success',
+                'No unread alert field found.'
+            );
         }
 
         $updates = [
@@ -80,69 +108,97 @@ class TanodAlertController extends Controller
         }
 
         $this->baseAlertQuery($user)
-            ->where(function ($query) {
+            ->where(function ($query): void {
                 $query->where('is_read', false)
                     ->orWhere('is_read', 0)
                     ->orWhereNull('is_read');
             })
             ->update($updates);
 
-        return back()->with('success', 'All alerts marked as read.');
+        return back()->with(
+            'success',
+            'All alerts marked as read.'
+        );
     }
 
-    public function destroy(UserNotification $notification): RedirectResponse
-    {
-        $user = Auth::user();
+    public function destroy(
+        Request $request,
+        UserNotification $notification
+    ): RedirectResponse {
+        Gate::authorize('delete', $notification);
+        $this->ensureOperationalAlert($notification);
 
-        $this->authorizeNotificationAccess($user, $notification);
+        $auditMetadata = [
+            'notification_id' => (int) $notification->id,
+            'notification_type' => $notification->type,
+            'source_id' => $notification->source_id,
+        ];
 
         $notification->delete();
 
-        return back()->with('success', 'Alert deleted successfully.');
+        $this->recordOperationalActivity(
+            event: 'tanod_alert.deleted',
+            category: 'tanod_alert',
+            description: 'A tanod alert was deleted.',
+            metadata: $auditMetadata,
+            request: $request,
+        );
+
+        return back()->with(
+            'success',
+            'Alert deleted successfully.'
+        );
     }
 
-    public function destroyAll(): RedirectResponse
+    public function destroyAll(Request $request): RedirectResponse
     {
-        $user = Auth::user();
+        Gate::authorize('deleteAny', UserNotification::class);
 
-        $deletedCount = $this->baseAlertQuery($user)->delete();
+        $deletedCount = $this->baseAlertQuery($request->user())
+            ->delete();
 
-        return back()->with('success', $deletedCount . ' alert notification(s) deleted successfully.');
+        $this->recordOperationalActivity(
+            event: 'tanod_alert.deleted_all',
+            category: 'tanod_alert',
+            description: 'All visible tanod alerts were deleted.',
+            metadata: [
+                'deleted_count' => $deletedCount,
+            ],
+            request: $request,
+        );
+
+        return back()->with(
+            'success',
+            $deletedCount . ' alert notification(s) deleted successfully.'
+        );
     }
 
-    private function authorizeNotificationAccess(?User $user, UserNotification $notification): void
+    /**
+     * Ensure alert endpoints cannot be used to alter another category of the
+     * current user's notifications, such as announcements or complaints.
+     */
+    private function ensureOperationalAlert(UserNotification $notification): void
     {
-        if (! $user) {
-            abort(403, 'Unauthorized access.');
-        }
+        $type = strtolower(trim((string) $notification->type));
 
-        if ((int) $notification->user_id === (int) $user->id) {
-            return;
-        }
-
-        abort(403, 'You are not allowed to manage this alert.');
+        abort_unless(
+            in_array($type, $this->alertTypesOnly(), true),
+            404,
+            'Alert notification not found.'
+        );
     }
 
-    private function baseAlertQuery(?User $user)
+    private function baseAlertQuery(User $user)
     {
-        if (! $user) {
-            abort(403, 'Unauthorized access.');
-        }
-
         /*
         |--------------------------------------------------------------------------
         | Tanod Alerts Module Rule
         |--------------------------------------------------------------------------
-        | Shows operational tanod alerts only.
         |
-        | Excluded:
-        | - announcement
-        | - calamity
+        | Every query is restricted to the authenticated user's own records.
+        | Announcements and calamity notices remain in their dedicated module
+        | and notification bell.
         |
-        | Those belong to the Announcements module and notification bell only.
-        |
-        | UI filters are clean grouped labels, but the query still supports older
-        | notification aliases already stored in the database.
         */
 
         return UserNotification::query()
@@ -154,12 +210,12 @@ class TanodAlertController extends Controller
             ->whereIn('type', $this->alertTypesOnly());
     }
 
-    private function unreadAlertQuery(?User $user)
+    private function unreadAlertQuery(User $user)
     {
         $query = $this->baseAlertQuery($user);
 
         if (Schema::hasColumn('notifications', 'is_read')) {
-            $query->where(function ($unreadQuery) {
+            $query->where(function ($unreadQuery): void {
                 $unreadQuery->where('is_read', false)
                     ->orWhere('is_read', 0)
                     ->orWhereNull('is_read');
@@ -191,29 +247,22 @@ class TanodAlertController extends Controller
                 'assigned_incident',
                 'incident_assigned',
                 'new_assigned_incident',
-
                 'incident',
                 'incident_reported',
-
                 'incident_update',
                 'incident_updated',
                 'incident_status_update',
                 'status_update',
-
                 'dispatch',
                 'escalation',
                 'emergency',
                 'resolved',
-
                 'tanod_task',
                 'tanod_task_assigned',
                 'task_assigned',
-
                 'tanod_task_update',
                 'task_update',
-
                 'tanod_alert',
-
                 'community_problem',
                 'community',
             ],

@@ -2,18 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\EmergencyHotline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class EmergencyModeController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
-        $user = $request->user();
+        Gate::authorize('viewAny', EmergencyHotline::class);
 
         $hotlines = EmergencyHotline::query()
             ->where('is_active', true)
@@ -23,50 +27,106 @@ class EmergencyModeController extends Controller
 
         return view('emergency-mode.index', [
             'hotlines' => $hotlines,
-            'canManageHotlines' => $this->canManageHotlines($user),
+            'canManageHotlines' => Gate::allows(
+                'create',
+                EmergencyHotline::class
+            ),
             'colors' => $this->colors(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless($this->canManageHotlines($request->user()), 403);
+        Gate::authorize('create', EmergencyHotline::class);
 
         $validated = $request->validate([
-            'agency_name' => ['required', 'string', 'max:255'],
-            'hotline_number' => ['required', 'string', 'max:50'],
-            'color' => ['required', Rule::in(array_keys($this->colors()))],
+            'agency_name' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+            'hotline_number' => [
+                'required',
+                'string',
+                'max:50',
+                'regex:/^[0-9+()\-.\s\/]*$/',
+            ],
+            'color' => [
+                'required',
+                Rule::in(array_keys($this->colors())),
+            ],
         ]);
 
-        $nextOrder = ((int) EmergencyHotline::query()->max('sort_order')) + 1;
+        $createdHotline = null;
 
-        EmergencyHotline::create([
-            'agency_name' => $validated['agency_name'],
-            'hotline_number' => $validated['hotline_number'],
-            'color' => $validated['color'],
-            'is_active' => true,
-            'sort_order' => $nextOrder,
-        ]);
+        DB::transaction(function () use (
+            $validated,
+            &$createdHotline
+        ): void {
+            $lastOrder = EmergencyHotline::query()
+                ->orderByDesc('sort_order')
+                ->lockForUpdate()
+                ->value('sort_order');
 
-        return back()->with('success', 'Emergency hotline added successfully.');
+            $createdHotline = EmergencyHotline::create([
+                'agency_name' => trim($validated['agency_name']),
+                'hotline_number' => trim($validated['hotline_number']),
+                'color' => $validated['color'],
+                'is_active' => true,
+                'sort_order' => ((int) $lastOrder) + 1,
+            ]);
+        });
+
+        $this->recordOperationalActivity(
+            event: 'emergency_hotline.created',
+            category: 'emergency_hotline',
+            description: 'An emergency hotline was created.',
+            metadata: [
+                'emergency_hotline_id' => (int) $createdHotline->id,
+                'agency_name' => $createdHotline->agency_name,
+                'color' => $createdHotline->color,
+                'sort_order' => $createdHotline->sort_order,
+            ],
+            request: $request,
+        );
+
+        return back()->with(
+            'success',
+            'Emergency hotline added successfully.'
+        );
     }
 
-    public function destroy(Request $request, EmergencyHotline $emergencyHotline): RedirectResponse
-    {
-        abort_unless($this->canManageHotlines($request->user()), 403);
+    public function destroy(
+        EmergencyHotline $emergencyHotline
+    ): RedirectResponse {
+        Gate::authorize('delete', $emergencyHotline);
 
-        $emergencyHotline->delete();
+        $auditMetadata = [
+            'emergency_hotline_id' => (int) $emergencyHotline->id,
+            'agency_name' => $emergencyHotline->agency_name,
+            'color' => $emergencyHotline->color,
+            'sort_order' => $emergencyHotline->sort_order,
+        ];
 
-        return back()->with('success', 'Emergency hotline removed successfully.');
-    }
+        DB::transaction(function () use ($emergencyHotline): void {
+            $lockedHotline = EmergencyHotline::query()
+                ->lockForUpdate()
+                ->findOrFail($emergencyHotline->getKey());
 
-    private function canManageHotlines($user): bool
-    {
-        return $user && in_array(strtolower((string) $user->role), [
-            'admin',
-            'official',
-            'dao',
-        ], true);
+            $lockedHotline->delete();
+        });
+
+        $this->recordOperationalActivity(
+            event: 'emergency_hotline.deleted',
+            category: 'emergency_hotline',
+            description: 'An emergency hotline was deleted.',
+            metadata: $auditMetadata,
+        );
+
+        return back()->with(
+            'success',
+            'Emergency hotline removed successfully.'
+        );
     }
 
     private function colors(): array

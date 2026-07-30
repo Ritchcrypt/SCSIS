@@ -18,11 +18,7 @@ return new class extends Migration
                     ->constrained('users')
                     ->nullOnDelete();
 
-                $table->foreignId('employee_id')
-                    ->nullable()
-                    ->unique()
-                    ->constrained('employees')
-                    ->nullOnDelete();
+                $table->unsignedBigInteger('employee_id')->nullable();
 
                 $table->string('badge_number', 50)->unique();
                 $table->string('contact_number', 50)->nullable();
@@ -51,13 +47,11 @@ return new class extends Migration
             }
 
             if (! Schema::hasColumn('tanod_profiles', 'employee_id')) {
-                $table->foreignId('employee_id')
-                    ->nullable()
-                    ->unique()
-                    ->after('user_id')
-                    ->constrained('employees')
-                    ->nullOnDelete();
-            }
+    $table->unsignedBigInteger('employee_id')
+        ->nullable()
+        ->unique()
+        ->after('user_id');
+}
 
             if (! Schema::hasColumn('tanod_profiles', 'badge_number')) {
                 $table->string('badge_number', 50)->unique()->after('employee_id');

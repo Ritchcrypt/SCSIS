@@ -41,13 +41,6 @@
         </div>
     @endif
 
-    @if (session('temporary_password'))
-        <div class="rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm font-medium text-blue-800">
-            Temporary password for <strong>{{ session('temporary_password_user') }}</strong>:
-            <span class="font-mono font-bold">{{ session('temporary_password') }}</span>
-        </div>
-    @endif
-
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <form method="POST"
               action="{{ $isEdit ? route('admin.users.update', $userRecord) : route('admin.users.store') }}"
@@ -98,7 +91,7 @@
                                class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
                         <p class="mt-2 text-xs text-slate-500">
-                            Accepted formats: JPG, PNG, or WEBP. Maximum size: 50 MB.
+                            Accepted formats: JPG, PNG, or WEBP. Maximum size: 5 MB.
                             @if ($isEdit && $profilePhotoUrl)
                                 Uploading a new image will replace the current profile picture.
                             @endif
@@ -233,18 +226,19 @@
             @if (! $isEdit)
                 <div>
                     <label for="password" class="mb-2 block text-sm font-semibold text-slate-700">
-                        Temporary Password
+                        Initial Password
                     </label>
 
                     <input id="password"
-                           type="text"
+                           type="password"
                            name="password"
+                           autocomplete="new-password"
                            required
-                           placeholder="Minimum 8 characters"
+                           placeholder="At least 12 characters with uppercase, lowercase, number, and symbol"
                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
                     <p class="mt-2 text-xs text-slate-500">
-                        Give this temporary password to the user after account creation.
+                        Use a unique initial password that satisfies the TabangNow password policy. The user can later change it from their profile.
                     </p>
 
                     @error('password')
@@ -276,7 +270,7 @@
 
                         <button type="submit"
                                 class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
-                            Reset Password
+                            Send Password Reset Link
                         </button>
                     </form>
 

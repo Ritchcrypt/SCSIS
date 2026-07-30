@@ -5,7 +5,6 @@ namespace Tests\Feature\Settings;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
-use Livewire\Volt\Volt;
 use Tests\TestCase;
 
 class PasswordUpdateTest extends TestCase
@@ -14,37 +13,72 @@ class PasswordUpdateTest extends TestCase
 
     public function test_password_can_be_updated(): void
     {
+        $currentPassword = 'CurrentTabang#2026';
+        $newPassword = 'UpdatedTabang#2026';
+
+        /** @var User $user */
         $user = User::factory()->create([
-            'password' => Hash::make('password'),
+            'role' => 'resident',
+            'is_active' => true,
+            'status' => true,
+            'password' => Hash::make($currentPassword),
         ]);
 
-        $this->actingAs($user);
+        $response = $this
+            ->actingAs($user)
+            ->from(route('profile.edit'))
+            ->put(route('profile.password.update'), [
+                'current_password' => $currentPassword,
+                'password' => $newPassword,
+                'password_confirmation' => $newPassword,
+            ]);
 
-        $response = Volt::test('settings.password')
-            ->set('current_password', 'password')
-            ->set('password', 'new-password')
-            ->set('password_confirmation', 'new-password')
-            ->call('updatePassword');
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
 
-        $response->assertHasNoErrors();
+        $user->refresh();
 
-        $this->assertTrue(Hash::check('new-password', $user->refresh()->password));
+        $this->assertTrue(
+            Hash::check($newPassword, $user->password)
+        );
+
+        $this->assertFalse(
+            Hash::check($currentPassword, $user->password)
+        );
     }
 
     public function test_correct_password_must_be_provided_to_update_password(): void
     {
+        $currentPassword = 'CurrentTabang#2026';
+        $newPassword = 'UpdatedTabang#2026';
+
+        /** @var User $user */
         $user = User::factory()->create([
-            'password' => Hash::make('password'),
+            'role' => 'resident',
+            'is_active' => true,
+            'status' => true,
+            'password' => Hash::make($currentPassword),
         ]);
 
-        $this->actingAs($user);
+        $response = $this
+            ->actingAs($user)
+            ->from(route('profile.edit'))
+            ->put(route('profile.password.update'), [
+                'current_password' => 'IncorrectPassword#2026',
+                'password' => $newPassword,
+                'password_confirmation' => $newPassword,
+            ]);
 
-        $response = Volt::test('settings.password')
-            ->set('current_password', 'wrong-password')
-            ->set('password', 'new-password')
-            ->set('password_confirmation', 'new-password')
-            ->call('updatePassword');
+        $response->assertRedirect();
 
-        $response->assertHasErrors(['current_password']);
+        $user->refresh();
+
+        $this->assertTrue(
+            Hash::check($currentPassword, $user->password)
+        );
+
+        $this->assertFalse(
+            Hash::check($newPassword, $user->password)
+        );
     }
 }

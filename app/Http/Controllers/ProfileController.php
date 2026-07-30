@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Rules\SecureUploadedFile;
+use App\Services\ActivityLogger;
+use App\Services\SecureUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,11 +13,20 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
+use Throwable;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        private readonly ActivityLogger $activityLogger,
+        private readonly SecureUploadService $secureUploads
+    ) {
+    }
+
     public function edit(Request $request): View
     {
         $authUser = $request->user();
@@ -40,6 +52,33 @@ class ProfileController extends Controller
 
         $userRecord = User::query()->findOrFail($authUser->id);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Canonical email input
+        |--------------------------------------------------------------------------
+        |
+        | Validation and uniqueness checks must operate on the same lowercase,
+        | trimmed value that will be stored in the database.
+        |
+        */
+
+        $request->merge([
+            'email' => strtolower(
+                trim(
+                    (string) $request->input(
+                        'email'
+                    )
+                )
+            ),
+        ]);
+
+        $originalValues = [
+            'name' => (string) $userRecord->name,
+            'email' => (string) $userRecord->email,
+            'contact_number' => (string) ($userRecord->contact_number ?? ''),
+            'address' => (string) ($userRecord->address ?? ''),
+        ];
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -48,41 +87,180 @@ class ProfileController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($userRecord->id),
             ],
-            'contact_number' => ['nullable', 'string', 'max:30', 'regex:/^[0-9+()\-\s]*$/'],
+            'contact_number' => [
+                'nullable',
+                'string',
+                'max:30',
+                'regex:/^[0-9+()\-\s]*$/',
+            ],
             'address' => ['nullable', 'string', 'max:1000'],
-            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:51200'],
+            'profile_photo' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                new SecureUploadedFile(
+                    'profile_photo'
+                ),
+            ],
         ]);
 
+        $normalizedEmail = strtolower(
+            trim(
+                (string) $validated['email']
+            )
+        );
+
+        $emailChanged = strcasecmp(
+            (string) $userRecord->email,
+            $normalizedEmail
+        ) !== 0;
+
+        $oldEmail = (string) $userRecord->email;
         $oldProfilePhotoPath = $userRecord->profile_photo_path ?? null;
         $newProfilePhotoPath = $this->storeProfilePhoto($request);
 
-        DB::transaction(function () use ($validated, $userRecord, $newProfilePhotoPath) {
-            $userRecord->name = $validated['name'];
-            $userRecord->email = $validated['email'];
+        try {
+            DB::transaction(function () use (
+                $validated,
+                $userRecord,
+                $newProfilePhotoPath,
+                $normalizedEmail,
+                $emailChanged
+            ): void {
+                $userRecord->name = trim(
+                    (string) $validated['name']
+                );
 
-            if (Schema::hasColumn('users', 'contact_number')) {
-                $userRecord->contact_number = $this->normalizeContactNumber(
-                    $validated['contact_number'] ?? null
+                $userRecord->email = $normalizedEmail;
+
+                if (
+                    $emailChanged
+                    && Schema::hasColumn(
+                        'users',
+                        'email_verified_at'
+                    )
+                ) {
+                    $userRecord->email_verified_at = null;
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'users',
+                        'contact_number'
+                    )
+                ) {
+                    $userRecord->contact_number =
+                        $this->normalizeContactNumber(
+                            $validated[
+                                'contact_number'
+                            ] ?? null
+                        );
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'users',
+                        'address'
+                    )
+                ) {
+                    $userRecord->address =
+                        $validated['address'] ?? null;
+                }
+
+                if (
+                    $newProfilePhotoPath
+                    && Schema::hasColumn(
+                        'users',
+                        'profile_photo_path'
+                    )
+                ) {
+                    $userRecord->profile_photo_path =
+                        $newProfilePhotoPath;
+                }
+
+                $userRecord->save();
+            });
+        } catch (Throwable $exception) {
+            if ($newProfilePhotoPath) {
+                $this->secureUploads->delete(
+                    $newProfilePhotoPath,
+                    [
+                        'profile-photos',
+                    ]
                 );
             }
 
-            if (Schema::hasColumn('users', 'address')) {
-                $userRecord->address = $validated['address'] ?? null;
-            }
+            throw $exception;
+        }
 
-            if ($newProfilePhotoPath && Schema::hasColumn('users', 'profile_photo_path')) {
-                $userRecord->profile_photo_path = $newProfilePhotoPath;
-            }
-
-            $userRecord->save();
-        });
+        if ($emailChanged) {
+            $this->deletePasswordResetTokens(
+                $oldEmail
+            );
+        }
 
         if ($newProfilePhotoPath && $oldProfilePhotoPath) {
-            $oldProfilePhotoPath = $this->normalizeProfilePhotoPath($oldProfilePhotoPath);
+            $oldProfilePhotoPath = $this->normalizeProfilePhotoPath(
+                $oldProfilePhotoPath
+            );
 
-            if ($oldProfilePhotoPath && Storage::disk('public')->exists($oldProfilePhotoPath)) {
-                Storage::disk('public')->delete($oldProfilePhotoPath);
+            if ($oldProfilePhotoPath) {
+                $this->secureUploads->delete(
+                    $oldProfilePhotoPath,
+                    [
+                        'profile-photos',
+                    ]
+                );
             }
+        }
+
+        $userRecord->refresh();
+
+        $changedFields = [];
+
+        if ($originalValues['name'] !== (string) $userRecord->name) {
+            $changedFields[] = 'name';
+        }
+
+        if (
+            strcasecmp(
+                $originalValues['email'],
+                (string) $userRecord->email
+            ) !== 0
+        ) {
+            $changedFields[] = 'email';
+        }
+
+        if (
+            $originalValues['contact_number']
+            !== (string) ($userRecord->contact_number ?? '')
+        ) {
+            $changedFields[] = 'contact_number';
+        }
+
+        if (
+            $originalValues['address']
+            !== (string) ($userRecord->address ?? '')
+        ) {
+            $changedFields[] = 'address';
+        }
+
+        if ($newProfilePhotoPath) {
+            $changedFields[] = 'profile_photo';
+        }
+
+        if ($changedFields !== []) {
+            $this->activityLogger->record(
+                event: 'account.profile_updated',
+                category: 'account',
+                description: 'User updated their profile information.',
+                actor: $userRecord,
+                target: $userRecord,
+                metadata: [
+                    'changed_fields' => $changedFields,
+                ],
+                request: $request,
+            );
         }
 
         return redirect()
@@ -94,50 +272,376 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        abort_unless($user && in_array(strtolower((string) $user->role), [
-            'official',
-            'dao',
-            'tanod',
-            'resident',
-        ], true), 403);
+        abort_unless(
+            $user && in_array(
+                strtolower((string) $user->role),
+                [
+                    'admin',
+                    'official',
+                    'dao',
+                    'tanod',
+                    'resident',
+                ],
+                true
+            ),
+            403
+        );
 
         $validated = $request->validateWithBag('updatePassword', [
-            'current_password' => ['required', 'current_password'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'current_password' => [
+                'required',
+                'string',
+                'current_password',
+            ],
+            'password' => [
+                'required',
+                'string',
+                Password::defaults(),
+                'confirmed',
+                'different:current_password',
+            ],
         ]);
 
-        $user->forceFill([
-            'password' => Hash::make($validated['password']),
-        ])->save();
+        $currentSessionId = $request->session()->getId();
+
+        DB::transaction(function () use (
+            $validated,
+            $user,
+            $currentSessionId
+        ): void {
+            $user->forceFill([
+                'password' => Hash::make($validated['password']),
+                'remember_token' => Str::random(60),
+            ])->save();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Revoke other authentication credentials
+            |--------------------------------------------------------------------------
+            |
+            | Keep this browser session active, but terminate sessions on other
+            | devices and invalidate persistent tokens.
+            |
+            */
+
+            $this->revokeAuthenticationArtifacts(
+                $user,
+                $currentSessionId
+            );
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Rotate current-session security values
+        |--------------------------------------------------------------------------
+        */
+
+        $request->session()->forget('auth.password_confirmed_at');
+        $request->session()->regenerate();
+        $request->session()->regenerateToken();
+        $request->session()->put(
+            'security.last_activity_at',
+            time()
+        );
+
+        $user->refresh();
+
+        $this->activityLogger->record(
+            event: 'auth.password_changed',
+            category: 'authentication',
+            description: 'User changed their account password.',
+            actor: $user,
+            target: $user,
+            metadata: [
+                'other_sessions_revoked' => true,
+                'remember_token_rotated' => true,
+            ],
+            request: $request,
+        );
 
         return redirect()
             ->route('profile.edit')
-            ->with('success', 'Password updated successfully.');
+            ->with(
+                'success',
+                'Password updated successfully. Other active sessions were signed out.'
+            );
+    }
+
+
+    public function destroyOtherSessions(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user, 403, 'Unauthorized access.');
+
+        $request->validateWithBag('logoutOtherSessions', [
+            'password' => [
+                'required',
+                'string',
+                'current_password',
+            ],
+        ]);
+
+        $currentSessionId = $request->session()->getId();
+
+        DB::transaction(function () use (
+            $user,
+            $currentSessionId
+        ): void {
+            /*
+            |--------------------------------------------------------------------------
+            | Invalidate persistent authentication
+            |--------------------------------------------------------------------------
+            |
+            | Rotating the remember token prevents old remember-me cookies on
+            | other devices from restoring an authenticated session.
+            |
+            */
+
+            $user->forceFill([
+                'remember_token' => Str::random(60),
+            ])->save();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delete other database sessions
+            |--------------------------------------------------------------------------
+            |
+            | The current browser session is preserved. Sessions belonging to
+            | other users are never touched.
+            |
+            */
+
+            if (
+                Schema::hasTable('sessions')
+                && Schema::hasColumn('sessions', 'user_id')
+            ) {
+                $sessions = DB::table('sessions')
+                    ->where('user_id', $user->id);
+
+                if (
+                    $currentSessionId !== ''
+                    && Schema::hasColumn('sessions', 'id')
+                ) {
+                    $sessions->where('id', '!=', $currentSessionId);
+                }
+
+                $sessions->delete();
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Revoke personal access tokens
+            |--------------------------------------------------------------------------
+            |
+            | Personal access tokens may represent other authenticated devices
+            | or clients, so they are revoked with the other sessions.
+            |
+            */
+
+            if (
+                Schema::hasTable('personal_access_tokens')
+                && Schema::hasColumn(
+                    'personal_access_tokens',
+                    'tokenable_id'
+                )
+                && Schema::hasColumn(
+                    'personal_access_tokens',
+                    'tokenable_type'
+                )
+            ) {
+                DB::table('personal_access_tokens')
+                    ->where('tokenable_id', $user->id)
+                    ->where('tokenable_type', User::class)
+                    ->delete();
+            }
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Rotate this browser's session security values
+        |--------------------------------------------------------------------------
+        */
+
+        $request->session()->regenerate();
+        $request->session()->regenerateToken();
+        $request->session()->put(
+            'security.last_activity_at',
+            time()
+        );
+
+        $user->refresh();
+
+        $this->activityLogger->record(
+            event: 'auth.other_sessions_revoked',
+            category: 'authentication',
+            description: 'User signed out other browsers and devices.',
+            actor: $user,
+            target: $user,
+            metadata: [
+                'current_session_preserved' => true,
+                'remember_token_rotated' => true,
+                'personal_access_tokens_revoked' => true,
+            ],
+            request: $request,
+        );
+
+        return redirect()
+            ->route('profile.edit')
+            ->with(
+                'success',
+                'Other browser and device sessions were signed out successfully.'
+            );
     }
 
     public function destroyOwnAccount(Request $request): RedirectResponse
     {
         $user = $request->user();
 
-        abort_unless($user && in_array(strtolower((string) $user->role), [
-            'official',
-            'dao',
-            'tanod',
-            'resident',
-        ], true), 403);
+        abort_unless(
+            $user && in_array(
+                strtolower((string) $user->role),
+                [
+                    'official',
+                    'dao',
+                    'tanod',
+                    'resident',
+                ],
+                true
+            ),
+            403
+        );
 
         $request->validateWithBag('userDeletion', [
-            'password' => ['required', 'current_password'],
+            'password' => [
+                'required',
+                'current_password',
+            ],
         ]);
 
-        Auth::logout();
+        $profilePhotoPath =
+            $this->normalizeProfilePhotoPath(
+                $user->profile_photo_path ?? null
+            );
 
-        $user->delete();
+        /*
+        |--------------------------------------------------------------------------
+        | Log out before deleting the authenticated model
+        |--------------------------------------------------------------------------
+        |
+        | Laravel rotates the remember token during logout. Logging out after
+        | deletion could cause the deleted Eloquent user model to be saved again.
+        |
+        */
+
+        Auth::guard('web')->logout();
+
+        DB::transaction(function () use (
+            $request,
+            $user
+        ): void {
+            $this->revokeAuthenticationArtifacts($user);
+
+            $deleted = $user->delete();
+
+            if (! $deleted) {
+                throw new \RuntimeException(
+                    'The user account could not be deleted.'
+                );
+            }
+
+            $this->activityLogger->record(
+                event: 'account.self_deleted',
+                category: 'account',
+                description: 'User permanently deleted their own account.',
+                actor: $user,
+                target: $user,
+                metadata: [
+                    'role' => strtolower((string) $user->role),
+                ],
+                request: $request,
+            );
+        });
+
+        if ($profilePhotoPath) {
+            $this->secureUploads->delete(
+                $profilePhotoPath,
+                [
+                    'profile-photos',
+                ]
+            );
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    private function revokeAuthenticationArtifacts(
+        User $user,
+        ?string $exceptSessionId = null
+    ): void {
+        if (
+            Schema::hasTable('sessions')
+            && Schema::hasColumn('sessions', 'user_id')
+        ) {
+            $sessions = DB::table('sessions')
+                ->where('user_id', $user->id);
+
+            if (
+                $exceptSessionId !== null
+                && $exceptSessionId !== ''
+                && Schema::hasColumn('sessions', 'id')
+            ) {
+                $sessions->where('id', '!=', $exceptSessionId);
+            }
+
+            $sessions->delete();
+        }
+
+        if (
+            Schema::hasTable('personal_access_tokens')
+            && Schema::hasColumn('personal_access_tokens', 'tokenable_id')
+            && Schema::hasColumn('personal_access_tokens', 'tokenable_type')
+        ) {
+            DB::table('personal_access_tokens')
+                ->where('tokenable_id', $user->id)
+                ->where('tokenable_type', User::class)
+                ->delete();
+        }
+
+        foreach (['password_reset_tokens', 'password_resets'] as $table) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn($table, 'email')
+            ) {
+                DB::table($table)
+                    ->where('email', $user->email)
+                    ->delete();
+            }
+        }
+    }
+
+    private function deletePasswordResetTokens(
+        string $email
+    ): void {
+        foreach ([
+            'password_reset_tokens',
+            'password_resets',
+        ] as $table) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn(
+                    $table,
+                    'email'
+                )
+            ) {
+                DB::table($table)
+                    ->where('email', $email)
+                    ->delete();
+            }
+        }
     }
 
     private function storeProfilePhoto(Request $request): ?string
@@ -150,7 +654,10 @@ class ProfileController extends Controller
             return null;
         }
 
-        $path = $request->file('profile_photo')->store('profile-photos', 'public');
+        $path = $this->secureUploads->store(
+            $request->file('profile_photo'),
+            'profile_photo'
+        );
 
         return $this->normalizeProfilePhotoPath($path);
     }

@@ -2,41 +2,87 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\CaseRecord;
 use App\Models\Incident;
+use App\Support\SqlLikePattern;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class CaseManagementController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
-        $search = trim((string) $request->query('search', ''));
+        Gate::authorize('viewAny', CaseRecord::class);
+
+        $search = SqlLikePattern::normalize(
+            $request->query('search')
+        );
+
+        $searchPattern = SqlLikePattern::contains(
+            $search
+        );
 
         $cases = CaseRecord::query()
             ->with(['incident', 'creator', 'updater'])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($searchQuery) use ($search) {
-                    $searchQuery
-                        ->where('case_number', 'like', "%{$search}%")
-                        ->orWhere('subject_name', 'like', "%{$search}%")
-                        ->orWhere('contact', 'like', "%{$search}%")
-                        ->orWhere('address', 'like', "%{$search}%")
-                        ->orWhere('incident_title', 'like', "%{$search}%")
-                        ->orWhere('handled_by', 'like', "%{$search}%")
-                        ->orWhereHas('incident', function ($incidentQuery) use ($search) {
-                            $incidentQuery
-                                ->where('incident_code', 'like', "%{$search}%")
-                                ->orWhere('incident_title', 'like', "%{$search}%")
-                                ->orWhere('title', 'like', "%{$search}%");
-                        });
-                });
-            })
+            ->when(
+                $searchPattern !== null,
+                function ($query) use ($searchPattern): void {
+                    $query->where(
+                        function ($searchQuery) use ($searchPattern): void {
+                            SqlLikePattern::whereContains(
+                                $searchQuery,
+                                'case_number',
+                                $searchPattern
+                            );
+
+                            foreach ([
+                                'subject_name',
+                                'contact',
+                                'address',
+                                'incident_title',
+                                'handled_by',
+                            ] as $column) {
+                                SqlLikePattern::orWhereContains(
+                                    $searchQuery,
+                                    $column,
+                                    $searchPattern
+                                );
+                            }
+
+                            $searchQuery->orWhereHas(
+                                'incident',
+                                function ($incidentQuery) use ($searchPattern): void {
+                                    SqlLikePattern::whereContains(
+                                        $incidentQuery,
+                                        'incident_code',
+                                        $searchPattern
+                                    );
+
+                                    SqlLikePattern::orWhereContains(
+                                        $incidentQuery,
+                                        'incident_title',
+                                        $searchPattern
+                                    );
+
+                                    SqlLikePattern::orWhereContains(
+                                        $incidentQuery,
+                                        'title',
+                                        $searchPattern
+                                    );
+                                }
+                            );
+                        }
+                    );
+                }
+            )
             ->orderByRaw('CAST(case_number AS UNSIGNED) ASC')
             ->paginate(10)
             ->withQueryString();
@@ -58,118 +104,144 @@ class CaseManagementController extends Controller
             'caseTypes' => $this->caseTypes(),
             'caseStatuses' => $this->caseStatuses(),
             'filters' => [
-                'search' => $search,
+                'search' => $search ?? '',
             ],
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'case_number' => ['nullable', 'string', 'max:50'],
-            'case_type' => ['required', Rule::in(array_keys($this->caseTypes()))],
-            'subject_name' => ['required', 'string', 'max:255'],
-            'contact' => ['nullable', 'string', 'max:50'],
-            'address' => ['nullable', 'string', 'max:500'],
-            'incident_id' => ['nullable', 'integer', 'exists:incidents,id'],
-            'incident_title' => ['nullable', 'string', 'max:255'],
-            'status' => ['required', Rule::in(array_keys($this->caseStatuses()))],
-            'hearing_date' => ['nullable', 'date'],
-            'handled_by' => ['nullable', 'string', 'max:255'],
-            'resolution' => ['nullable', 'string', 'max:3000'],
-            'notes' => ['nullable', 'string', 'max:3000'],
-        ]);
+        Gate::authorize('create', CaseRecord::class);
 
-        DB::transaction(function () use ($validated) {
-            $incidentTitle = $validated['incident_title'] ?? null;
+        $validated = $request->validate($this->validationRules());
 
-            if (! empty($validated['incident_id']) && empty($incidentTitle)) {
-                $incident = Incident::find($validated['incident_id']);
-                $incidentTitle = $incident?->display_title;
-            }
+        $createdCase = null;
 
+        DB::transaction(function () use (
+            $request,
+            $validated,
+            &$createdCase
+        ): void {
             $caseNumber = trim((string) ($validated['case_number'] ?? ''));
 
-            if ($caseNumber === '' || strtoupper($caseNumber) === 'AUTO-GENERATED') {
+            if (
+                $caseNumber === ''
+                || strtoupper($caseNumber) === 'AUTO-GENERATED'
+            ) {
                 $caseNumber = $this->generateCaseNumber();
             }
 
-            if (CaseRecord::query()->where('case_number', $caseNumber)->exists()) {
+            if (
+                CaseRecord::query()
+                    ->where('case_number', $caseNumber)
+                    ->exists()
+            ) {
                 throw ValidationException::withMessages([
                     'case_number' => 'The case number has already been taken.',
                 ]);
             }
 
-            CaseRecord::create([
+            $createdCase = CaseRecord::create([
                 'case_number' => $caseNumber,
                 'case_type' => $validated['case_type'],
                 'subject_name' => $validated['subject_name'],
-                'contact' => $validated['contact'] ?? null,
-                'address' => $validated['address'] ?? null,
+                'contact' => $this->nullableText($validated['contact'] ?? null),
+                'address' => $this->nullableText($validated['address'] ?? null),
                 'incident_id' => $validated['incident_id'] ?? null,
-                'incident_title' => $incidentTitle,
+                'incident_title' => $this->incidentTitle(
+                    $validated['incident_id'] ?? null,
+                    $validated['incident_title'] ?? null
+                ),
                 'status' => $validated['status'],
                 'hearing_date' => $validated['hearing_date'] ?? null,
-                'handled_by' => $validated['handled_by'] ?? null,
-                'resolution' => $validated['resolution'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'created_by' => Auth::id(),
-                'updated_by' => Auth::id(),
+                'handled_by' => $this->nullableText($validated['handled_by'] ?? null),
+                'resolution' => $this->nullableText($validated['resolution'] ?? null),
+                'notes' => $this->nullableText($validated['notes'] ?? null),
+                'created_by' => $request->user()->id,
+                'updated_by' => $request->user()->id,
             ]);
         });
+
+        $this->recordOperationalActivity(
+            event: 'case.created',
+            category: 'case',
+            description: 'A case record was created.',
+            metadata: [
+                'case_id' => (int) $createdCase->id,
+                'case_number' => $createdCase->case_number,
+                'case_type' => $createdCase->case_type,
+                'status' => $createdCase->status,
+                'incident_id' => $createdCase->incident_id,
+            ],
+            request: $request,
+        );
 
         return redirect()
             ->route('admin.cases.index')
             ->with('success', 'Case record created successfully.');
     }
 
-    public function update(Request $request, CaseRecord $caseRecord): RedirectResponse
-    {
-        $validated = $request->validate([
-            'case_number' => [
-                'required',
-                'string',
-                'max:50',
-                'not_in:AUTO-GENERATED,auto-generated,Auto-Generated',
-                Rule::unique('case_records', 'case_number')->ignore($caseRecord->getKey()),
-            ],
-            'case_type' => ['required', Rule::in(array_keys($this->caseTypes()))],
-            'subject_name' => ['required', 'string', 'max:255'],
-            'contact' => ['nullable', 'string', 'max:50'],
-            'address' => ['nullable', 'string', 'max:500'],
-            'incident_id' => ['nullable', 'integer', 'exists:incidents,id'],
-            'incident_title' => ['nullable', 'string', 'max:255'],
-            'status' => ['required', Rule::in(array_keys($this->caseStatuses()))],
-            'hearing_date' => ['nullable', 'date'],
-            'handled_by' => ['nullable', 'string', 'max:255'],
-            'resolution' => ['nullable', 'string', 'max:3000'],
-            'notes' => ['nullable', 'string', 'max:3000'],
-        ]);
+    public function update(
+        Request $request,
+        CaseRecord $caseRecord
+    ): RedirectResponse {
+        Gate::authorize('update', $caseRecord);
 
-        DB::transaction(function () use ($caseRecord, $validated) {
-            $incidentTitle = $validated['incident_title'] ?? null;
+        $validated = $request->validate(
+            $this->validationRules($caseRecord)
+        );
 
-            if (! empty($validated['incident_id']) && empty($incidentTitle)) {
-                $incident = Incident::find($validated['incident_id']);
-                $incidentTitle = $incident?->display_title;
-            }
+        $previousStatus = $caseRecord->status;
+        $previousType = $caseRecord->case_type;
+        $previousIncidentId = $caseRecord->incident_id;
 
-            $caseRecord->update([
-                'case_number' => $validated['case_number'],
+        DB::transaction(function () use (
+            $request,
+            $caseRecord,
+            $validated
+        ): void {
+            $lockedCase = CaseRecord::query()
+                ->lockForUpdate()
+                ->findOrFail($caseRecord->getKey());
+
+            $lockedCase->update([
+                'case_number' => trim($validated['case_number']),
                 'case_type' => $validated['case_type'],
                 'subject_name' => $validated['subject_name'],
-                'contact' => $validated['contact'] ?? null,
-                'address' => $validated['address'] ?? null,
+                'contact' => $this->nullableText($validated['contact'] ?? null),
+                'address' => $this->nullableText($validated['address'] ?? null),
                 'incident_id' => $validated['incident_id'] ?? null,
-                'incident_title' => $incidentTitle,
+                'incident_title' => $this->incidentTitle(
+                    $validated['incident_id'] ?? null,
+                    $validated['incident_title'] ?? null
+                ),
                 'status' => $validated['status'],
                 'hearing_date' => $validated['hearing_date'] ?? null,
-                'handled_by' => $validated['handled_by'] ?? null,
-                'resolution' => $validated['resolution'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'updated_by' => Auth::id(),
+                'handled_by' => $this->nullableText($validated['handled_by'] ?? null),
+                'resolution' => $this->nullableText($validated['resolution'] ?? null),
+                'notes' => $this->nullableText($validated['notes'] ?? null),
+                'updated_by' => $request->user()->id,
             ]);
         });
+
+        $caseRecord->refresh();
+
+        $this->recordOperationalActivity(
+            event: 'case.updated',
+            category: 'case',
+            description: 'A case record was updated.',
+            metadata: [
+                'case_id' => (int) $caseRecord->id,
+                'case_number' => $caseRecord->case_number,
+                'previous_status' => $previousStatus,
+                'new_status' => $caseRecord->status,
+                'previous_case_type' => $previousType,
+                'new_case_type' => $caseRecord->case_type,
+                'previous_incident_id' => $previousIncidentId,
+                'new_incident_id' => $caseRecord->incident_id,
+            ],
+            request: $request,
+        );
 
         return redirect()
             ->route('admin.cases.index')
@@ -178,11 +250,111 @@ class CaseManagementController extends Controller
 
     public function destroy(CaseRecord $caseRecord): RedirectResponse
     {
-        $caseRecord->delete();
+        Gate::authorize('delete', $caseRecord);
+
+        $auditMetadata = [
+            'case_id' => (int) $caseRecord->id,
+            'case_number' => $caseRecord->case_number,
+            'case_type' => $caseRecord->case_type,
+            'status' => $caseRecord->status,
+            'incident_id' => $caseRecord->incident_id,
+        ];
+
+        DB::transaction(function () use ($caseRecord): void {
+            $lockedCase = CaseRecord::query()
+                ->lockForUpdate()
+                ->findOrFail($caseRecord->getKey());
+
+            $lockedCase->delete();
+        });
+
+        $this->recordOperationalActivity(
+            event: 'case.deleted',
+            category: 'case',
+            description: 'A case record was deleted.',
+            metadata: $auditMetadata,
+        );
 
         return redirect()
             ->route('admin.cases.index')
             ->with('success', 'Case record deleted successfully.');
+    }
+
+    private function validationRules(
+        ?CaseRecord $caseRecord = null
+    ): array {
+        $caseNumberRule = [
+            $caseRecord ? 'required' : 'nullable',
+            'string',
+            'max:50',
+            'not_regex:/[\x00-\x1F\x7F]/',
+        ];
+
+        if ($caseRecord) {
+            $caseNumberRule[] =
+                'not_in:AUTO-GENERATED,auto-generated,Auto-Generated';
+
+            $caseNumberRule[] = Rule::unique(
+                'case_records',
+                'case_number'
+            )->ignore($caseRecord->getKey());
+        }
+
+        return [
+            'case_number' => $caseNumberRule,
+            'case_type' => [
+                'required',
+                Rule::in(array_keys($this->caseTypes())),
+            ],
+            'subject_name' => ['required', 'string', 'max:255'],
+            'contact' => [
+                'nullable',
+                'string',
+                'max:50',
+                'regex:/^[0-9+()\-.\s]*$/',
+            ],
+            'address' => ['nullable', 'string', 'max:500'],
+            'incident_id' => [
+                'nullable',
+                'integer',
+                'exists:incidents,id',
+            ],
+            'incident_title' => ['nullable', 'string', 'max:255'],
+            'status' => [
+                'required',
+                Rule::in(array_keys($this->caseStatuses())),
+            ],
+            'hearing_date' => ['nullable', 'date'],
+            'handled_by' => ['nullable', 'string', 'max:255'],
+            'resolution' => ['nullable', 'string', 'max:3000'],
+            'notes' => ['nullable', 'string', 'max:3000'],
+        ];
+    }
+
+    private function incidentTitle(
+        int|string|null $incidentId,
+        mixed $fallbackTitle
+    ): ?string {
+        if ($incidentId) {
+            $incident = Incident::query()->find((int) $incidentId);
+
+            return $incident?->display_title
+                ?? $incident?->incident_title
+                ?? $incident?->title;
+        }
+
+        return $this->nullableText($fallbackTitle);
+    }
+
+    private function nullableText(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function generateCaseNumber(): string
@@ -190,7 +362,9 @@ class CaseManagementController extends Controller
         $lastNumber = CaseRecord::query()
             ->lockForUpdate()
             ->whereRaw("case_number REGEXP '^[0-9]+$'")
-            ->selectRaw('MAX(CAST(case_number AS UNSIGNED)) as max_number')
+            ->selectRaw(
+                'MAX(CAST(case_number AS UNSIGNED)) as max_number'
+            )
             ->value('max_number');
 
         return (string) ((int) $lastNumber + 1);

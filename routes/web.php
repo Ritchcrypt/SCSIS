@@ -1,106 +1,101 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\IncidentController;
-use App\Http\Controllers\TanodAlertController;
-use App\Http\Controllers\CaseManagementController;
 use App\Http\Controllers\AnnouncementController;
-use App\Http\Controllers\EmergencyModeController;
-use App\Http\Controllers\TanodRosterController;
 use App\Http\Controllers\BarangayMapController;
-use App\Http\Controllers\ReportController;
-use App\Http\Controllers\TanodTaskController;
-use App\Http\Controllers\UserManagementController;
-use App\Http\Controllers\RoleDashboardController;
-use App\Http\Controllers\SystemBrandingController;
+use App\Http\Controllers\CaseManagementController;
+use App\Http\Controllers\EmergencyModeController;
+use App\Http\Controllers\IncidentController;
+use App\Http\Controllers\NotificationOpenController;
 use App\Http\Controllers\PresenceController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\NotificationOpenController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResidentComplaintController;
+use App\Http\Controllers\RoleDashboardController;
+use App\Http\Controllers\SystemBrandingController;
+use App\Http\Controllers\TanodAlertController;
+use App\Http\Controllers\TanodRosterController;
+use App\Http\Controllers\TanodTaskController;
 use App\Http\Controllers\ThemePreferenceController;
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'active.user'])->group(function () {
-    Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])
-        ->name('presence.heartbeat');
-});
-
-Route::get('/', function () {
-    if (Auth::check()) {
-        return redirect()->route('dashboard');
-    }
-
-    return view('welcome');
-})->name('home');
-
 /*
 |--------------------------------------------------------------------------
-| Main Dashboard Redirect
+| Public Entry and Branding
 |--------------------------------------------------------------------------
 */
-Route::get('/dashboard', function () {
-    $user = Auth::user();
 
-    if (! $user) {
-        return redirect()->route('login');
-    }
+Route::get('/', function () {
+    return Auth::check()
+        ? redirect()->route('dashboard')
+        : redirect()->route('login');
+})->name('home');
 
-    return match ($user->role) {
-        'admin' => redirect()->route('admin.dashboard'),
-        'official', 'dao' => redirect()->route('official.dashboard'),
-        'tanod' => redirect()->route('tanod.dashboard'),
-        'resident' => redirect()->route('resident.dashboard'),
-        default => abort(403, 'Invalid user role.'),
-    };
-})->middleware(['auth', 'active.user'])->name('dashboard');
+Route::get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
+    ->name('system-branding.logo');
 
 /*
 |--------------------------------------------------------------------------
 | Shared Authenticated Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->get('/users/{user}/profile-photo', [UserManagementController::class, 'profilePhoto'])
-    ->name('users.profile-photo');
-
-Route::patch('/theme-preference', [ThemePreferenceController::class, 'update'])
-    ->name('theme-preference.update');
-
-Route::middleware(['auth', 'active.user'])
-    ->get('/incident-evidence/{evidenceId}/file', [IncidentController::class, 'showEvidenceFile'])
-    ->name('incident-evidence.file');
-
-Route::middleware(['auth', 'active.user'])
-    ->get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
-    ->name('system-branding.logo');
-
-Route::middleware(['auth', 'active.user'])
-    ->post('/notifications/{notification}/open', [NotificationOpenController::class, 'open'])
-    ->name('notifications.open');
 
 Route::middleware(['auth', 'active.user'])->group(function () {
+    Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])
+        ->name('presence.heartbeat');
+
+    Route::get('/dashboard', function () {
+        $user = Auth::user();
+
+        return match ($user?->role) {
+            'admin' => redirect()->route('admin.dashboard'),
+            'official', 'dao' => redirect()->route('official.dashboard'),
+            'tanod' => redirect()->route('tanod.dashboard'),
+            'resident' => redirect()->route('resident.dashboard'),
+            default => abort(403, 'Invalid user role.'),
+        };
+    })->name('dashboard');
+
+    Route::get('/users/{user}/profile-photo', [UserManagementController::class, 'profilePhoto'])
+        ->name('users.profile-photo');
+
+    Route::patch('/theme-preference', [ThemePreferenceController::class, 'update'])
+        ->name('theme-preference.update');
+
+    Route::get('/incident-evidence/{evidenceId}/file', [IncidentController::class, 'showEvidenceFile'])
+        ->name('incident-evidence.file');
+
+    Route::post('/notifications/{notification}/open', [NotificationOpenController::class, 'open'])
+        ->name('notifications.open');
+
+    Route::get('/resident-complaint-proofs/{proof}/file', [ResidentComplaintController::class, 'proofFile'])
+        ->name('resident-complaint-proofs.file');
+
     Route::get('/profile', [ProfileController::class, 'edit'])
         ->name('profile.edit');
-
-    Route::middleware(['auth', 'active.user'])
-    ->get('/resident-complaint-proofs/{proof}/file', [ResidentComplaintController::class, 'proofFile'])
-    ->name('resident-complaint-proofs.file');
 
     Route::patch('/profile', [ProfileController::class, 'update'])
         ->name('profile.update');
 
     Route::match(['patch', 'put'], '/profile/password', [ProfileController::class, 'updatePassword'])
-    ->name('profile.password.update');
+        ->name('profile.password.update');
 
-Route::delete('/profile/self-delete', [ProfileController::class, 'destroyOwnAccount'])
-    ->name('profile.self-delete');
+    Route::delete('/profile/other-sessions', [ProfileController::class, 'destroyOtherSessions'])
+        ->name('profile.other-sessions.destroy');
+
+    Route::delete('/profile/self-delete', [ProfileController::class, 'destroyOwnAccount'])
+        ->name('profile.self-delete');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Admin Routes
+| Administrator Routes
 |--------------------------------------------------------------------------
 */
+
 Route::middleware(['auth', 'active.user', 'role:admin'])
     ->prefix('admin')
     ->name('admin.')
@@ -109,46 +104,50 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
             ->name('dashboard');
 
         Route::get('/reports', [ReportController::class, 'index'])
-    ->name('reports.index');
+            ->name('reports.index');
 
-Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
-    ->name('reports.pdf');
+        Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
+            ->name('reports.pdf');
 
-Route::get('/reports/incidents/{incident}/pdf', [ReportController::class, 'downloadIncidentPdf'])
-    ->name('reports.incident-pdf');
+        Route::get('/reports/incidents/{incident}/pdf', [ReportController::class, 'downloadIncidentPdf'])
+            ->name('reports.incident-pdf');
 
-Route::get('/reports/cases/{caseRecord}/pdf', [ReportController::class, 'downloadCasePdf'])
-    ->name('reports.case-pdf');
+        Route::get('/reports/cases/{caseRecord}/pdf', [ReportController::class, 'downloadCasePdf'])
+            ->name('reports.case-pdf');
 
-Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
-    ->name('reports.complaint-pdf');
-
-        Route::post('/resident-complaints/{residentComplaint}/proofs', [ResidentComplaintController::class, 'storeProof'])
-    ->name('resident-complaints.proofs.store');
-
-        Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
-    ->name('resident-complaints.evidence');
-
-        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
-    ->name('emergency-mode.index');
-
-Route::post('/emergency-hotlines', [EmergencyModeController::class, 'store'])
-    ->name('emergency-mode.store');
-
-Route::delete('/emergency-hotlines/{emergencyHotline}', [EmergencyModeController::class, 'destroy'])
-    ->name('emergency-mode.destroy');
+        Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
+            ->name('reports.complaint-pdf');
 
         Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
-    ->name('resident-complaints.index');
+            ->name('resident-complaints.index');
 
-Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
-    ->name('resident-complaints.show');
+        Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
+            ->name('resident-complaints.show');
 
-Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplaintController::class, 'updateStatus'])
-    ->name('resident-complaints.update-status');
+        Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
+            ->name('resident-complaints.evidence');
 
-Route::delete('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'destroy'])
-    ->name('resident-complaints.destroy');
+        Route::post('/resident-complaints/{residentComplaint}/proofs', [ResidentComplaintController::class, 'storeProof'])
+            ->name('resident-complaints.proofs.store');
+
+        Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplaintController::class, 'updateStatus'])
+            ->name('resident-complaints.update-status');
+
+        Route::delete('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'destroy'])
+            ->name('resident-complaints.destroy');
+
+        /* Preserve both established GET URLs without duplicate route names. */
+        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
+            ->name('emergency-hotlines.index');
+
+        Route::get('/emergency-mode', [EmergencyModeController::class, 'index'])
+            ->name('emergency-mode.index');
+
+        Route::post('/emergency-hotlines', [EmergencyModeController::class, 'store'])
+            ->name('emergency-mode.store');
+
+        Route::delete('/emergency-hotlines/{emergencyHotline}', [EmergencyModeController::class, 'destroy'])
+            ->name('emergency-mode.destroy');
 
         Route::get('/presence/users', [PresenceController::class, 'users'])
             ->name('users.presence');
@@ -180,9 +179,6 @@ Route::delete('/resident-complaints/{residentComplaint}', [ResidentComplaintCont
         Route::get('/users/{user}', [UserManagementController::class, 'show'])
             ->name('users.show');
 
-        Route::delete('/incidents/{incident}', [IncidentController::class, 'destroy'])
-            ->name('incidents.destroy');
-
         Route::get('/users/{user}/edit', [UserManagementController::class, 'edit'])
             ->name('users.edit');
 
@@ -201,8 +197,12 @@ Route::delete('/resident-complaints/{residentComplaint}', [ResidentComplaintCont
         Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])
             ->name('users.destroy');
 
-        Route::delete('/tanod-tasks/{tanodTask}', [TanodTaskController::class, 'destroy'])
-            ->name('tanod-tasks.destroy');
+        /* Activity Logs: read-only administrator module. */
+        Route::get('/activity-logs', [ActivityLogController::class, 'index'])
+            ->name('activity-logs.index');
+
+        Route::get('/activity-logs/{activityLog}', [ActivityLogController::class, 'show'])
+            ->name('activity-logs.show');
 
         Route::get('/tanod-tasks', [TanodTaskController::class, 'index'])
             ->name('tanod-tasks.index');
@@ -222,17 +222,8 @@ Route::delete('/resident-complaints/{residentComplaint}', [ResidentComplaintCont
         Route::patch('/tanod-tasks/{tanodTask}/cancel', [TanodTaskController::class, 'cancel'])
             ->name('tanod-tasks.cancel');
 
-        Route::get('/reports', [ReportController::class, 'index'])
-    ->name('reports.index');
-
-Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
-    ->name('reports.pdf');
-
-Route::get('/reports/incidents/{incident}/pdf', [ReportController::class, 'downloadIncidentPdf'])
-    ->name('reports.incident-pdf');
-
-Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
-    ->name('reports.complaint-pdf');
+        Route::delete('/tanod-tasks/{tanodTask}', [TanodTaskController::class, 'destroy'])
+            ->name('tanod-tasks.destroy');
 
         Route::get('/map', [BarangayMapController::class, 'index'])
             ->name('map.index');
@@ -248,9 +239,6 @@ Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::cla
 
         Route::delete('/tanods/{tanod}', [TanodRosterController::class, 'destroy'])
             ->name('tanods.destroy');
-
-        Route::get('/emergency-mode', [EmergencyModeController::class, 'index'])
-            ->name('emergency-mode.index');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->name('announcements.index');
@@ -300,6 +288,9 @@ Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::cla
         Route::post('/incidents/{incident}/messages', [IncidentController::class, 'storeMessage'])
             ->name('incidents.messages.store');
 
+        Route::delete('/incidents/{incident}', [IncidentController::class, 'destroy'])
+            ->name('incidents.destroy');
+
         Route::get('/cases', [CaseManagementController::class, 'index'])
             ->name('cases.index');
 
@@ -318,6 +309,7 @@ Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::cla
 | Barangay Official Routes
 |--------------------------------------------------------------------------
 */
+
 Route::middleware(['auth', 'active.user', 'role:official,dao'])
     ->prefix('official')
     ->name('official.')
@@ -325,40 +317,41 @@ Route::middleware(['auth', 'active.user', 'role:official,dao'])
         Route::get('/dashboard', [RoleDashboardController::class, 'official'])
             ->name('dashboard');
 
-        Route::post('/resident-complaints/{residentComplaint}/proofs', [ResidentComplaintController::class, 'storeProof'])
-    ->name('resident-complaints.proofs.store');
+        Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
+            ->name('resident-complaints.index');
+
+        Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
+            ->name('resident-complaints.show');
 
         Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
-    ->name('resident-complaints.evidence');
+            ->name('resident-complaints.evidence');
 
+        Route::post('/resident-complaints/{residentComplaint}/proofs', [ResidentComplaintController::class, 'storeProof'])
+            ->name('resident-complaints.proofs.store');
+
+        Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplaintController::class, 'updateStatus'])
+            ->name('resident-complaints.update-status');
+
+        /* Preserve both established GET URLs without duplicate route names. */
         Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
-    ->name('emergency-mode.index');
-
-Route::post('/emergency-hotlines', [EmergencyModeController::class, 'store'])
-    ->name('emergency-mode.store');
-
-Route::delete('/emergency-hotlines/{emergencyHotline}', [EmergencyModeController::class, 'destroy'])
-    ->name('emergency-mode.destroy');
-
-        Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
-    ->name('resident-complaints.index');
-
-Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
-    ->name('resident-complaints.show');
-
-Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplaintController::class, 'updateStatus'])
-    ->name('resident-complaints.update-status');
-
-        Route::get('/map', [BarangayMapController::class, 'index'])
-    ->name('map.index');
+            ->name('emergency-hotlines.index');
 
         Route::get('/emergency-mode', [EmergencyModeController::class, 'index'])
-    ->name('emergency-mode.index');
+            ->name('emergency-mode.index');
+
+        Route::post('/emergency-hotlines', [EmergencyModeController::class, 'store'])
+            ->name('emergency-mode.store');
+
+        Route::delete('/emergency-hotlines/{emergencyHotline}', [EmergencyModeController::class, 'destroy'])
+            ->name('emergency-mode.destroy');
+
+        Route::get('/map', [BarangayMapController::class, 'index'])
+            ->name('map.index');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
-    ->name('announcements.index');
+            ->name('announcements.index');
 
-                Route::get('/tanods', [TanodRosterController::class, 'index'])
+        Route::get('/tanods', [TanodRosterController::class, 'index'])
             ->name('tanods.index');
 
         Route::post('/tanods', [TanodRosterController::class, 'store'])
@@ -370,7 +363,7 @@ Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplai
         Route::delete('/tanods/{tanod}', [TanodRosterController::class, 'destroy'])
             ->name('tanods.destroy');
 
-                Route::post('/barangays/quick-store', [IncidentController::class, 'quickStoreBarangay'])
+        Route::post('/barangays/quick-store', [IncidentController::class, 'quickStoreBarangay'])
             ->name('barangays.quick-store');
 
         Route::delete('/barangays/{barangayId}/quick-delete', [IncidentController::class, 'quickDeleteBarangay'])
@@ -403,6 +396,7 @@ Route::patch('/resident-complaints/{residentComplaint}/status', [ResidentComplai
 | Barangay Tanod Routes
 |--------------------------------------------------------------------------
 */
+
 Route::middleware(['auth', 'active.user', 'role:tanod'])
     ->prefix('tanod')
     ->name('tanod.')
@@ -411,13 +405,7 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
             ->name('dashboard');
 
         Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
-    ->name('emergency-mode.index');
-
-        Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
             ->name('emergency-mode.index');
-
-        Route::get('/announcements', [AnnouncementController::class, 'index'])
-            ->name('announcements.index');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->name('announcements.index');
@@ -461,6 +449,7 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
 | Resident Routes
 |--------------------------------------------------------------------------
 */
+
 Route::middleware(['auth', 'active.user', 'role:resident'])
     ->prefix('resident')
     ->name('resident.')
@@ -468,38 +457,23 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
         Route::get('/dashboard', [RoleDashboardController::class, 'resident'])
             ->name('dashboard');
 
-        Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
-    ->name('resident-complaints.evidence');
-
         Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
-    ->name('resident-complaints.index');
+            ->name('resident-complaints.index');
 
-Route::get('/resident-complaints/create', [ResidentComplaintController::class, 'create'])
-    ->name('resident-complaints.create');
+        Route::get('/resident-complaints/create', [ResidentComplaintController::class, 'create'])
+            ->name('resident-complaints.create');
 
-Route::post('/resident-complaints', [ResidentComplaintController::class, 'store'])
-    ->name('resident-complaints.store');
+        Route::post('/resident-complaints', [ResidentComplaintController::class, 'store'])
+            ->name('resident-complaints.store');
 
-Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
-    ->name('resident-complaints.show');
+        Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
+            ->name('resident-complaints.show');
 
-Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
-    ->name('emergency-mode.index');
+        Route::get('/resident-complaints/{residentComplaint}/evidence', [ResidentComplaintController::class, 'evidence'])
+            ->name('resident-complaints.evidence');
 
         Route::get('/emergency-hotlines', [EmergencyModeController::class, 'index'])
-    ->name('emergency-mode.index');
-
-        Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
-    ->name('resident-complaints.index');
-
-Route::get('/resident-complaints/create', [ResidentComplaintController::class, 'create'])
-    ->name('resident-complaints.create');
-
-Route::post('/resident-complaints', [ResidentComplaintController::class, 'store'])
-    ->name('resident-complaints.store');
-
-Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintController::class, 'show'])
-    ->name('resident-complaints.show');
+            ->name('emergency-mode.index');
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->name('announcements.index');
@@ -520,24 +494,14 @@ Route::get('/resident-complaints/{residentComplaint}', [ResidentComplaintControl
             ->name('incidents.messages.store');
     });
 
-/*
-|--------------------------------------------------------------------------
-| Authentication / Logout
-|--------------------------------------------------------------------------
-*/
-Route::post('/logout', function () {
-    Auth::logout();
-
-    request()->session()->invalidate();
-    request()->session()->regenerateToken();
-
-    return redirect()->route('login');
-})->middleware('auth')->name('logout');
-
 if (file_exists(__DIR__ . '/auth.php')) {
     require __DIR__ . '/auth.php';
 }
 
+/*
+| Keep the starter-kit settings routes available until their remaining views
+| are intentionally retired in a separate, tested cleanup.
+*/
 if (file_exists(__DIR__ . '/settings.php')) {
     require __DIR__ . '/settings.php';
 }

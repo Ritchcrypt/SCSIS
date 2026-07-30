@@ -6,6 +6,7 @@ use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
@@ -15,12 +16,20 @@ class NotificationOpenController extends Controller
     {
         $user = $request->user();
 
-        abort_unless($user && (int) $notification->user_id === (int) $user->id, 403);
+        abort_unless($user, 403, 'Unauthenticated request.');
 
-        $type = strtolower((string) $notification->type);
+        Gate::authorize('view', $notification);
+
+        $type = strtolower(trim((string) $notification->type));
         $role = strtolower((string) $user->role);
 
         $this->markNotificationGroupAsRead($notification);
+
+        if ($type === 'user_registration') {
+            return redirect()->to(
+                $this->userRegistrationUrl($role, $notification)
+            );
+        }
 
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return redirect()->to($this->announcementUrl($role));
@@ -111,6 +120,41 @@ class NotificationOpenController extends Controller
         }
 
         $query->update($updates);
+    }
+
+    private function userRegistrationUrl(
+        string $role,
+        UserNotification $notification
+    ): string {
+        /*
+        |--------------------------------------------------------------------------
+        | Administrator-only registration approval
+        |--------------------------------------------------------------------------
+        |
+        | The source_id contains the newly registered resident's user ID.
+        | Only an administrator may open the account approval page.
+        |
+        */
+
+        if ($role !== 'admin') {
+            return $this->dashboardUrl($role);
+        }
+
+        $sourceId = $this->sourceId($notification);
+
+        if (
+            $sourceId
+            && $this->recordExists('users', $sourceId)
+            && Route::has('admin.users.edit')
+        ) {
+            return route('admin.users.edit', $sourceId);
+        }
+
+        if (Route::has('admin.users.index')) {
+            return route('admin.users.index');
+        }
+
+        return $this->dashboardUrl($role);
     }
 
     private function announcementUrl(string $role): string

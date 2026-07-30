@@ -32,9 +32,9 @@ return [
     |
     */
 
-    'lifetime' => env('SESSION_LIFETIME', 120),
+    'lifetime' => env('SESSION_LIFETIME', 30),
 
-    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
+    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -47,7 +47,7 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    'encrypt' => env('SESSION_ENCRYPT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -169,7 +169,10 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env(
+        'SESSION_SECURE_COOKIE',
+        env('APP_ENV') === 'production'
+    ),
 
     /*
     |--------------------------------------------------------------------------

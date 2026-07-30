@@ -202,6 +202,53 @@
             </div>
         </form>
 
+        <div class="border-t border-slate-200 px-6 py-5">
+            <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+                <h2 class="text-lg font-bold text-blue-900">
+                    Session Security
+                </h2>
+
+                <p class="mt-1 text-sm leading-6 text-blue-800">
+                    Sign out this account from every other browser or device.
+                    This browser will remain signed in.
+                </p>
+
+                <form method="POST"
+                      action="{{ route('profile.other-sessions.destroy') }}"
+                      class="mt-5 space-y-4">
+                    @csrf
+                    @method('DELETE')
+
+                    <div>
+                        <label for="other_sessions_password"
+                               class="mb-2 block text-sm font-semibold text-slate-700">
+                            Current Password
+                        </label>
+
+                        <input id="other_sessions_password"
+                               name="password"
+                               type="password"
+                               required
+                               autocomplete="current-password"
+                               class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                        @error('password', 'logoutOtherSessions')
+                            <p class="mt-2 text-sm font-medium text-red-600">
+                                {{ $message }}
+                            </p>
+                        @enderror
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button type="submit"
+                                class="inline-flex rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800">
+                            Sign Out Other Devices
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         @php
             $selfServiceRole = strtolower((string) ($userRecord->role ?? auth()->user()?->role ?? ''));
         @endphp

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Route;
 
 class Evidence extends Model
 {
@@ -41,8 +42,22 @@ class Evidence extends Model
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
-    public function getFileUrlAttribute(): string
+    public function getFileUrlAttribute(): ?string
     {
-        return asset('storage/' . ltrim($this->file_path, '/'));
+        if (
+            ! $this->exists
+            || ! Route::has(
+                'incident-evidence.file'
+            )
+        ) {
+            return null;
+        }
+
+        return route(
+            'incident-evidence.file',
+            [
+                'evidenceId' => $this->getKey(),
+            ]
+        );
     }
 }

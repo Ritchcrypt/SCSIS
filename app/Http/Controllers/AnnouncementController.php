@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\Announcement;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -16,29 +18,49 @@ use Illuminate\View\View;
 
 class AnnouncementController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
+        Gate::authorize('viewAny', Announcement::class);
+
         $user = $request->user();
+        $canManageAnnouncements = Gate::allows(
+            'create',
+            Announcement::class
+        );
 
         $announcements = Announcement::query()
             ->with('poster')
-            ->when(! $this->canManageAnnouncements($user), function ($query) use ($user) {
-                $role = strtolower((string) ($user?->role ?? ''));
+            ->when(
+                ! $canManageAnnouncements,
+                function ($query) use ($user): void {
+                    $allowedAudiences = $this->allowedAudiencesForUser(
+                        $user
+                    );
 
-                $allowedAudiences = match ($role) {
-                    'tanod' => ['everyone', 'public', 'all', 'tanod'],
-                    'resident' => ['everyone', 'public', 'all', 'residents', 'resident'],
-                    default => ['everyone', 'public', 'all'],
-                };
+                    if (
+                        Schema::hasColumn(
+                            'announcements',
+                            'is_active'
+                        )
+                    ) {
+                        $query->where('is_active', true);
+                    }
 
-                if (Schema::hasColumn('announcements', 'is_active')) {
-                    $query->where('is_active', true);
+                    if (
+                        Schema::hasColumn(
+                            'announcements',
+                            'audience'
+                        )
+                    ) {
+                        $query->whereIn(
+                            'audience',
+                            $allowedAudiences
+                        );
+                    }
                 }
-
-                if (Schema::hasColumn('announcements', 'audience')) {
-                    $query->whereIn('audience', $allowedAudiences);
-                }
-            })
+            )
             ->latest('published_at')
             ->latest()
             ->paginate(10)
@@ -49,194 +71,317 @@ class AnnouncementController extends Controller
             'categories' => $this->categories(),
             'priorities' => $this->priorities(),
             'audiences' => $this->audiences(),
-            'canManageAnnouncements' => $this->canManageAnnouncements($user),
+            'canManageAnnouncements' => $canManageAnnouncements,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $user = $request->user();
-
-        if (! $this->canManageAnnouncements($user)) {
-            abort(403, 'Only admin or official can post announcements.');
-        }
+        Gate::authorize('create', Announcement::class);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string', 'max:5000'],
-            'category' => ['required', Rule::in(array_keys($this->categories()))],
-            'priority' => ['required', Rule::in(array_keys($this->priorities()))],
-            'audience' => ['required', Rule::in($this->allowedAudienceValues())],
-            'activate_calamity_mode' => ['nullable', 'boolean'],
-            'show_in_weather_feed' => ['nullable', 'boolean'],
+            'category' => [
+                'required',
+                Rule::in(array_keys($this->categories())),
+            ],
+            'priority' => [
+                'required',
+                Rule::in(array_keys($this->priorities())),
+            ],
+            'audience' => [
+                'required',
+                Rule::in($this->allowedAudienceValues()),
+            ],
+            'activate_calamity_mode' => [
+                'nullable',
+                'boolean',
+            ],
+            'show_in_weather_feed' => [
+                'nullable',
+                'boolean',
+            ],
         ]);
 
-        $validated['audience'] = $this->normalizeAudience($validated['audience']);
+        $audience = $this->normalizeAudience(
+            $validated['audience']
+        );
 
-        $calamityMode = (bool) ($validated['activate_calamity_mode'] ?? false);
-        $showInWeatherFeed = $request->boolean('show_in_weather_feed');
+        $calamityMode = $request->boolean(
+            'activate_calamity_mode'
+        );
+
+        $showInWeatherFeed = $request->boolean(
+            'show_in_weather_feed'
+        );
 
         if ($calamityMode) {
             $validated['category'] = 'calamity';
             $validated['priority'] = 'emergency';
-            $validated['audience'] = 'everyone';
-
+            $audience = 'everyone';
             $showInWeatherFeed = true;
         }
 
         $announcementData = [
-            'title' => $validated['title'],
-            'content' => $validated['content'],
+            'title' => trim($validated['title']),
+            'content' => trim($validated['content']),
             'category' => $validated['category'],
             'priority' => $validated['priority'],
-            'audience' => $validated['audience'],
+            'audience' => $audience,
             'is_active' => true,
             'activate_calamity_mode' => $calamityMode,
-            'posted_by' => Auth::id(),
+            'posted_by' => $request->user()->id,
             'published_at' => now(),
         ];
 
-        if (Schema::hasColumn('announcements', 'show_in_weather_feed')) {
-            $announcementData['show_in_weather_feed'] = $showInWeatherFeed;
+        if (
+            Schema::hasColumn(
+                'announcements',
+                'show_in_weather_feed'
+            )
+        ) {
+            $announcementData['show_in_weather_feed'] =
+                $showInWeatherFeed;
         }
 
-        $announcement = Announcement::create($announcementData);
+        $announcement = Announcement::create(
+            $announcementData
+        );
 
         $this->notifyTargetUsers($announcement);
 
-        return redirect()
-            ->to($this->announcementIndexUrl($user))
-            ->with('success', 'Announcement posted successfully and users were notified.');
-    }
-
-    public function toggle(Request $request, Announcement $announcement): RedirectResponse
-    {
-        $user = $request->user();
-
-        if (! $this->canManageAnnouncements($user)) {
-            abort(403, 'Only admin or official can update announcements.');
-        }
-
-        $announcement->update([
-            'is_active' => ! $announcement->is_active,
-        ]);
+        $this->recordOperationalActivity(
+            event: 'announcement.created',
+            category: 'announcement',
+            description: 'An announcement was created.',
+            metadata: [
+                'announcement_id' => (int) $announcement->id,
+                'category' => $announcement->category,
+                'priority' => $announcement->priority,
+                'audience' => $announcement->audience,
+                'is_active' => (bool) $announcement->is_active,
+                'calamity_mode' => (bool) $announcement->activate_calamity_mode,
+            ],
+            request: $request,
+        );
 
         return redirect()
-            ->to($this->announcementIndexUrl($user))
-            ->with('success', $announcement->is_active
-                ? 'Announcement activated successfully.'
-                : 'Announcement deactivated successfully.');
+            ->to($this->announcementIndexUrl($request->user()))
+            ->with(
+                'success',
+                'Announcement posted successfully and users were notified.'
+            );
     }
 
-    public function destroy(Request $request, Announcement $announcement): RedirectResponse
-    {
-        $user = $request->user();
+    public function toggle(
+        Request $request,
+        Announcement $announcement
+    ): RedirectResponse {
+        Gate::authorize('update', $announcement);
 
-        if (! $this->canManageAnnouncements($user)) {
-            abort(403, 'Only admin or official can delete announcements.');
-        }
+        $previousActiveState = (bool) $announcement->is_active;
 
-        $this->deleteAnnouncementNotifications($announcement);
+        DB::transaction(function () use ($announcement): void {
+            $lockedAnnouncement = Announcement::query()
+                ->lockForUpdate()
+                ->findOrFail($announcement->getKey());
 
-        $announcement->delete();
+            $lockedAnnouncement->update([
+                'is_active' => ! (bool) $lockedAnnouncement->is_active,
+            ]);
+        });
+
+        $announcement->refresh();
+
+        $this->recordOperationalActivity(
+            event: 'announcement.toggled',
+            category: 'announcement',
+            description: 'An announcement active state was changed.',
+            metadata: [
+                'announcement_id' => (int) $announcement->id,
+                'previous_active' => $previousActiveState,
+                'new_active' => (bool) $announcement->is_active,
+                'category' => $announcement->category,
+                'priority' => $announcement->priority,
+            ],
+            request: $request,
+        );
 
         return redirect()
-            ->to($this->announcementIndexUrl($user))
-            ->with('success', 'Announcement deleted successfully.');
+            ->to($this->announcementIndexUrl($request->user()))
+            ->with(
+                'success',
+                $announcement->is_active
+                    ? 'Announcement activated successfully.'
+                    : 'Announcement deactivated successfully.'
+            );
     }
 
-    private function notifyTargetUsers(Announcement $announcement): void
-    {
+    public function destroy(
+        Request $request,
+        Announcement $announcement
+    ): RedirectResponse {
+        Gate::authorize('delete', $announcement);
+
+        $auditMetadata = [
+            'announcement_id' => (int) $announcement->id,
+            'category' => $announcement->category,
+            'priority' => $announcement->priority,
+            'audience' => $announcement->audience,
+            'was_active' => (bool) $announcement->is_active,
+        ];
+
+        DB::transaction(function () use ($announcement): void {
+            $lockedAnnouncement = Announcement::query()
+                ->lockForUpdate()
+                ->findOrFail($announcement->getKey());
+
+            $this->deleteAnnouncementNotifications(
+                $lockedAnnouncement
+            );
+
+            $lockedAnnouncement->delete();
+        });
+
+        $this->recordOperationalActivity(
+            event: 'announcement.deleted',
+            category: 'announcement',
+            description: 'An announcement was deleted.',
+            metadata: $auditMetadata,
+            request: $request,
+        );
+
+        return redirect()
+            ->to($this->announcementIndexUrl($request->user()))
+            ->with(
+                'success',
+                'Announcement deleted successfully.'
+            );
+    }
+
+    private function notifyTargetUsers(
+        Announcement $announcement
+    ): void {
         try {
             if (! Schema::hasTable('notifications')) {
                 return;
             }
 
-            $audience = strtolower(trim((string) $announcement->audience));
+            $audience = strtolower(
+                trim((string) $announcement->audience)
+            );
 
-            $usersQuery = User::query()
-                ->select(['id', 'role']);
+            $usersQuery = User::query()->select([
+                'id',
+                'role',
+            ]);
 
             if (Schema::hasColumn('users', 'is_active')) {
                 $usersQuery->where('is_active', true);
             }
 
-            switch ($audience) {
-                case 'tanod':
-                    $usersQuery->where('role', 'tanod');
-                    break;
+            match ($audience) {
+                'tanod' => $usersQuery->where('role', 'tanod'),
+                'residents',
+                'resident' => $usersQuery->where(
+                    'role',
+                    'resident'
+                ),
+                'official',
+                'officials',
+                'dao' => $usersQuery->whereIn(
+                    'role',
+                    ['official', 'dao']
+                ),
+                'admin' => $usersQuery->where('role', 'admin'),
+                'everyone',
+                'public',
+                'all' => $usersQuery->whereIn('role', [
+                    'admin',
+                    'official',
+                    'dao',
+                    'tanod',
+                    'resident',
+                ]),
+                default => null,
+            };
 
-                case 'residents':
-                case 'resident':
-                    $usersQuery->where('role', 'resident');
-                    break;
-
-                case 'official':
-                case 'officials':
-                case 'dao':
-                    $usersQuery->whereIn('role', ['official', 'dao']);
-                    break;
-
-                case 'admin':
-                    $usersQuery->where('role', 'admin');
-                    break;
-
-                case 'everyone':
-                case 'public':
-                case 'all':
-                    $usersQuery->whereIn('role', [
-                        'admin',
-                        'official',
-                        'dao',
-                        'tanod',
-                        'resident',
-                    ]);
-                    break;
-
-                default:
-                    return;
+            if (! in_array($audience, $this->allowedAudienceValues(), true)) {
+                return;
             }
 
-            $usersQuery->chunkById(100, function ($users) use ($announcement): void {
-                foreach ($users as $user) {
-                    $notificationData = [
-                        'user_id' => $user->id,
-                        'type' => 'announcement',
-                        'source_id' => $announcement->id,
-                        'title' => mb_substr((string) $announcement->title, 0, 150),
-                        'message' => (string) $announcement->content,
-                        'is_read' => false,
-                        'read_at' => null,
-                    ];
+            $notificationType = (
+                $announcement->category === 'calamity'
+                || (bool) $announcement->activate_calamity_mode
+            )
+                ? 'calamity'
+                : 'announcement';
 
-                    if (Schema::hasColumn('notifications', 'acknowledged_by')) {
-                        $notificationData['acknowledged_by'] = null;
-                    }
-
-                    if (Schema::hasColumn('notifications', 'acknowledged_at')) {
-                        $notificationData['acknowledged_at'] = null;
-                    }
-
-                    UserNotification::updateOrCreate(
-                        [
+            $usersQuery->chunkById(
+                100,
+                function ($users) use (
+                    $announcement,
+                    $notificationType
+                ): void {
+                    foreach ($users as $user) {
+                        $notificationData = [
                             'user_id' => $user->id,
-                            'type' => 'announcement',
+                            'type' => $notificationType,
                             'source_id' => $announcement->id,
-                        ],
-                        $notificationData
-                    );
+                            'title' => mb_substr(
+                                (string) $announcement->title,
+                                0,
+                                150
+                            ),
+                            'message' => (string) $announcement->content,
+                            'is_read' => false,
+                            'read_at' => null,
+                        ];
+
+                        if (
+                            Schema::hasColumn(
+                                'notifications',
+                                'acknowledged_by'
+                            )
+                        ) {
+                            $notificationData['acknowledged_by'] = null;
+                        }
+
+                        if (
+                            Schema::hasColumn(
+                                'notifications',
+                                'acknowledged_at'
+                            )
+                        ) {
+                            $notificationData['acknowledged_at'] = null;
+                        }
+
+                        UserNotification::updateOrCreate(
+                            [
+                                'user_id' => $user->id,
+                                'type' => $notificationType,
+                                'source_id' => $announcement->id,
+                            ],
+                            $notificationData
+                        );
+                    }
                 }
-            });
-        } catch (\Throwable $e) {
-            Log::warning('Announcement notification creation failed.', [
-                'announcement_id' => $announcement->id,
-                'error' => $e->getMessage(),
-            ]);
+            );
+        } catch (\Throwable $exception) {
+            Log::warning(
+                'Announcement notification creation failed.',
+                [
+                    'announcement_id' => $announcement->id,
+                    'error' => $exception->getMessage(),
+                ]
+            );
         }
     }
 
-    private function deleteAnnouncementNotifications(Announcement $announcement): void
-    {
+    private function deleteAnnouncementNotifications(
+        Announcement $announcement
+    ): void {
         if (! Schema::hasTable('notifications')) {
             return;
         }
@@ -250,36 +395,62 @@ class AnnouncementController extends Controller
             ->delete();
     }
 
-    private function canManageAnnouncements(?User $user): bool
+    private function allowedAudiencesForUser(User $user): array
     {
-        return $user && in_array(strtolower((string) $user->role), [
-            'admin',
-            'official',
-            'dao',
-        ], true);
+        return match (true) {
+            $user->isOfficial() => [
+                'everyone',
+                'public',
+                'all',
+                'official',
+                'officials',
+                'dao',
+            ],
+            $user->isTanod() => [
+                'everyone',
+                'public',
+                'all',
+                'tanod',
+            ],
+            $user->isResident() => [
+                'everyone',
+                'public',
+                'all',
+                'residents',
+                'resident',
+            ],
+            default => [
+                'everyone',
+                'public',
+                'all',
+            ],
+        };
     }
 
     private function announcementIndexUrl(?User $user): string
     {
-        $role = strtolower((string) ($user?->role ?? ''));
-
-        $routeName = match ($role) {
-            'admin' => Route::has('admin.announcements.index') ? 'admin.announcements.index' : null,
-            'official', 'dao' => Route::has('official.announcements.index') ? 'official.announcements.index' : null,
-            'tanod' => Route::has('tanod.announcements.index') ? 'tanod.announcements.index' : null,
-            'resident' => Route::has('resident.announcements.index') ? 'resident.announcements.index' : null,
+        $routeName = match (strtolower((string) $user?->role)) {
+            'admin' => 'admin.announcements.index',
+            'official',
+            'dao' => 'official.announcements.index',
+            'tanod' => 'tanod.announcements.index',
+            'resident' => 'resident.announcements.index',
             default => null,
         };
 
-        return $routeName ? route($routeName) : route('dashboard');
+        return $routeName && Route::has($routeName)
+            ? route($routeName)
+            : route('dashboard');
     }
 
     private function normalizeAudience(string $audience): string
     {
         return match (strtolower($audience)) {
-            'public', 'all' => 'everyone',
+            'public',
+            'all' => 'everyone',
             'resident' => 'residents',
-            'officials', 'dao' => 'official',
+            'officials',
+            'dao' => 'official',
             default => strtolower($audience),
         };
     }
