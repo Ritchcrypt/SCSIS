@@ -200,11 +200,12 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
     {
         $this->authorizeAdmin($request);
 
-        $previousStatus = $tanodTask->status;
+        $previousStatus = $this->transitionTaskStatus(
+            $tanodTask,
+            'closed'
+        );
 
-        $tanodTask->update([
-            'status' => 'closed',
-        ]);
+        $tanodTask->refresh();
 
         $this->recordOperationalActivity(
             event: 'tanod_task.closed',
@@ -226,11 +227,12 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
     {
         $this->authorizeAdmin($request);
 
-        $previousStatus = $tanodTask->status;
+        $previousStatus = $this->transitionTaskStatus(
+            $tanodTask,
+            'cancelled'
+        );
 
-        $tanodTask->update([
-            'status' => 'cancelled',
-        ]);
+        $tanodTask->refresh();
 
         $this->recordOperationalActivity(
             event: 'tanod_task.cancelled',
@@ -246,6 +248,42 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
         );
 
         return back()->with('success', 'Tanod task cancelled successfully.');
+    }
+
+    private function transitionTaskStatus(
+        TanodTask $tanodTask,
+        string $newStatus
+    ): string {
+        return DB::transaction(function () use (
+            $tanodTask,
+            $newStatus
+        ): string {
+            $lockedTask = TanodTask::query()
+                ->whereKey(
+                    $tanodTask->id
+                )
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $currentStatus = strtolower(
+                trim(
+                    (string) $lockedTask->status
+                )
+            );
+
+            if ($currentStatus !== 'open') {
+                throw ValidationException::withMessages([
+                    'status' =>
+                        'Only an open task may be closed or cancelled.',
+                ]);
+            }
+
+            $lockedTask->update([
+                'status' => $newStatus,
+            ]);
+
+            return $currentStatus;
+        });
     }
 
     private function authorizeAdmin(Request $request): void

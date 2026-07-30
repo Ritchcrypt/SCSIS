@@ -246,6 +246,7 @@ class CaseManagementController extends Controller
             $caseRecord ? 'required' : 'nullable',
             'string',
             'max:50',
+            'not_regex:/[\x00-\x1F\x7F]/',
         ];
 
         if ($caseRecord) {
@@ -265,7 +266,12 @@ class CaseManagementController extends Controller
                 Rule::in(array_keys($this->caseTypes())),
             ],
             'subject_name' => ['required', 'string', 'max:255'],
-            'contact' => ['nullable', 'string', 'max:50'],
+            'contact' => [
+                'nullable',
+                'string',
+                'max:50',
+                'regex:/^[0-9+()\-.\s]*$/',
+            ],
             'address' => ['nullable', 'string', 'max:500'],
             'incident_id' => [
                 'nullable',

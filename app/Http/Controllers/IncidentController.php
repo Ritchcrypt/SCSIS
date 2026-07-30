@@ -250,7 +250,19 @@ class IncidentController extends Controller
         $validated = $request->validate([
             'incident_title' => ['required', 'string', 'max:255'],
             'incident_description' => ['required', 'string', 'max:3000'],
-            'category_id' => ['required', 'exists:incident_categories,id'],
+            'category_id' => [
+                'required',
+                'integer',
+                Rule::exists(
+                    'incident_categories',
+                    'id'
+                )->where(
+                    fn ($query) => $query->where(
+                        'is_active',
+                        true
+                    )
+                ),
+            ],
             'barangay_id' => ['required', 'exists:barangays,id'],
             'priority' => ['required', Rule::in(array_keys($this->severityOptions()))],
             'location_address' => ['required', 'string', 'max:500'],
@@ -477,7 +489,15 @@ $this->storeIncidentEvidence($request, $incident);
             'status_id' => [
                 'required',
                 'integer',
-                Rule::exists('statuses', 'id'),
+                Rule::exists(
+                    'statuses',
+                    'id'
+                )->where(
+                    fn ($query) => $query->where(
+                        'is_active',
+                        true
+                    )
+                ),
             ],
             'remarks' => [
                 'nullable',
@@ -497,7 +517,10 @@ $this->storeIncidentEvidence($request, $incident);
         $validated = $request->validate($rules);
 
         $status = Status::query()
-            ->findOrFail((int) $validated['status_id']);
+            ->active()
+            ->findOrFail(
+                (int) $validated['status_id']
+            );
 
         $previousStatusId = $incident->status_id !== null
             ? (int) $incident->status_id
@@ -646,7 +669,15 @@ $this->storeIncidentEvidence($request, $incident);
         Gate::authorize('escalate', $incident);
 
         $validated = $request->validate([
-            'agency' => ['required', 'string', 'max:100'],
+            'agency' => [
+                'required',
+                'string',
+                Rule::in(
+                    array_keys(
+                        $this->agencyOptions()
+                    )
+                ),
+            ],
             'reason' => ['nullable', 'string', 'max:3000'],
         ]);
 
@@ -1021,19 +1052,36 @@ $this->storeIncidentEvidence($request, $incident);
         $absolutePath = $storedFile['absolute_path'];
         $mimeType = $storedFile['mime_type'];
 
-        $fileName = $evidenceRecord->file_name
-            ?? $evidenceRecord->name
-            ?? basename($cleanFilePath);
+        $fileName = $this->secureUploads
+            ->safeOriginalName(
+                $evidenceRecord->file_name
+                    ?? $evidenceRecord->name
+                    ?? basename(
+                        $storedFile['path']
+                    ),
+                basename(
+                    $storedFile['path']
+                )
+            );
 
-        $fileName = basename(str_replace('\\', '/', (string) $fileName));
-        $fileName = str_replace(["\r", "\n", '"'], '', $fileName);
+        $response = response()->file(
+            $absolutePath,
+            [
+                'Content-Type' => (string) $mimeType,
+                'Content-Disposition' => 'inline; filename="'
+                    . $fileName
+                    . '"',
+                'X-Content-Type-Options' => 'nosniff',
+            ]
+        );
 
-        return response()->file($absolutePath, [
-            'Content-Type' => (string) $mimeType,
-            'Content-Disposition' => 'inline; filename="' . $fileName . '"',
-            'Cache-Control' => 'private, no-store',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective(
+            'no-store',
+            true
+        );
+
+        return $response;
     }
 
 

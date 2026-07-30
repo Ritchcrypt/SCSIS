@@ -51,6 +51,26 @@ class ProfileController extends Controller
 
         $userRecord = User::query()->findOrFail($authUser->id);
 
+        /*
+        |--------------------------------------------------------------------------
+        | Canonical email input
+        |--------------------------------------------------------------------------
+        |
+        | Validation and uniqueness checks must operate on the same lowercase,
+        | trimmed value that will be stored in the database.
+        |
+        */
+
+        $request->merge([
+            'email' => strtolower(
+                trim(
+                    (string) $request->input(
+                        'email'
+                    )
+                )
+            ),
+        ]);
+
         $originalValues = [
             'name' => (string) $userRecord->name,
             'email' => (string) $userRecord->email,
@@ -83,16 +103,43 @@ class ProfileController extends Controller
             ],
         ]);
 
+        $normalizedEmail = strtolower(
+            trim(
+                (string) $validated['email']
+            )
+        );
+
+        $emailChanged = strcasecmp(
+            (string) $userRecord->email,
+            $normalizedEmail
+        ) !== 0;
+
+        $oldEmail = (string) $userRecord->email;
         $oldProfilePhotoPath = $userRecord->profile_photo_path ?? null;
         $newProfilePhotoPath = $this->storeProfilePhoto($request);
 
         DB::transaction(function () use (
             $validated,
             $userRecord,
-            $newProfilePhotoPath
+            $newProfilePhotoPath,
+            $normalizedEmail,
+            $emailChanged
         ): void {
-            $userRecord->name = $validated['name'];
-            $userRecord->email = $validated['email'];
+            $userRecord->name = trim(
+                (string) $validated['name']
+            );
+
+            $userRecord->email = $normalizedEmail;
+
+            if (
+                $emailChanged
+                && Schema::hasColumn(
+                    'users',
+                    'email_verified_at'
+                )
+            ) {
+                $userRecord->email_verified_at = null;
+            }
 
             if (Schema::hasColumn('users', 'contact_number')) {
                 $userRecord->contact_number = $this->normalizeContactNumber(
@@ -113,6 +160,12 @@ class ProfileController extends Controller
 
             $userRecord->save();
         });
+
+        if ($emailChanged) {
+            $this->deletePasswordResetTokens(
+                $oldEmail
+            );
+        }
 
         if ($newProfilePhotoPath && $oldProfilePhotoPath) {
             $oldProfilePhotoPath = $this->normalizeProfilePhotoPath(
@@ -519,6 +572,27 @@ class ProfileController extends Controller
             ) {
                 DB::table($table)
                     ->where('email', $user->email)
+                    ->delete();
+            }
+        }
+    }
+
+    private function deletePasswordResetTokens(
+        string $email
+    ): void {
+        foreach ([
+            'password_reset_tokens',
+            'password_resets',
+        ] as $table) {
+            if (
+                Schema::hasTable($table)
+                && Schema::hasColumn(
+                    $table,
+                    'email'
+                )
+            ) {
+                DB::table($table)
+                    ->where('email', $email)
                     ->delete();
             }
         }

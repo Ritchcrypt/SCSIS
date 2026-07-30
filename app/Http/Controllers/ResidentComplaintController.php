@@ -90,6 +90,7 @@ class ResidentComplaintController extends Controller
             'nullable',
             'string',
             'max:30',
+            'regex:/^[0-9+()\-.\s]*$/',
         ],
         'complaint_address' => [
             'required',
@@ -208,11 +209,33 @@ class ResidentComplaintController extends Controller
         ],
     ]);
 
-    $previousStatus = $residentComplaint->status;
+    $previousStatus = null;
 
-    $residentComplaint->update([
-        'status' => $validated['status'],
-    ]);
+    DB::transaction(function () use (
+        $residentComplaint,
+        $validated,
+        &$previousStatus
+    ): void {
+        $lockedComplaint = ResidentComplaint::query()
+            ->whereKey(
+                $residentComplaint->id
+            )
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        Gate::authorize(
+            'update',
+            $lockedComplaint
+        );
+
+        $previousStatus = (string) $lockedComplaint->status;
+
+        $lockedComplaint->update([
+            'status' => $validated['status'],
+        ]);
+    });
+
+    $residentComplaint->refresh();
 
     $this->notifyResidentStatusUpdated($residentComplaint);
 

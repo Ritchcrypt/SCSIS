@@ -296,6 +296,18 @@ class UserManagementController extends Controller
                 $oldRole = strtolower(trim((string) $lockedUser->role));
                 $oldActive = $this->isUserActive($lockedUser);
                 $oldEmail = (string) $lockedUser->email;
+
+                $newEmail = strtolower(
+                    trim(
+                        (string) $validated['email']
+                    )
+                );
+
+                $emailChanged = strcasecmp(
+                    $oldEmail,
+                    $newEmail
+                ) !== 0;
+
                 $passwordChanged = array_key_exists(
                     'password',
                     $validated
@@ -310,12 +322,7 @@ class UserManagementController extends Controller
                     $changedFields[] = 'name';
                 }
 
-                if (
-                    strcasecmp(
-                        (string) $lockedUser->email,
-                        strtolower(trim($validated['email']))
-                    ) !== 0
-                ) {
+                if ($emailChanged) {
                     $changedFields[] = 'email';
                 }
 
@@ -362,9 +369,18 @@ class UserManagementController extends Controller
                 }
 
                 $lockedUser->name = $validated['name'];
-                $lockedUser->email = strtolower(
-                    trim($validated['email'])
-                );
+                $lockedUser->email = $newEmail;
+
+                if (
+                    $emailChanged
+                    && Schema::hasColumn(
+                        'users',
+                        'email_verified_at'
+                    )
+                ) {
+                    $lockedUser->email_verified_at = null;
+                }
+
                 $lockedUser->role = $newRole;
 
                 if ($passwordChanged) {
@@ -420,11 +436,6 @@ class UserManagementController extends Controller
 
                 $roleChanged = $oldRole !== $newRole;
                 $activeStateChanged = $oldActive !== $newActive;
-                $emailChanged = strcasecmp(
-                    $oldEmail,
-                    (string) $lockedUser->email
-                ) !== 0;
-
                 if (
                     $roleChanged
                     || $activeStateChanged
@@ -835,8 +846,20 @@ class UserManagementController extends Controller
             });
     }
 
-    private function validateUser(Request $request, ?User $user = null): array
-    {
+    private function validateUser(
+        Request $request,
+        ?User $user = null
+    ): array {
+        $request->merge([
+            'email' => strtolower(
+                trim(
+                    (string) $request->input(
+                        'email'
+                    )
+                )
+            ),
+        ]);
+
         $barangayRule = Schema::hasTable('barangays')
             ? ['nullable', 'integer', 'exists:barangays,id']
             : ['nullable'];

@@ -64,6 +64,10 @@ class TanodRosterController extends Controller
     {
         Gate::authorize('create', TanodProfile::class);
 
+        $this->normalizeEmailInput(
+            $request
+        );
+
         $validated = $request->validate(
             $this->validationRules()
         );
@@ -187,6 +191,10 @@ class TanodRosterController extends Controller
         TanodProfile $tanod
     ): RedirectResponse {
         Gate::authorize('update', $tanod);
+
+        $this->normalizeEmailInput(
+            $request
+        );
 
         $validated = $request->validate(
             $this->validationRules($tanod)
@@ -329,6 +337,26 @@ class TanodRosterController extends Controller
             ->with('success', 'Tanod member deleted successfully.');
     }
 
+    private function normalizeEmailInput(
+        Request $request
+    ): void {
+        $email = $request->input(
+            'email'
+        );
+
+        if ($email === null) {
+            return;
+        }
+
+        $request->merge([
+            'email' => strtolower(
+                trim(
+                    (string) $email
+                )
+            ),
+        ]);
+    }
+
     private function validationRules(
         ?TanodProfile $tanod = null
     ): array {
@@ -353,7 +381,11 @@ class TanodRosterController extends Controller
                 'string',
                 'max:100',
             ],
-            'date_appointed' => ['nullable', 'date'],
+            'date_appointed' => [
+                'nullable',
+                'date',
+                'before_or_equal:today',
+            ],
             'shift' => [
                 'required',
                 Rule::in(array_keys($this->shifts())),
