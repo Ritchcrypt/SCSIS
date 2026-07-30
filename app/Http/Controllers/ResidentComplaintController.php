@@ -6,6 +6,8 @@ use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\ResidentComplaint;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Rules\SecureUploadedFile;
+use App\Services\SecureUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +21,11 @@ use Illuminate\View\View;
 class ResidentComplaintController extends Controller
 {
     use RecordsOperationalActivity;
+
+    public function __construct(
+        private readonly SecureUploadService $secureUploads
+    ) {
+    }
 
     public function index(Request $request): View
 {
@@ -98,7 +105,9 @@ class ResidentComplaintController extends Controller
             'nullable',
             'image',
             'mimes:jpg,jpeg,png,webp',
-            'max:51200',
+            new SecureUploadedFile(
+                'complaint_evidence'
+            ),
         ],
     ], [
         'complainant_name.required' =>
@@ -117,15 +126,16 @@ class ResidentComplaintController extends Controller
             'The evidence picture must be JPG, JPEG, PNG, or WEBP.',
 
         'evidence.max' =>
-            'The evidence picture must not exceed 50MB.',
+            'The evidence picture must not exceed 10MB.',
     ]);
 
     $evidencePath = null;
 
     if ($request->hasFile('evidence')) {
-        $evidencePath = $request
-            ->file('evidence')
-            ->store('resident-complaints', 'public');
+        $evidencePath = $this->secureUploads->store(
+            $request->file('evidence'),
+            'complaint_evidence'
+        );
     }
 
     $complaint = ResidentComplaint::create([
@@ -244,7 +254,9 @@ class ResidentComplaintController extends Controller
             'required',
             'image',
             'mimes:jpg,jpeg,png,webp',
-            'max:51200',
+            new SecureUploadedFile(
+                'complaint_proof'
+            ),
         ],
         'proof_note' => [
             'nullable',
@@ -262,12 +274,13 @@ class ResidentComplaintController extends Controller
             'The proof picture must be JPG, JPEG, PNG, or WEBP.',
 
         'proof_picture.max' =>
-            'The proof picture must not exceed 50MB.',
+            'The proof picture must not exceed 10MB.',
     ]);
 
-    $proofPath = $request
-        ->file('proof_picture')
-        ->store('resident-complaints/proofs', 'public');
+    $proofPath = $this->secureUploads->store(
+        $request->file('proof_picture'),
+        'complaint_proof'
+    );
 
     DB::table('resident_complaint_proofs')->insert([
         'resident_complaint_id' => $residentComplaint->id,
@@ -356,8 +369,11 @@ class ResidentComplaintController extends Controller
         $this->deleteComplaintProofs($residentComplaint);
 
         if ($residentComplaint->evidence_path) {
-            Storage::disk('public')->delete(
-                $residentComplaint->evidence_path
+            $this->secureUploads->delete(
+                $residentComplaint->evidence_path,
+                [
+                    'resident-complaints',
+                ]
             );
         }
 
@@ -482,11 +498,12 @@ class ResidentComplaintController extends Controller
             ->get(['id', 'proof_path']);
 
         foreach ($proofs as $proof) {
-            $path = $this->cleanPublicStoragePath((string) $proof->proof_path);
-
-            if ($path && Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
-            }
+            $this->secureUploads->delete(
+                $proof->proof_path,
+                [
+                    'resident-complaints/proofs',
+                ]
+            );
         }
 
         DB::table('resident_complaint_proofs')
@@ -561,30 +578,37 @@ class ResidentComplaintController extends Controller
     );
 }
 
-    private function servePublicStorageFile(string $path, string $missingMessage)
-    {
-        $cleanPath = $this->cleanPublicStoragePath($path);
+    private function servePublicStorageFile(
+        string $path,
+        string $missingMessage
+    ) {
+        $storedFile = $this->secureUploads->resolve(
+            $path,
+            [
+                'resident-complaints',
+            ],
+            [
+                'image/jpeg',
+                'image/png',
+                'image/webp',
+            ]
+        );
 
-        if (
-            ! $cleanPath
-            || str_contains($cleanPath, '..')
-            || ! Storage::disk('public')->exists($cleanPath)
-        ) {
+        if (! $storedFile) {
             abort(404, $missingMessage);
         }
 
-        $absolutePath = Storage::disk('public')->path($cleanPath);
-
-        if (! is_file($absolutePath)) {
-            abort(404, $missingMessage);
-        }
-
-        $mimeType = @mime_content_type($absolutePath) ?: 'application/octet-stream';
-
-        return response()->file($absolutePath, [
-            'Content-Type' => $mimeType,
-            'Content-Disposition' => 'inline; filename="' . basename($cleanPath) . '"',
-        ]);
+        return response()->file(
+            $storedFile['absolute_path'],
+            [
+                'Content-Type' => $storedFile['mime_type'],
+                'Content-Disposition' => 'inline; filename="'
+                    . basename($storedFile['path'])
+                    . '"',
+                'Cache-Control' => 'private, no-store',
+                'X-Content-Type-Options' => 'nosniff',
+            ]
+        );
     }
 
     private function cleanPublicStoragePath(string $path): string

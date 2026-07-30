@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Rules\SecureUploadedFile;
 use App\Services\ActivityLogger;
+use App\Services\SecureUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,7 +21,8 @@ use Illuminate\View\View;
 class ProfileController extends Controller
 {
     public function __construct(
-        private readonly ActivityLogger $activityLogger
+        private readonly ActivityLogger $activityLogger,
+        private readonly SecureUploadService $secureUploads
     ) {
     }
 
@@ -74,7 +77,9 @@ class ProfileController extends Controller
                 'nullable',
                 'image',
                 'mimes:jpg,jpeg,png,webp',
-                'max:51200',
+                new SecureUploadedFile(
+                    'profile_photo'
+                ),
             ],
         ]);
 
@@ -114,11 +119,13 @@ class ProfileController extends Controller
                 $oldProfilePhotoPath
             );
 
-            if (
-                $oldProfilePhotoPath
-                && Storage::disk('public')->exists($oldProfilePhotoPath)
-            ) {
-                Storage::disk('public')->delete($oldProfilePhotoPath);
+            if ($oldProfilePhotoPath) {
+                $this->secureUploads->delete(
+                    $oldProfilePhotoPath,
+                    [
+                        'profile-photos',
+                    ]
+                );
             }
         }
 
@@ -527,9 +534,10 @@ class ProfileController extends Controller
             return null;
         }
 
-        $path = $request
-            ->file('profile_photo')
-            ->store('profile-photos', 'public');
+        $path = $this->secureUploads->store(
+            $request->file('profile_photo'),
+            'profile_photo'
+        );
 
         return $this->normalizeProfilePhotoPath($path);
     }

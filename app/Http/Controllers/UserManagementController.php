@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\User;
+use App\Rules\SecureUploadedFile;
 use App\Services\ActivityLogger;
+use App\Services\SecureUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +24,8 @@ use Illuminate\View\View;
 class UserManagementController extends Controller
 {
     public function __construct(
-        private readonly ActivityLogger $activityLogger
+        private readonly ActivityLogger $activityLogger,
+        private readonly SecureUploadService $secureUploads
     ) {
     }
 
@@ -168,32 +171,50 @@ class UserManagementController extends Controller
             $user->profile_photo_path ?? null
         );
 
-        if (
-            ! $profilePhotoPath
-            || ! Storage::disk('public')->exists($profilePhotoPath)
-        ) {
+        $storedFile = $this->secureUploads->resolve(
+            $profilePhotoPath,
+            [
+                'profile-photos',
+            ],
+            (array) config(
+                'secure_uploads.policies.profile_photo.allowed_mime_types',
+                []
+            )
+        );
+
+        if (! $storedFile) {
             abort(404, 'Profile photo not found.');
         }
 
-        $absolutePath = Storage::disk('public')->path($profilePhotoPath);
-
-        if (! is_file($absolutePath)) {
-            abort(404, 'Profile photo not found.');
-        }
-
-        $mimeType = @mime_content_type($absolutePath) ?: 'application/octet-stream';
+        $absolutePath = $storedFile['absolute_path'];
+        $mimeType = $storedFile['mime_type'];
         $fileName = preg_replace(
             '/[^A-Za-z0-9._-]/',
             '_',
-            basename($profilePhotoPath)
+            basename($storedFile['path'])
         );
 
-        return response()->file($absolutePath, [
+        $response = response()->file($absolutePath, [
             'Content-Type' => $mimeType,
             'Content-Disposition' => 'inline; filename="' . $fileName . '"',
-            'Cache-Control' => 'private, max-age=3600',
             'X-Content-Type-Options' => 'nosniff',
         ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Private browser caching
+        |--------------------------------------------------------------------------
+        |
+        | BinaryFileResponse may mark a file response as public while preparing
+        | its cache headers. Apply the private directive after constructing the
+        | response so authenticated profile photos are never shared-cacheable.
+        |
+        */
+
+        $response->setPrivate();
+        $response->setMaxAge(3600);
+
+        return $response;
     }
 
     public function edit(Request $request, User $user): View
@@ -848,7 +869,9 @@ class UserManagementController extends Controller
                 'nullable',
                 'image',
                 'mimes:jpg,jpeg,png,webp',
-                'max:5120',
+                new SecureUploadedFile(
+                    'profile_photo'
+                ),
             ],
         ];
 
@@ -885,7 +908,10 @@ class UserManagementController extends Controller
             return null;
         }
 
-        $path = $request->file('profile_photo')->store('profile-photos', 'public');
+        $path = $this->secureUploads->store(
+            $request->file('profile_photo'),
+            'profile_photo'
+        );
 
         return $this->normalizeProfilePhotoPath($path);
     }
@@ -1460,11 +1486,13 @@ class UserManagementController extends Controller
     {
         $path = $this->normalizeProfilePhotoPath($path);
 
-        if (
-            $path
-            && Storage::disk('public')->exists($path)
-        ) {
-            Storage::disk('public')->delete($path);
+        if ($path) {
+            $this->secureUploads->delete(
+                $path,
+                [
+                    'profile-photos',
+                ]
+            );
         }
     }
 

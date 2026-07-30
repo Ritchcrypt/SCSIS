@@ -12,6 +12,8 @@ use App\Models\IncidentStatusHistory;
 use App\Models\Status;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Rules\SecureUploadedFile;
+use App\Services\SecureUploadService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +28,11 @@ use Illuminate\View\View;
 class IncidentController extends Controller
 {
     use RecordsOperationalActivity;
+
+    public function __construct(
+        private readonly SecureUploadService $secureUploads
+    ) {
+    }
 
     public function destroy(
         Request $request,
@@ -250,14 +257,20 @@ class IncidentController extends Controller
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'evidence' => ['nullable', 'array', 'max:5'],
-            'evidence.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:51200'],
+            'evidence.*' => [
+                'nullable',
+                'file',
+                new SecureUploadedFile(
+                    'incident_evidence'
+                ),
+            ],
         ], [
             'category_id.required' => 'Please select an incident category.',
             'barangay_id.required' => 'Please select a barangay.',
             'priority.required' => 'Please select a severity level.',
             'location_address.required' => 'Please provide the incident location or landmark.',
             'evidence.*.mimes' => 'Evidence files must be JPG, JPEG, PNG, WEBP, or PDF.',
-            'evidence.*.max' => 'Each evidence file must not exceed 50MB.',
+            'evidence.*.max' => 'Each evidence file must not exceed 10MB.',
         ]);
 
         $pendingStatus = Status::query()
@@ -990,31 +1003,23 @@ $this->storeIncidentEvidence($request, $incident);
             abort(404, 'Evidence file path is invalid.');
         }
 
-        $cleanFilePath = str_replace('\\', '/', trim((string) $filePath));
-        $cleanFilePath = preg_replace('#^/?storage/#', '', $cleanFilePath);
-        $cleanFilePath = preg_replace('#^/?public/#', '', $cleanFilePath);
-        $cleanFilePath = ltrim($cleanFilePath, '/');
+        $storedFile = $this->secureUploads->resolve(
+            $filePath,
+            [
+                'incidents/evidence',
+            ],
+            (array) config(
+                'secure_uploads.policies.incident_evidence.allowed_mime_types',
+                []
+            )
+        );
 
-        if (
-            ! $cleanFilePath
-            || str_contains($cleanFilePath, '..')
-            || ! Storage::disk('public')->exists($cleanFilePath)
-        ) {
+        if (! $storedFile) {
             abort(404, 'Evidence file not found in storage.');
         }
 
-        $absolutePath = Storage::disk('public')->path($cleanFilePath);
-
-        if (! is_file($absolutePath)) {
-            abort(404, 'Evidence file is missing from disk.');
-        }
-
-        $mimeType = $evidenceRecord->mime_type ?? null;
-
-        if (! $mimeType) {
-            $detectedMimeType = @mime_content_type($absolutePath);
-            $mimeType = $detectedMimeType ?: 'application/octet-stream';
-        }
+        $absolutePath = $storedFile['absolute_path'];
+        $mimeType = $storedFile['mime_type'];
 
         $fileName = $evidenceRecord->file_name
             ?? $evidenceRecord->name
@@ -1026,6 +1031,8 @@ $this->storeIncidentEvidence($request, $incident);
         return response()->file($absolutePath, [
             'Content-Type' => (string) $mimeType,
             'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
@@ -1159,18 +1166,12 @@ $this->storeIncidentEvidence($request, $incident);
                         continue;
                     }
 
-                    $path = str_replace('\\', '/', trim((string) $path));
-                    $path = preg_replace('#^/?storage/#', '', $path);
-                    $path = preg_replace('#^/?public/#', '', $path);
-                    $path = ltrim($path, '/');
-
-                    if (
-                        $path
-                        && ! str_contains($path, '..')
-                        && Storage::disk('public')->exists($path)
-                    ) {
-                        Storage::disk('public')->delete($path);
-                    }
+                    $this->secureUploads->delete(
+                        $path,
+                        [
+                            'incidents/evidence',
+                        ]
+                    );
                 }
             }
         }
@@ -1339,7 +1340,10 @@ $this->storeIncidentEvidence($request, $incident);
     $columns = Schema::getColumnListing($evidenceTable);
 
     foreach ($uploadedFiles as $file) {
-        $path = $file->store('incidents/evidence', 'public');
+        $path = $this->secureUploads->store(
+            $file,
+            'incident_evidence'
+        );
 
         $evidenceData = [];
 
@@ -1364,15 +1368,23 @@ $this->storeIncidentEvidence($request, $incident);
         }
 
         if (in_array('file_name', $columns, true)) {
-            $evidenceData['file_name'] = $file->getClientOriginalName();
+            $evidenceData['file_name'] = $this->secureUploads
+                ->safeOriginalName(
+                    $file->getClientOriginalName(),
+                    basename($path)
+                );
         }
 
         if (in_array('name', $columns, true)) {
-            $evidenceData['name'] = $file->getClientOriginalName();
+            $evidenceData['name'] = $this->secureUploads
+                ->safeOriginalName(
+                    $file->getClientOriginalName(),
+                    basename($path)
+                );
         }
 
         if (in_array('file_type', $columns, true)) {
-            $evidenceData['file_type'] = $file->getClientOriginalExtension();
+            $evidenceData['file_type'] = pathinfo($path, PATHINFO_EXTENSION);
         }
 
         if (in_array('mime_type', $columns, true)) {

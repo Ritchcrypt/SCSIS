@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\SystemSetting;
+use App\Rules\SecureUploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -65,6 +66,9 @@ class SystemBrandingController extends Controller
                 'mimes:jpg,jpeg,png,webp',
                 'max:5120',
                 'dimensions:max_width=4096,max_height=4096',
+                new SecureUploadedFile(
+                    'branding_logo'
+                ),
             ],
             'remove_logo' => [
                 'nullable',
