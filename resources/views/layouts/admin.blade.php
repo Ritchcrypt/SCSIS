@@ -237,6 +237,12 @@
                             'route' => 'admin.users.index',
                             'active' => ['admin.users.*'],
                         ],
+                        [
+                            'label' => 'Activity Logs',
+                            'icon' => '🧾',
+                            'route' => 'admin.activity-logs.index',
+                            'active' => ['admin.activity-logs.*'],
+                        ],
                     ],
 
                     'official', 'dao' => [

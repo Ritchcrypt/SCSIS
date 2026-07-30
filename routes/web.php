@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\BarangayMapController;
@@ -195,6 +196,13 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])
             ->name('users.destroy');
+
+        /* Activity Logs: read-only administrator module. */
+        Route::get('/activity-logs', [ActivityLogController::class, 'index'])
+            ->name('activity-logs.index');
+
+        Route::get('/activity-logs/{activityLog}', [ActivityLogController::class, 'show'])
+            ->name('activity-logs.show');
 
         Route::get('/tanod-tasks', [TanodTaskController::class, 'index'])
             ->name('tanod-tasks.index');
