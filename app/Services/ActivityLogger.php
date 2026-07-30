@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -75,7 +76,45 @@ class ActivityLogger
                 'created_at' => now(),
             ]);
         } catch (\Throwable $exception) {
-            report($exception);
+            /*
+            |--------------------------------------------------------------------------
+            | Non-disruptive audit failure handling
+            |--------------------------------------------------------------------------
+            |
+            | An audit write failure must not break the primary operation.
+            | The fallback record deliberately excludes exception messages,
+            | request payloads, credentials, cookies, and metadata values.
+            |
+            */
+
+            try {
+                Log::channel(
+                    (string) config(
+                        'activity.failure_log_channel',
+                        'security'
+                    )
+                )->error(
+                    'Activity audit write failed.',
+                    [
+                        'event' => Str::limit(
+                            trim($event),
+                            100,
+                            ''
+                        ),
+                        'category' => Str::limit(
+                            trim($category),
+                            50,
+                            ''
+                        ),
+                        'exception_class' => $exception::class,
+                    ]
+                );
+            } catch (\Throwable) {
+                /*
+                | The primary request must continue even if both the database
+                | audit trail and the fallback file channel are unavailable.
+                */
+            }
 
             return null;
         }

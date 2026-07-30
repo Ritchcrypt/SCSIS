@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use LogicException;
 
 class ActivityLog extends Model
 {
@@ -25,6 +26,34 @@ class ActivityLog extends Model
         'metadata',
         'created_at',
     ];
+
+    protected static function booted(): void
+    {
+        /*
+        |--------------------------------------------------------------------------
+        | Application-level audit immutability
+        |--------------------------------------------------------------------------
+        |
+        | Normal Eloquent operations may create audit records, but they may not
+        | modify or delete an existing record. Retention pruning is performed
+        | only by the controlled console command through the query builder.
+        |
+        */
+
+        static::saving(function (ActivityLog $activityLog): void {
+            if ($activityLog->exists) {
+                throw new LogicException(
+                    'Existing activity log records are immutable.'
+                );
+            }
+        });
+
+        static::deleting(function (): void {
+            throw new LogicException(
+                'Activity log records cannot be deleted through Eloquent.'
+            );
+        });
+    }
 
     protected function casts(): array
     {

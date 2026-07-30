@@ -1097,8 +1097,18 @@ class UserManagementController extends Controller
             ['tanod_tasks', 'created_by'],
             ['tanod_tasks', 'updated_by'],
             ['emergency_agency_logs', 'contacted_by'],
-            ['activity_logs', 'actor_id'],
-            ['activity_logs', 'target_user_id'],
+
+            /*
+            |--------------------------------------------------------------------------
+            | Activity logs are intentionally excluded
+            |--------------------------------------------------------------------------
+            |
+            | actor_id and target_user_id are historical identifiers, not live
+            | foreign keys. Rewriting them during account deletion would alter
+            | the audit trail and destroy its evidentiary value.
+            |
+            */
+
             ['evidence', 'uploaded_by'],
             ['incident_evidence', 'uploaded_by'],
             ['incident_evidences', 'uploaded_by'],

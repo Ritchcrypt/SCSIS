@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Listeners\RecordAuthenticationActivity;
+use App\Models\ActivityLog;
 use App\Models\Announcement;
 use App\Models\CaseRecord;
 use App\Models\EmergencyHotline;
@@ -11,6 +12,7 @@ use App\Models\ResidentComplaint;
 use App\Models\TanodProfile;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Policies\ActivityLogPolicy;
 use App\Policies\AnnouncementPolicy;
 use App\Policies\CaseRecordPolicy;
 use App\Policies\EmergencyHotlinePolicy;
@@ -65,6 +67,7 @@ class AppServiceProvider extends ServiceProvider
             );
         }
 
+        Gate::policy(ActivityLog::class, ActivityLogPolicy::class);
         Gate::policy(Announcement::class, AnnouncementPolicy::class);
         Gate::policy(CaseRecord::class, CaseRecordPolicy::class);
         Gate::policy(EmergencyHotline::class, EmergencyHotlinePolicy::class);

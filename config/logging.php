@@ -118,6 +118,15 @@ return [
             'replace_placeholders' => true,
         ],
 
+
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('SECURITY_LOG_LEVEL', 'warning'),
+            'days' => env('SECURITY_LOG_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
         'null' => [
             'driver' => 'monolog',
             'handler' => NullHandler::class,
