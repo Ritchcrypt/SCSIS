@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\CaseRecord;
 use App\Models\Incident;
+use App\Support\SqlLikePattern;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,27 +22,67 @@ class CaseManagementController extends Controller
     {
         Gate::authorize('viewAny', CaseRecord::class);
 
-        $search = trim((string) $request->query('search', ''));
+        $search = SqlLikePattern::normalize(
+            $request->query('search')
+        );
+
+        $searchPattern = SqlLikePattern::contains(
+            $search
+        );
 
         $cases = CaseRecord::query()
             ->with(['incident', 'creator', 'updater'])
-            ->when($search !== '', function ($query) use ($search): void {
-                $query->where(function ($searchQuery) use ($search): void {
-                    $searchQuery
-                        ->where('case_number', 'like', "%{$search}%")
-                        ->orWhere('subject_name', 'like', "%{$search}%")
-                        ->orWhere('contact', 'like', "%{$search}%")
-                        ->orWhere('address', 'like', "%{$search}%")
-                        ->orWhere('incident_title', 'like', "%{$search}%")
-                        ->orWhere('handled_by', 'like', "%{$search}%")
-                        ->orWhereHas('incident', function ($incidentQuery) use ($search): void {
-                            $incidentQuery
-                                ->where('incident_code', 'like', "%{$search}%")
-                                ->orWhere('incident_title', 'like', "%{$search}%")
-                                ->orWhere('title', 'like', "%{$search}%");
-                        });
-                });
-            })
+            ->when(
+                $searchPattern !== null,
+                function ($query) use ($searchPattern): void {
+                    $query->where(
+                        function ($searchQuery) use ($searchPattern): void {
+                            SqlLikePattern::whereContains(
+                                $searchQuery,
+                                'case_number',
+                                $searchPattern
+                            );
+
+                            foreach ([
+                                'subject_name',
+                                'contact',
+                                'address',
+                                'incident_title',
+                                'handled_by',
+                            ] as $column) {
+                                SqlLikePattern::orWhereContains(
+                                    $searchQuery,
+                                    $column,
+                                    $searchPattern
+                                );
+                            }
+
+                            $searchQuery->orWhereHas(
+                                'incident',
+                                function ($incidentQuery) use ($searchPattern): void {
+                                    SqlLikePattern::whereContains(
+                                        $incidentQuery,
+                                        'incident_code',
+                                        $searchPattern
+                                    );
+
+                                    SqlLikePattern::orWhereContains(
+                                        $incidentQuery,
+                                        'incident_title',
+                                        $searchPattern
+                                    );
+
+                                    SqlLikePattern::orWhereContains(
+                                        $incidentQuery,
+                                        'title',
+                                        $searchPattern
+                                    );
+                                }
+                            );
+                        }
+                    );
+                }
+            )
             ->orderByRaw('CAST(case_number AS UNSIGNED) ASC')
             ->paginate(10)
             ->withQueryString();
@@ -63,7 +104,7 @@ class CaseManagementController extends Controller
             'caseTypes' => $this->caseTypes(),
             'caseStatuses' => $this->caseStatuses(),
             'filters' => [
-                'search' => $search,
+                'search' => $search ?? '',
             ],
         ]);
     }

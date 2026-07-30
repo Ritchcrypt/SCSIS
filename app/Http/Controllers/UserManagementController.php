@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Rules\SecureUploadedFile;
 use App\Services\ActivityLogger;
 use App\Services\SecureUploadService;
+use App\Support\SqlLikePattern;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -793,57 +794,162 @@ class UserManagementController extends Controller
 
     private function filteredUsersQuery(Request $request)
     {
+        $searchPattern = SqlLikePattern::contains(
+            $request->query('search')
+        );
+
+        $role = strtolower(
+            trim(
+                (string) $request->query(
+                    'role',
+                    ''
+                )
+            )
+        );
+
+        if (! array_key_exists($role, $this->roles())) {
+            $role = null;
+        }
+
+        $status = strtolower(
+            trim(
+                (string) $request->query(
+                    'status',
+                    ''
+                )
+            )
+        );
+
+        if (! array_key_exists($status, $this->statusOptions())) {
+            $status = null;
+        }
+
+        $date = strtolower(
+            trim(
+                (string) $request->query(
+                    'date',
+                    ''
+                )
+            )
+        );
+
+        if (! array_key_exists($date, $this->dateOptions())) {
+            $date = null;
+        }
+
         return User::query()
             ->where('email', '!=', self::DELETED_USER_EMAIL)
-            ->when($request->filled('search'), function ($query) use ($request) {
-                $search = $request->string('search')->toString();
-
-                $query->where(function ($searchQuery) use ($search) {
-                    $searchQuery
-                        ->where('name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
-
-                    if (Schema::hasColumn('users', 'contact_number')) {
-                        $searchQuery->orWhere('contact_number', 'like', "%{$search}%");
-                    }
-
-                    if (Schema::hasColumn('users', 'address')) {
-                        $searchQuery->orWhere('address', 'like', "%{$search}%");
-                    }
-                });
-            })
-            ->when($request->filled('role') && $request->role !== 'all', function ($query) use ($request) {
-                $query->where('role', $request->query('role'));
-            })
             ->when(
-                $request->filled('status')
-                && $request->status !== 'all'
-                && Schema::hasColumn('users', 'last_seen_at'),
-                function ($query) use ($request) {
-                    $onlineThreshold = now()->subMinutes(self::ONLINE_WINDOW_MINUTES);
+                $searchPattern !== null,
+                function ($query) use ($searchPattern): void {
+                    $query->where(
+                        function ($searchQuery) use ($searchPattern): void {
+                            SqlLikePattern::whereContains(
+                                $searchQuery,
+                                'name',
+                                $searchPattern
+                            );
 
-                    if ($request->query('status') === 'online') {
+                            SqlLikePattern::orWhereContains(
+                                $searchQuery,
+                                'email',
+                                $searchPattern
+                            );
+
+                            if (Schema::hasColumn('users', 'contact_number')) {
+                                SqlLikePattern::orWhereContains(
+                                    $searchQuery,
+                                    'contact_number',
+                                    $searchPattern
+                                );
+                            }
+
+                            if (Schema::hasColumn('users', 'address')) {
+                                SqlLikePattern::orWhereContains(
+                                    $searchQuery,
+                                    'address',
+                                    $searchPattern
+                                );
+                            }
+                        }
+                    );
+                }
+            )
+            ->when(
+                $role !== null,
+                fn ($query) => $query->where(
+                    'role',
+                    $role
+                )
+            )
+            ->when(
+                $status !== null
+                && Schema::hasColumn(
+                    'users',
+                    'last_seen_at'
+                ),
+                function ($query) use ($status): void {
+                    $onlineThreshold = now()
+                        ->subMinutes(
+                            self::ONLINE_WINDOW_MINUTES
+                        );
+
+                    if ($status === 'online') {
                         $query->whereNotNull('last_seen_at')
-                            ->where('last_seen_at', '>=', $onlineThreshold);
+                            ->where(
+                                'last_seen_at',
+                                '>=',
+                                $onlineThreshold
+                            );
                     }
 
-                    if ($request->query('status') === 'offline') {
-                        $query->where(function ($offlineQuery) use ($onlineThreshold) {
-                            $offlineQuery->whereNull('last_seen_at')
-                                ->orWhere('last_seen_at', '<', $onlineThreshold);
-                        });
+                    if ($status === 'offline') {
+                        $query->where(
+                            function ($offlineQuery) use ($onlineThreshold): void {
+                                $offlineQuery
+                                    ->whereNull('last_seen_at')
+                                    ->orWhere(
+                                        'last_seen_at',
+                                        '<',
+                                        $onlineThreshold
+                                    );
+                            }
+                        );
                     }
                 }
             )
-            ->when($request->filled('date') && $request->date !== 'all', function ($query) use ($request) {
-                match ($request->query('date')) {
-                    'today' => $query->whereDate('created_at', today()),
-                    'week' => $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]),
-                    'month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
-                    'year' => $query->whereBetween('created_at', [now()->startOfYear(), now()->endOfYear()]),
-                    default => null,
-                };
-            });
+            ->when(
+                $date !== null,
+                function ($query) use ($date): void {
+                    match ($date) {
+                        'today' => $query->whereDate(
+                            'created_at',
+                            today()
+                        ),
+                        'week' => $query->whereBetween(
+                            'created_at',
+                            [
+                                now()->startOfWeek(),
+                                now()->endOfWeek(),
+                            ]
+                        ),
+                        'month' => $query->whereBetween(
+                            'created_at',
+                            [
+                                now()->startOfMonth(),
+                                now()->endOfMonth(),
+                            ]
+                        ),
+                        'year' => $query->whereBetween(
+                            'created_at',
+                            [
+                                now()->startOfYear(),
+                                now()->endOfYear(),
+                            ]
+                        ),
+                    };
+                }
+            );
     }
 
     private function validateUser(

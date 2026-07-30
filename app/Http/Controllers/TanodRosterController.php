@@ -7,6 +7,7 @@ use App\Models\Barangay;
 use App\Models\Employee;
 use App\Models\TanodProfile;
 use App\Models\User;
+use App\Support\SqlLikePattern;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,24 +28,59 @@ class TanodRosterController extends Controller
     {
         Gate::authorize('viewAny', TanodProfile::class);
 
-        $search = trim((string) $request->query('search', ''));
+        $search = SqlLikePattern::normalize(
+            $request->query('search')
+        );
+
+        $searchPattern = SqlLikePattern::contains(
+            $search
+        );
 
         $tanods = TanodProfile::query()
             ->with(['user', 'employee'])
-            ->when($search !== '', function ($query) use ($search): void {
-                $query->where(function ($searchQuery) use ($search): void {
-                    $searchQuery
-                        ->where('contact_number', 'like', "%{$search}%")
-                        ->orWhere('purok_assignment', 'like', "%{$search}%")
-                        ->orWhere('shift', 'like', "%{$search}%")
-                        ->orWhere('status', 'like', "%{$search}%")
-                        ->orWhereHas('user', function ($userQuery) use ($search): void {
-                            $userQuery
-                                ->where('name', 'like', "%{$search}%")
-                                ->orWhere('email', 'like', "%{$search}%");
-                        });
-                });
-            })
+            ->when(
+                $searchPattern !== null,
+                function ($query) use ($searchPattern): void {
+                    $query->where(
+                        function ($searchQuery) use ($searchPattern): void {
+                            SqlLikePattern::whereContains(
+                                $searchQuery,
+                                'contact_number',
+                                $searchPattern
+                            );
+
+                            foreach ([
+                                'purok_assignment',
+                                'shift',
+                                'status',
+                            ] as $column) {
+                                SqlLikePattern::orWhereContains(
+                                    $searchQuery,
+                                    $column,
+                                    $searchPattern
+                                );
+                            }
+
+                            $searchQuery->orWhereHas(
+                                'user',
+                                function ($userQuery) use ($searchPattern): void {
+                                    SqlLikePattern::whereContains(
+                                        $userQuery,
+                                        'name',
+                                        $searchPattern
+                                    );
+
+                                    SqlLikePattern::orWhereContains(
+                                        $userQuery,
+                                        'email',
+                                        $searchPattern
+                                    );
+                                }
+                            );
+                        }
+                    );
+                }
+            )
             ->orderBy('id')
             ->paginate(10)
             ->withQueryString();

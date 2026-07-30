@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Models\UserNotification;
 use App\Rules\SecureUploadedFile;
 use App\Services\SecureUploadService;
+use App\Support\SafeDatabaseIdentifier;
+use App\Support\SqlLikePattern;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -97,6 +99,14 @@ class IncidentController extends Controller
 
         $user = $request->user();
 
+        $search = SqlLikePattern::normalize(
+            $request->query('search')
+        );
+
+        $searchPattern = SqlLikePattern::contains(
+            $search
+        );
+
         $query = Incident::query()
             ->with([
                 'barangay',
@@ -119,28 +129,59 @@ class IncidentController extends Controller
             ->when($user->isResident(), function ($query) use ($user) {
                 $this->applyResidentIncidentOwnerFilter($query, (int) $user->id);
             })
-            ->when($request->filled('search'), function ($query) use ($request) {
-                $search = trim($request->string('search')->toString());
+            ->when(
+                $searchPattern !== null,
+                function ($query) use ($searchPattern): void {
+                    $query->where(
+                        function ($searchQuery) use ($searchPattern): void {
+                            SqlLikePattern::whereContains(
+                                $searchQuery,
+                                'incident_title',
+                                $searchPattern
+                            );
 
-                if ($search === '') {
-                    return;
+                            SqlLikePattern::orWhereContains(
+                                $searchQuery,
+                                'incident_description',
+                                $searchPattern
+                            );
+
+                            $searchQuery->orWhereHas(
+                                'barangay',
+                                function ($barangayQuery) use ($searchPattern): void {
+                                    SqlLikePattern::whereContains(
+                                        $barangayQuery,
+                                        'barangay_name',
+                                        $searchPattern
+                                    );
+                                }
+                            );
+
+                            $searchQuery->orWhereHas(
+                                'category',
+                                function ($categoryQuery) use ($searchPattern): void {
+                                    SqlLikePattern::whereContains(
+                                        $categoryQuery,
+                                        'category_name',
+                                        $searchPattern
+                                    );
+                                }
+                            );
+
+                            $searchQuery->orWhereHas(
+                                'currentStatus',
+                                function ($statusQuery) use ($searchPattern): void {
+                                    SqlLikePattern::whereContains(
+                                        $statusQuery,
+                                        'status_name',
+                                        $searchPattern
+                                    );
+                                }
+                            );
+                        }
+                    );
                 }
-
-                $query->where(function ($searchQuery) use ($search) {
-                    $searchQuery
-                        ->where('incident_title', 'like', "%{$search}%")
-                        ->orWhere('incident_description', 'like', "%{$search}%")
-                        ->orWhereHas('barangay', function ($barangayQuery) use ($search) {
-                            $barangayQuery->where('barangay_name', 'like', "%{$search}%");
-                        })
-                        ->orWhereHas('category', function ($categoryQuery) use ($search) {
-                            $categoryQuery->where('category_name', 'like', "%{$search}%");
-                        })
-                        ->orWhereHas('currentStatus', function ($statusQuery) use ($search) {
-                            $statusQuery->where('status_name', 'like', "%{$search}%");
-                        });
-                });
-            })
+            )
             ->when(
                 $request->filled('type') && $request->string('type')->toString() !== 'all',
                 function ($query) use ($request) {
@@ -186,7 +227,7 @@ class IncidentController extends Controller
             'statuses' => $statuses,
             'severityOptions' => $this->severityOptions(),
             'filters' => [
-                'search' => $request->query('search'),
+                'search' => $search ?? '',
                 'type' => $request->query('type', 'all'),
                 'status' => $request->query('status', 'all'),
                 'severity' => $request->query('severity', 'all'),
@@ -882,10 +923,16 @@ class IncidentController extends Controller
             );
         }
 
+        $wrappedNameColumn = SafeDatabaseIdentifier::wrap(
+            $nameColumn
+        );
+
         $exists = DB::table('barangays')
             ->whereRaw(
-                "LOWER({$nameColumn}) = ?",
-                [mb_strtolower($barangayName)]
+                "LOWER({$wrappedNameColumn}) = ?",
+                [
+                    mb_strtolower($barangayName),
+                ]
             )
             ->exists();
 
@@ -923,14 +970,16 @@ class IncidentController extends Controller
         }
 
         DB::transaction(function () use (
-            $nameColumn,
+            $wrappedNameColumn,
             $barangayName,
             $data
         ): void {
             $duplicate = DB::table('barangays')
                 ->whereRaw(
-                    "LOWER({$nameColumn}) = ?",
-                    [mb_strtolower($barangayName)]
+                    "LOWER({$wrappedNameColumn}) = ?",
+                    [
+                        mb_strtolower($barangayName),
+                    ]
                 )
                 ->lockForUpdate()
                 ->exists();
