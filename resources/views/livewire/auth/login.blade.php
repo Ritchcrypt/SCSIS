@@ -20,36 +20,13 @@ new #[Layout('components.layouts.auth')] class extends Component {
 
     public bool $remember = false;
 
-    /**
-     * Authenticate the user securely.
-     */
     public function login(): void
     {
-        /*
-        |--------------------------------------------------------------------------
-        | Normalize login identity
-        |--------------------------------------------------------------------------
-        |
-        | Removes accidental spaces and normalizes email casing before
-        | validation, throttling, and authentication.
-        |
-        */
-
         $this->email = Str::lower(trim($this->email));
 
         $this->validate();
 
         $this->ensureIsNotRateLimited();
-
-        /*
-        |--------------------------------------------------------------------------
-        | Authentication credentials
-        |--------------------------------------------------------------------------
-        |
-        | is_active is included directly in the authentication query so an
-        | inactive account never receives an authenticated session.
-        |
-        */
 
         $credentials = [
             'email' => $this->email,
@@ -60,16 +37,6 @@ new #[Layout('components.layouts.auth')] class extends Component {
         if (! Auth::attempt($credentials, $this->remember)) {
             RateLimiter::hit($this->throttleKey(), 60);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Generic error response
-            |--------------------------------------------------------------------------
-            |
-            | Do not reveal whether an email exists, a password is incorrect,
-            | or an account has been deactivated.
-            |
-            */
-
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
             ]);
@@ -77,19 +44,12 @@ new #[Layout('components.layouts.auth')] class extends Component {
 
         RateLimiter::clear($this->throttleKey());
 
-        /*
-        |--------------------------------------------------------------------------
-        | Session fixation protection
-        |--------------------------------------------------------------------------
-        */
-
         Session::regenerate();
 
-        /*
-        |--------------------------------------------------------------------------
-        | Remove password from Livewire component state
-        |--------------------------------------------------------------------------
-        */
+        Session::put(
+            'security.last_activity_at',
+            time()
+        );
 
         $this->password = '';
 
@@ -99,9 +59,6 @@ new #[Layout('components.layouts.auth')] class extends Component {
         );
     }
 
-    /**
-     * Prevent excessive authentication attempts.
-     */
     protected function ensureIsNotRateLimited(): void
     {
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
@@ -120,9 +77,6 @@ new #[Layout('components.layouts.auth')] class extends Component {
         ]);
     }
 
-    /**
-     * Generate the login throttle key.
-     */
     protected function throttleKey(): string
     {
         return Str::transliterate(
@@ -143,7 +97,6 @@ new #[Layout('components.layouts.auth')] class extends Component {
     />
 
     <form wire:submit="login" class="flex flex-col gap-6">
-        {{-- Email Address --}}
         <flux:input
             wire:model="email"
             :label="__('Email address')"
@@ -155,7 +108,6 @@ new #[Layout('components.layouts.auth')] class extends Component {
             placeholder="email@example.com"
         />
 
-        {{-- Password --}}
         <div class="relative">
             <flux:input
                 wire:model="password"
@@ -178,7 +130,6 @@ new #[Layout('components.layouts.auth')] class extends Component {
             @endif
         </div>
 
-        {{-- Remember Me --}}
         <label for="remember" class="tn-auth-remember">
             <input
                 id="remember"

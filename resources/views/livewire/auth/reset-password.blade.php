@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -46,14 +47,12 @@ new #[Layout('components.layouts.auth')] class extends Component {
                 'required',
                 'string',
             ],
-
             'email' => [
                 'required',
                 'string',
                 'email',
                 'max:255',
             ],
-
             'password' => [
                 'required',
                 'string',
@@ -69,19 +68,25 @@ new #[Layout('components.layouts.auth')] class extends Component {
                 'password_confirmation',
                 'token'
             ),
-            function ($user): void {
+            function (User $user): void {
                 $user->forceFill([
                     'password' => Hash::make($this->password),
                     'remember_token' => Str::random(60),
-                ])->save();
+                ]);
+
+                if (Schema::hasColumn('users', 'last_seen_at')) {
+                    $user->last_seen_at = null;
+                }
+
+                $user->save();
 
                 /*
                 |--------------------------------------------------------------------------
-                | Terminate existing authenticated sessions
+                | Terminate existing authentication credentials
                 |--------------------------------------------------------------------------
                 |
-                | A password reset normally means the previous credentials may
-                | have been lost or compromised. Remove all existing sessions.
+                | A completed password reset invalidates all authenticated
+                | sessions, remember-me cookies, and API tokens.
                 |
                 */
 
@@ -91,6 +96,23 @@ new #[Layout('components.layouts.auth')] class extends Component {
                 ) {
                     DB::table('sessions')
                         ->where('user_id', $user->id)
+                        ->delete();
+                }
+
+                if (
+                    Schema::hasTable('personal_access_tokens')
+                    && Schema::hasColumn(
+                        'personal_access_tokens',
+                        'tokenable_id'
+                    )
+                    && Schema::hasColumn(
+                        'personal_access_tokens',
+                        'tokenable_type'
+                    )
+                ) {
+                    DB::table('personal_access_tokens')
+                        ->where('tokenable_id', $user->id)
+                        ->where('tokenable_type', User::class)
                         ->delete();
                 }
 
