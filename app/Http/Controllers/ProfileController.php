@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Throwable;
 use Illuminate\View\View;
 
 class ProfileController extends Controller
@@ -118,48 +119,79 @@ class ProfileController extends Controller
         $oldProfilePhotoPath = $userRecord->profile_photo_path ?? null;
         $newProfilePhotoPath = $this->storeProfilePhoto($request);
 
-        DB::transaction(function () use (
-            $validated,
-            $userRecord,
-            $newProfilePhotoPath,
-            $normalizedEmail,
-            $emailChanged
-        ): void {
-            $userRecord->name = trim(
-                (string) $validated['name']
-            );
-
-            $userRecord->email = $normalizedEmail;
-
-            if (
+        try {
+            DB::transaction(function () use (
+                $validated,
+                $userRecord,
+                $newProfilePhotoPath,
+                $normalizedEmail,
                 $emailChanged
-                && Schema::hasColumn(
-                    'users',
-                    'email_verified_at'
-                )
-            ) {
-                $userRecord->email_verified_at = null;
-            }
+            ): void {
+                $userRecord->name = trim(
+                    (string) $validated['name']
+                );
 
-            if (Schema::hasColumn('users', 'contact_number')) {
-                $userRecord->contact_number = $this->normalizeContactNumber(
-                    $validated['contact_number'] ?? null
+                $userRecord->email = $normalizedEmail;
+
+                if (
+                    $emailChanged
+                    && Schema::hasColumn(
+                        'users',
+                        'email_verified_at'
+                    )
+                ) {
+                    $userRecord->email_verified_at = null;
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'users',
+                        'contact_number'
+                    )
+                ) {
+                    $userRecord->contact_number =
+                        $this->normalizeContactNumber(
+                            $validated[
+                                'contact_number'
+                            ] ?? null
+                        );
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'users',
+                        'address'
+                    )
+                ) {
+                    $userRecord->address =
+                        $validated['address'] ?? null;
+                }
+
+                if (
+                    $newProfilePhotoPath
+                    && Schema::hasColumn(
+                        'users',
+                        'profile_photo_path'
+                    )
+                ) {
+                    $userRecord->profile_photo_path =
+                        $newProfilePhotoPath;
+                }
+
+                $userRecord->save();
+            });
+        } catch (Throwable $exception) {
+            if ($newProfilePhotoPath) {
+                $this->secureUploads->delete(
+                    $newProfilePhotoPath,
+                    [
+                        'profile-photos',
+                    ]
                 );
             }
 
-            if (Schema::hasColumn('users', 'address')) {
-                $userRecord->address = $validated['address'] ?? null;
-            }
-
-            if (
-                $newProfilePhotoPath
-                && Schema::hasColumn('users', 'profile_photo_path')
-            ) {
-                $userRecord->profile_photo_path = $newProfilePhotoPath;
-            }
-
-            $userRecord->save();
-        });
+            throw $exception;
+        }
 
         if ($emailChanged) {
             $this->deletePasswordResetTokens(
@@ -487,6 +519,11 @@ class ProfileController extends Controller
             ],
         ]);
 
+        $profilePhotoPath =
+            $this->normalizeProfilePhotoPath(
+                $user->profile_photo_path ?? null
+            );
+
         /*
         |--------------------------------------------------------------------------
         | Log out before deleting the authenticated model
@@ -525,6 +562,15 @@ class ProfileController extends Controller
                 request: $request,
             );
         });
+
+        if ($profilePhotoPath) {
+            $this->secureUploads->delete(
+                $profilePhotoPath,
+                [
+                    'profile-photos',
+                ]
+            );
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

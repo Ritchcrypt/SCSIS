@@ -142,6 +142,25 @@ return [
     |
     */
 
+    'private_disk' => 'local',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sensitive legacy directories
+    |--------------------------------------------------------------------------
+    |
+    | These directories may contain uploads created before private storage was
+    | introduced. The migration command can move them to the private disk
+    | without changing the database paths already stored by the application.
+    |
+    */
+
+    'sensitive_prefixes' => [
+        'incidents/evidence',
+        'resident-complaints',
+        'profile-photos',
+    ],
+
     'legacy_read_disks' => [
         'public',
     ],

@@ -6,9 +6,16 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 class SecureUploadService
 {
+    public const LEGACY_MOVED = 'moved';
+    public const LEGACY_DEDUPLICATED = 'deduplicated';
+    public const LEGACY_MISSING = 'missing';
+    public const LEGACY_CONFLICT = 'conflict';
+    public const LEGACY_FAILED = 'failed';
+
     private const MIME_EXTENSIONS = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
@@ -29,7 +36,7 @@ class SecureUploadService
 
         $disk = (string) (
             $configuration['disk']
-            ?? 'local'
+            ?? $this->privateDisk()
         );
 
         $directory = $this->safeDirectory(
@@ -70,9 +77,21 @@ class SecureUploadService
             );
         }
 
-        return $this->normalizePath(
+        $normalizedPath = $this->normalizePath(
             $path
         );
+
+        if ($normalizedPath === null) {
+            Storage::disk($disk)->delete(
+                $path
+            );
+
+            throw new RuntimeException(
+                'The stored upload path is invalid.'
+            );
+        }
+
+        return $normalizedPath;
     }
 
     /**
@@ -155,7 +174,7 @@ class SecureUploadService
     }
 
     /**
-     * Delete a stored file from the private disk and any approved legacy disk.
+     * Delete a stored file from the private disk and approved legacy disks.
      */
     public function delete(
         mixed $path,
@@ -180,6 +199,117 @@ class SecureUploadService
                 Storage::disk($disk)->delete($path);
             }
         }
+    }
+
+    /**
+     * Delete several paths after the related database transaction commits.
+     */
+    public function deleteMany(
+        array $paths,
+        array $allowedPrefixes
+    ): void {
+        foreach (
+            array_values(
+                array_unique($paths)
+            ) as $path
+        ) {
+            $this->delete(
+                $path,
+                $allowedPrefixes
+            );
+        }
+    }
+
+    /**
+     * Move one legacy sensitive upload from the public disk to the private
+     * disk without changing its database path.
+     */
+    public function migrateLegacyFile(
+        mixed $path,
+        array $allowedPrefixes
+    ): string {
+        $path = $this->normalizePath(
+            $path
+        );
+
+        if (
+            $path === null
+            || ! $this->hasAllowedPrefix(
+                $path,
+                $allowedPrefixes
+            )
+        ) {
+            return self::LEGACY_FAILED;
+        }
+
+        $public = Storage::disk('public');
+        $private = Storage::disk(
+            $this->privateDisk()
+        );
+
+        if (! $public->exists($path)) {
+            return self::LEGACY_MISSING;
+        }
+
+        if ($private->exists($path)) {
+            try {
+                if (
+                    $private->size($path)
+                    === $public->size($path)
+                ) {
+                    $public->delete($path);
+
+                    return self::LEGACY_DEDUPLICATED;
+                }
+            } catch (Throwable) {
+                return self::LEGACY_CONFLICT;
+            }
+
+            return self::LEGACY_CONFLICT;
+        }
+
+        $stream = $public->readStream(
+            $path
+        );
+
+        if (! is_resource($stream)) {
+            return self::LEGACY_FAILED;
+        }
+
+        try {
+            $written = $private->put(
+                $path,
+                $stream
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        if (! $written) {
+            return self::LEGACY_FAILED;
+        }
+
+        try {
+            $verified = $private->exists($path)
+                && $private->size($path)
+                    === $public->size($path);
+        } catch (Throwable) {
+            $verified = false;
+        }
+
+        if (! $verified) {
+            $private->delete($path);
+
+            return self::LEGACY_FAILED;
+        }
+
+        if (! $public->delete($path)) {
+            $private->delete($path);
+
+            return self::LEGACY_FAILED;
+        }
+
+        return self::LEGACY_MOVED;
     }
 
     public function normalizePath(
@@ -281,11 +411,28 @@ class SecureUploadService
         return $configuration;
     }
 
+    public function sensitivePrefixes(): array
+    {
+        return array_values(
+            array_filter(
+                array_map(
+                    fn (mixed $prefix): string => $this->safePrefix(
+                        (string) $prefix
+                    ),
+                    (array) config(
+                        'secure_uploads.sensitive_prefixes',
+                        []
+                    )
+                )
+            )
+        );
+    }
+
     private function readDisks(): array
     {
         return array_values(
             array_unique([
-                'local',
+                $this->privateDisk(),
                 ...array_map(
                     static fn (mixed $disk): string => trim(
                         (string) $disk
@@ -301,26 +448,28 @@ class SecureUploadService
         );
     }
 
+    private function privateDisk(): string
+    {
+        $disk = trim(
+            (string) config(
+                'secure_uploads.private_disk',
+                'local'
+            )
+        );
+
+        return $disk !== ''
+            ? $disk
+            : 'local';
+    }
+
     private function safeDirectory(
         string $directory
     ): string {
-        $directory = trim(
-            str_replace(
-                '\\',
-                '/',
-                $directory
-            ),
-            '/'
+        $directory = $this->safePrefix(
+            $directory
         );
 
-        if (
-            $directory === ''
-            || str_contains($directory, '..')
-            || preg_match(
-                '#^[A-Za-z0-9/_-]+$#',
-                $directory
-            ) !== 1
-        ) {
+        if ($directory === '') {
             throw new RuntimeException(
                 'The secure upload directory is invalid.'
             );
@@ -329,18 +478,39 @@ class SecureUploadService
         return $directory;
     }
 
+    private function safePrefix(
+        string $prefix
+    ): string {
+        $prefix = trim(
+            str_replace(
+                '\\',
+                '/',
+                $prefix
+            ),
+            '/'
+        );
+
+        if (
+            $prefix === ''
+            || str_contains($prefix, '..')
+            || preg_match(
+                '#^[A-Za-z0-9/_-]+$#',
+                $prefix
+            ) !== 1
+        ) {
+            return '';
+        }
+
+        return $prefix;
+    }
+
     private function hasAllowedPrefix(
         string $path,
         array $allowedPrefixes
     ): bool {
         foreach ($allowedPrefixes as $prefix) {
-            $prefix = trim(
-                str_replace(
-                    '\\',
-                    '/',
-                    (string) $prefix
-                ),
-                '/'
+            $prefix = $this->safePrefix(
+                (string) $prefix
             );
 
             if (

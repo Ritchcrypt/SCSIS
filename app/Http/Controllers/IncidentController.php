@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Throwable;
 
 class IncidentController extends Controller
 {
@@ -47,12 +48,35 @@ class IncidentController extends Controller
             'status_id' => $incident->status_id,
         ];
 
+        /*
+        |--------------------------------------------------------------------------
+        | Commit database deletion before deleting physical files
+        |--------------------------------------------------------------------------
+        |
+        | Filesystem operations do not participate in database rollbacks. File
+        | paths are collected first, database rows are deleted transactionally,
+        | then physical files are removed only after the transaction commits.
+        |
+        */
+
+        $filePaths = $this->incidentRelatedFilePaths(
+            (int) $incident->id
+        );
+
         DB::transaction(function () use ($incident): void {
-            $this->deleteIncidentRelatedFiles((int) $incident->id);
-            $this->deleteIncidentRelatedRows((int) $incident->id);
+            $this->deleteIncidentRelatedRows(
+                (int) $incident->id
+            );
 
             $incident->delete();
         });
+
+        $this->secureUploads->deleteMany(
+            $filePaths,
+            [
+                'incidents/evidence',
+            ]
+        );
 
         $this->recordOperationalActivity(
             event: 'incident.deleted',
@@ -296,8 +320,16 @@ class IncidentController extends Controller
         }
 
         $incident = null;
+        $storedEvidencePaths = [];
 
-        DB::transaction(function () use ($request, $validated, $pendingStatus, &$incident) {
+        try {
+            DB::transaction(function () use (
+                $request,
+                $validated,
+                $pendingStatus,
+                &$incident,
+                &$storedEvidencePaths
+            ): void {
             $incident = new Incident();
 
             $this->attachIncidentOwner($incident, $request);
@@ -377,7 +409,11 @@ class IncidentController extends Controller
 
             $this->storeIncidentLocation($incident, $validated);
 
-$this->storeIncidentEvidence($request, $incident);
+            $this->storeIncidentEvidence(
+                $request,
+                $incident,
+                $storedEvidencePaths
+            );
 
             IncidentStatusHistory::create([
                 'incident_id' => $incident->id,
@@ -387,9 +423,22 @@ $this->storeIncidentEvidence($request, $incident);
                 'status_changed_at' => now(),
             ]);
 
-            $this->notifyIncidentCreated($incident);
-            $this->createTanodTaskFromIncident($incident, $request);
-        });
+                $this->notifyIncidentCreated($incident);
+                $this->createTanodTaskFromIncident(
+                    $incident,
+                    $request
+                );
+            });
+        } catch (Throwable $exception) {
+            $this->secureUploads->deleteMany(
+                $storedEvidencePaths,
+                [
+                    'incidents/evidence',
+                ]
+            );
+
+            throw $exception;
+        }
 
         $this->recordOperationalActivity(
             event: 'incident.created',
@@ -1171,8 +1220,9 @@ $this->storeIncidentEvidence($request, $incident);
         UserNotification::create($notificationData);
     }
 
-    private function deleteIncidentRelatedFiles(int $incidentId): void
-    {
+    private function incidentRelatedFilePaths(
+        int $incidentId
+    ): array {
         $fileTables = [
             'evidence',
             'incident_evidence',
@@ -1188,41 +1238,63 @@ $this->storeIncidentEvidence($request, $incident);
             'url',
         ];
 
+        $paths = [];
+
         foreach ($fileTables as $table) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'incident_id')) {
+            if (
+                ! Schema::hasTable($table)
+                || ! Schema::hasColumn(
+                    $table,
+                    'incident_id'
+                )
+            ) {
                 continue;
             }
 
-            $existingFileColumns = array_values(array_filter(
-                $fileColumns,
-                fn ($column) => Schema::hasColumn($table, $column)
-            ));
+            $existingFileColumns = array_values(
+                array_filter(
+                    $fileColumns,
+                    fn (string $column): bool => Schema::hasColumn(
+                        $table,
+                        $column
+                    )
+                )
+            );
 
-            if (empty($existingFileColumns)) {
+            if ($existingFileColumns === []) {
                 continue;
             }
 
             $records = DB::table($table)
-                ->where('incident_id', $incidentId)
+                ->where(
+                    'incident_id',
+                    $incidentId
+                )
                 ->get($existingFileColumns);
 
             foreach ($records as $record) {
                 foreach ($existingFileColumns as $column) {
                     $path = $record->{$column} ?? null;
 
-                    if (! $path || str_starts_with((string) $path, 'http')) {
+                    if (
+                        ! is_scalar($path)
+                        || trim((string) $path) === ''
+                        || str_starts_with(
+                            (string) $path,
+                            'http'
+                        )
+                    ) {
                         continue;
                     }
 
-                    $this->secureUploads->delete(
-                        $path,
-                        [
-                            'incidents/evidence',
-                        ]
-                    );
+                    $paths[] = (string) $path;
                 }
             }
         }
+
+        return array_values(
+            array_unique($paths)
+        );
     }
 
     private function deleteIncidentRelatedRows(int $incidentId): void
@@ -1347,8 +1419,12 @@ $this->storeIncidentEvidence($request, $incident);
         }
     }
 
-    private function storeIncidentEvidence(Request $request, Incident $incident): void
-{
+    private function storeIncidentEvidence(
+        Request $request,
+        Incident $incident,
+        array &$storedPaths
+    ): void {
+
     $evidenceTable = null;
 
     if (Schema::hasTable('evidence')) {
@@ -1392,6 +1468,11 @@ $this->storeIncidentEvidence($request, $incident);
             $file,
             'incident_evidence'
         );
+
+        /*
+        | Record immediately so a later database failure can remove the file.
+        */
+        $storedPaths[] = $path;
 
         $evidenceData = [];
 
