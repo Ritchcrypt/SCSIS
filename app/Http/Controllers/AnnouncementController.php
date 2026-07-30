@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\Announcement;
 use App\Models\User;
 use App\Models\UserNotification;
@@ -17,6 +18,8 @@ use Illuminate\View\View;
 
 class AnnouncementController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', Announcement::class);
@@ -148,6 +151,21 @@ class AnnouncementController extends Controller
 
         $this->notifyTargetUsers($announcement);
 
+        $this->recordOperationalActivity(
+            event: 'announcement.created',
+            category: 'announcement',
+            description: 'An announcement was created.',
+            metadata: [
+                'announcement_id' => (int) $announcement->id,
+                'category' => $announcement->category,
+                'priority' => $announcement->priority,
+                'audience' => $announcement->audience,
+                'is_active' => (bool) $announcement->is_active,
+                'calamity_mode' => (bool) $announcement->activate_calamity_mode,
+            ],
+            request: $request,
+        );
+
         return redirect()
             ->to($this->announcementIndexUrl($request->user()))
             ->with(
@@ -162,6 +180,8 @@ class AnnouncementController extends Controller
     ): RedirectResponse {
         Gate::authorize('update', $announcement);
 
+        $previousActiveState = (bool) $announcement->is_active;
+
         DB::transaction(function () use ($announcement): void {
             $lockedAnnouncement = Announcement::query()
                 ->lockForUpdate()
@@ -173,6 +193,20 @@ class AnnouncementController extends Controller
         });
 
         $announcement->refresh();
+
+        $this->recordOperationalActivity(
+            event: 'announcement.toggled',
+            category: 'announcement',
+            description: 'An announcement active state was changed.',
+            metadata: [
+                'announcement_id' => (int) $announcement->id,
+                'previous_active' => $previousActiveState,
+                'new_active' => (bool) $announcement->is_active,
+                'category' => $announcement->category,
+                'priority' => $announcement->priority,
+            ],
+            request: $request,
+        );
 
         return redirect()
             ->to($this->announcementIndexUrl($request->user()))
@@ -190,6 +224,14 @@ class AnnouncementController extends Controller
     ): RedirectResponse {
         Gate::authorize('delete', $announcement);
 
+        $auditMetadata = [
+            'announcement_id' => (int) $announcement->id,
+            'category' => $announcement->category,
+            'priority' => $announcement->priority,
+            'audience' => $announcement->audience,
+            'was_active' => (bool) $announcement->is_active,
+        ];
+
         DB::transaction(function () use ($announcement): void {
             $lockedAnnouncement = Announcement::query()
                 ->lockForUpdate()
@@ -201,6 +243,14 @@ class AnnouncementController extends Controller
 
             $lockedAnnouncement->delete();
         });
+
+        $this->recordOperationalActivity(
+            event: 'announcement.deleted',
+            category: 'announcement',
+            description: 'An announcement was deleted.',
+            metadata: $auditMetadata,
+            request: $request,
+        );
 
         return redirect()
             ->to($this->announcementIndexUrl($request->user()))

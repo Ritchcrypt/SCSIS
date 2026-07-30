@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\Employee;
 use App\Models\TanodTask;
 use App\Models\TanodTaskResponse;
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\Schema;
 
 class TanodTaskController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
         $this->authorizeAdmin($request);
@@ -69,7 +72,15 @@ class TanodTaskController extends Controller
             'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
         ]);
 
-        DB::transaction(function () use ($request, $validated) {
+        $task = null;
+        $assignedTanodCount = 0;
+
+        DB::transaction(function () use (
+            $request,
+            $validated,
+            &$task,
+            &$assignedTanodCount
+        ): void {
             $task = TanodTask::create([
                 'created_by' => $request->user()->id,
                 'title' => $validated['title'],
@@ -87,6 +98,8 @@ class TanodTaskController extends Controller
                 ->active()
                 ->get();
 
+            $assignedTanodCount = $tanods->count();
+
             foreach ($tanods as $tanod) {
                 TanodTaskResponse::create([
                     'tanod_task_id' => $task->id,
@@ -102,6 +115,20 @@ class TanodTaskController extends Controller
                 }
             }
         });
+
+        $this->recordOperationalActivity(
+            event: 'tanod_task.created',
+            category: 'tanod_task',
+            description: 'A tanod task was created.',
+            metadata: [
+                'tanod_task_id' => (int) $task->id,
+                'incident_id' => $task->incident_id,
+                'priority' => $task->priority,
+                'status' => $task->status,
+                'assigned_tanod_count' => $assignedTanodCount,
+            ],
+            request: $request,
+        );
 
         return redirect()
             ->route('admin.tanod-tasks.index')
@@ -127,7 +154,14 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
 {
     $this->authorizeAdmin($request);
 
-    DB::transaction(function () use ($tanodTask) {
+    $auditMetadata = [
+        'tanod_task_id' => (int) $tanodTask->id,
+        'incident_id' => $tanodTask->incident_id,
+        'priority' => $tanodTask->priority,
+        'status' => $tanodTask->status,
+    ];
+
+    DB::transaction(function () use ($tanodTask): void {
         if (Schema::hasTable('notifications')) {
             UserNotification::query()
                 ->where('source_id', $tanodTask->id)
@@ -149,6 +183,14 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
         $tanodTask->delete();
     });
 
+    $this->recordOperationalActivity(
+        event: 'tanod_task.deleted',
+        category: 'tanod_task',
+        description: 'A tanod task was deleted.',
+        metadata: $auditMetadata,
+        request: $request,
+    );
+
     return redirect()
         ->route('admin.tanod-tasks.index')
         ->with('success', 'Tanod task deleted successfully.');
@@ -158,9 +200,24 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
     {
         $this->authorizeAdmin($request);
 
+        $previousStatus = $tanodTask->status;
+
         $tanodTask->update([
             'status' => 'closed',
         ]);
+
+        $this->recordOperationalActivity(
+            event: 'tanod_task.closed',
+            category: 'tanod_task',
+            description: 'A tanod task was closed.',
+            metadata: [
+                'tanod_task_id' => (int) $tanodTask->id,
+                'incident_id' => $tanodTask->incident_id,
+                'previous_status' => $previousStatus,
+                'new_status' => $tanodTask->status,
+            ],
+            request: $request,
+        );
 
         return back()->with('success', 'Tanod task closed successfully.');
     }
@@ -169,9 +226,24 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
     {
         $this->authorizeAdmin($request);
 
+        $previousStatus = $tanodTask->status;
+
         $tanodTask->update([
             'status' => 'cancelled',
         ]);
+
+        $this->recordOperationalActivity(
+            event: 'tanod_task.cancelled',
+            category: 'tanod_task',
+            description: 'A tanod task was cancelled.',
+            metadata: [
+                'tanod_task_id' => (int) $tanodTask->id,
+                'incident_id' => $tanodTask->incident_id,
+                'previous_status' => $previousStatus,
+                'new_status' => $tanodTask->status,
+            ],
+            request: $request,
+        );
 
         return back()->with('success', 'Tanod task cancelled successfully.');
     }
@@ -420,6 +492,20 @@ public function respond(
             responseStatus: $validated['response_status']
         );
     });
+
+    $this->recordOperationalActivity(
+        event: 'tanod_task.response_submitted',
+        category: 'tanod_task',
+        description: 'A tanod submitted a task response.',
+        metadata: [
+            'response_id' => (int) $response->id,
+            'tanod_task_id' => (int) $response->tanod_task_id,
+            'employee_id' => (int) $employee->id,
+            'response_status' => $validated['response_status'],
+            'response_note_provided' => ! empty($validated['response_note']),
+        ],
+        request: $request,
+    );
 
     return back()->with(
         'success',

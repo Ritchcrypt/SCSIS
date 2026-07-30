@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\ResidentComplaint;
 use App\Models\User;
 use App\Models\UserNotification;
@@ -17,6 +18,8 @@ use Illuminate\View\View;
 
 class ResidentComplaintController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
 {
     Gate::authorize('viewAny', ResidentComplaint::class);
@@ -148,6 +151,18 @@ class ResidentComplaintController extends Controller
 
     $this->notifyAdminsAndOfficials($complaint);
 
+    $this->recordOperationalActivity(
+        event: 'complaint.created',
+        category: 'complaint',
+        description: 'A resident complaint was submitted.',
+        metadata: [
+            'complaint_id' => (int) $complaint->id,
+            'status' => $complaint->status,
+            'evidence_attached' => $evidencePath !== null,
+        ],
+        request: $request,
+    );
+
     return redirect()
         ->to($this->complaintIndexUrl($user))
         ->with('success', 'Complaint submitted successfully.');
@@ -183,11 +198,25 @@ class ResidentComplaintController extends Controller
         ],
     ]);
 
+    $previousStatus = $residentComplaint->status;
+
     $residentComplaint->update([
         'status' => $validated['status'],
     ]);
 
     $this->notifyResidentStatusUpdated($residentComplaint);
+
+    $this->recordOperationalActivity(
+        event: 'complaint.status_updated',
+        category: 'complaint',
+        description: 'A resident complaint status was updated.',
+        metadata: [
+            'complaint_id' => (int) $residentComplaint->id,
+            'previous_status' => $previousStatus,
+            'new_status' => $residentComplaint->status,
+        ],
+        request: $request,
+    );
 
     return back()->with(
         'success',
@@ -251,6 +280,17 @@ class ResidentComplaintController extends Controller
 
     $this->notifyResidentProofUploaded($residentComplaint);
 
+    $this->recordOperationalActivity(
+        event: 'complaint.proof_uploaded',
+        category: 'complaint',
+        description: 'A proof image was uploaded for a resident complaint.',
+        metadata: [
+            'complaint_id' => (int) $residentComplaint->id,
+            'proof_note_provided' => ! empty($validated['proof_note']),
+        ],
+        request: $request,
+    );
+
     return back()->with(
         'success',
         'Proof picture sent to resident successfully.'
@@ -304,6 +344,13 @@ class ResidentComplaintController extends Controller
 
     $user = $request->user();
 
+    $auditMetadata = [
+        'complaint_id' => (int) $residentComplaint->id,
+        'status' => $residentComplaint->status,
+        'resident_id' => $residentComplaint->resident_id,
+        'evidence_attached' => ! empty($residentComplaint->evidence_path),
+    ];
+
     DB::transaction(function () use ($residentComplaint): void {
         $this->deleteComplaintNotifications($residentComplaint);
         $this->deleteComplaintProofs($residentComplaint);
@@ -316,6 +363,14 @@ class ResidentComplaintController extends Controller
 
         $residentComplaint->delete();
     });
+
+    $this->recordOperationalActivity(
+        event: 'complaint.deleted',
+        category: 'complaint',
+        description: 'A resident complaint was deleted.',
+        metadata: $auditMetadata,
+        request: $request,
+    );
 
     return redirect()
         ->to($this->complaintIndexUrl($user))

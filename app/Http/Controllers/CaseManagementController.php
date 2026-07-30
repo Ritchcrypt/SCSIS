@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\CaseRecord;
 use App\Models\Incident;
 use Illuminate\Http\RedirectResponse;
@@ -14,6 +15,8 @@ use Illuminate\View\View;
 
 class CaseManagementController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', CaseRecord::class);
@@ -71,7 +74,13 @@ class CaseManagementController extends Controller
 
         $validated = $request->validate($this->validationRules());
 
-        DB::transaction(function () use ($request, $validated): void {
+        $createdCase = null;
+
+        DB::transaction(function () use (
+            $request,
+            $validated,
+            &$createdCase
+        ): void {
             $caseNumber = trim((string) ($validated['case_number'] ?? ''));
 
             if (
@@ -91,7 +100,7 @@ class CaseManagementController extends Controller
                 ]);
             }
 
-            CaseRecord::create([
+            $createdCase = CaseRecord::create([
                 'case_number' => $caseNumber,
                 'case_type' => $validated['case_type'],
                 'subject_name' => $validated['subject_name'],
@@ -112,6 +121,20 @@ class CaseManagementController extends Controller
             ]);
         });
 
+        $this->recordOperationalActivity(
+            event: 'case.created',
+            category: 'case',
+            description: 'A case record was created.',
+            metadata: [
+                'case_id' => (int) $createdCase->id,
+                'case_number' => $createdCase->case_number,
+                'case_type' => $createdCase->case_type,
+                'status' => $createdCase->status,
+                'incident_id' => $createdCase->incident_id,
+            ],
+            request: $request,
+        );
+
         return redirect()
             ->route('admin.cases.index')
             ->with('success', 'Case record created successfully.');
@@ -126,6 +149,10 @@ class CaseManagementController extends Controller
         $validated = $request->validate(
             $this->validationRules($caseRecord)
         );
+
+        $previousStatus = $caseRecord->status;
+        $previousType = $caseRecord->case_type;
+        $previousIncidentId = $caseRecord->incident_id;
 
         DB::transaction(function () use (
             $request,
@@ -156,6 +183,25 @@ class CaseManagementController extends Controller
             ]);
         });
 
+        $caseRecord->refresh();
+
+        $this->recordOperationalActivity(
+            event: 'case.updated',
+            category: 'case',
+            description: 'A case record was updated.',
+            metadata: [
+                'case_id' => (int) $caseRecord->id,
+                'case_number' => $caseRecord->case_number,
+                'previous_status' => $previousStatus,
+                'new_status' => $caseRecord->status,
+                'previous_case_type' => $previousType,
+                'new_case_type' => $caseRecord->case_type,
+                'previous_incident_id' => $previousIncidentId,
+                'new_incident_id' => $caseRecord->incident_id,
+            ],
+            request: $request,
+        );
+
         return redirect()
             ->route('admin.cases.index')
             ->with('success', 'Case record updated successfully.');
@@ -165,6 +211,14 @@ class CaseManagementController extends Controller
     {
         Gate::authorize('delete', $caseRecord);
 
+        $auditMetadata = [
+            'case_id' => (int) $caseRecord->id,
+            'case_number' => $caseRecord->case_number,
+            'case_type' => $caseRecord->case_type,
+            'status' => $caseRecord->status,
+            'incident_id' => $caseRecord->incident_id,
+        ];
+
         DB::transaction(function () use ($caseRecord): void {
             $lockedCase = CaseRecord::query()
                 ->lockForUpdate()
@@ -172,6 +226,13 @@ class CaseManagementController extends Controller
 
             $lockedCase->delete();
         });
+
+        $this->recordOperationalActivity(
+            event: 'case.deleted',
+            category: 'case',
+            description: 'A case record was deleted.',
+            metadata: $auditMetadata,
+        );
 
         return redirect()
             ->route('admin.cases.index')

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\EmergencyHotline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,6 +13,8 @@ use Illuminate\View\View;
 
 class EmergencyModeController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', EmergencyHotline::class);
@@ -54,13 +57,18 @@ class EmergencyModeController extends Controller
             ],
         ]);
 
-        DB::transaction(function () use ($validated): void {
+        $createdHotline = null;
+
+        DB::transaction(function () use (
+            $validated,
+            &$createdHotline
+        ): void {
             $lastOrder = EmergencyHotline::query()
                 ->orderByDesc('sort_order')
                 ->lockForUpdate()
                 ->value('sort_order');
 
-            EmergencyHotline::create([
+            $createdHotline = EmergencyHotline::create([
                 'agency_name' => trim($validated['agency_name']),
                 'hotline_number' => trim($validated['hotline_number']),
                 'color' => $validated['color'],
@@ -68,6 +76,19 @@ class EmergencyModeController extends Controller
                 'sort_order' => ((int) $lastOrder) + 1,
             ]);
         });
+
+        $this->recordOperationalActivity(
+            event: 'emergency_hotline.created',
+            category: 'emergency_hotline',
+            description: 'An emergency hotline was created.',
+            metadata: [
+                'emergency_hotline_id' => (int) $createdHotline->id,
+                'agency_name' => $createdHotline->agency_name,
+                'color' => $createdHotline->color,
+                'sort_order' => $createdHotline->sort_order,
+            ],
+            request: $request,
+        );
 
         return back()->with(
             'success',
@@ -80,6 +101,13 @@ class EmergencyModeController extends Controller
     ): RedirectResponse {
         Gate::authorize('delete', $emergencyHotline);
 
+        $auditMetadata = [
+            'emergency_hotline_id' => (int) $emergencyHotline->id,
+            'agency_name' => $emergencyHotline->agency_name,
+            'color' => $emergencyHotline->color,
+            'sort_order' => $emergencyHotline->sort_order,
+        ];
+
         DB::transaction(function () use ($emergencyHotline): void {
             $lockedHotline = EmergencyHotline::query()
                 ->lockForUpdate()
@@ -87,6 +115,13 @@ class EmergencyModeController extends Controller
 
             $lockedHotline->delete();
         });
+
+        $this->recordOperationalActivity(
+            event: 'emergency_hotline.deleted',
+            category: 'emergency_hotline',
+            description: 'An emergency hotline was deleted.',
+            metadata: $auditMetadata,
+        );
 
         return back()->with(
             'success',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Http\RedirectResponse;
@@ -12,6 +13,8 @@ use Illuminate\View\View;
 
 class TanodAlertController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', UserNotification::class);
@@ -65,6 +68,18 @@ class TanodAlertController extends Controller
 
         $notification->acknowledge((int) $request->user()->id);
 
+        $this->recordOperationalActivity(
+            event: 'tanod_alert.acknowledged',
+            category: 'tanod_alert',
+            description: 'A tanod alert was acknowledged.',
+            metadata: [
+                'notification_id' => (int) $notification->id,
+                'notification_type' => $notification->type,
+                'source_id' => $notification->source_id,
+            ],
+            request: $request,
+        );
+
         return back()->with(
             'success',
             'Alert acknowledged successfully.'
@@ -113,7 +128,21 @@ class TanodAlertController extends Controller
         Gate::authorize('delete', $notification);
         $this->ensureOperationalAlert($notification);
 
+        $auditMetadata = [
+            'notification_id' => (int) $notification->id,
+            'notification_type' => $notification->type,
+            'source_id' => $notification->source_id,
+        ];
+
         $notification->delete();
+
+        $this->recordOperationalActivity(
+            event: 'tanod_alert.deleted',
+            category: 'tanod_alert',
+            description: 'A tanod alert was deleted.',
+            metadata: $auditMetadata,
+            request: $request,
+        );
 
         return back()->with(
             'success',
@@ -127,6 +156,16 @@ class TanodAlertController extends Controller
 
         $deletedCount = $this->baseAlertQuery($request->user())
             ->delete();
+
+        $this->recordOperationalActivity(
+            event: 'tanod_alert.deleted_all',
+            category: 'tanod_alert',
+            description: 'All visible tanod alerts were deleted.',
+            metadata: [
+                'deleted_count' => $deletedCount,
+            ],
+            request: $request,
+        );
 
         return back()->with(
             'success',

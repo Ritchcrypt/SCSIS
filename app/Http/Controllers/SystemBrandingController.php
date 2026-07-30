@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\SystemSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,8 @@ use Throwable;
 
 class SystemBrandingController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function edit(): View
     {
         Gate::authorize('manageSystemBranding');
@@ -79,6 +82,10 @@ class SystemBrandingController extends Controller
         ]);
 
         $setting = $this->currentSetting();
+
+        $previousSystemName = (string) $setting->system_name;
+        $previousSystemSubtitle = (string) $setting->system_subtitle;
+
         $oldLogoPath = $this->safeLogoPath(
             $setting->system_logo_path
         );
@@ -133,6 +140,46 @@ class SystemBrandingController extends Controller
         ) {
             $this->deleteLogo($oldLogoPath);
         }
+
+        $setting->refresh();
+
+        $changedFields = [];
+
+        if (
+            $previousSystemName
+            !== (string) $setting->system_name
+        ) {
+            $changedFields[] = 'system_name';
+        }
+
+        if (
+            $previousSystemSubtitle
+            !== (string) $setting->system_subtitle
+        ) {
+            $changedFields[] = 'system_subtitle';
+        }
+
+        $logoAction = match (true) {
+            $newLogoPath !== null => 'replaced',
+            $request->boolean('remove_logo') => 'removed',
+            default => 'unchanged',
+        };
+
+        if ($logoAction !== 'unchanged') {
+            $changedFields[] = 'system_logo';
+        }
+
+        $this->recordOperationalActivity(
+            event: 'system_branding.updated',
+            category: 'configuration',
+            description: 'System branding settings were updated.',
+            metadata: [
+                'system_setting_id' => (int) $setting->id,
+                'changed_fields' => $changedFields,
+                'logo_action' => $logoAction,
+            ],
+            request: $request,
+        );
 
         return redirect()
             ->route('admin.system-branding.edit')

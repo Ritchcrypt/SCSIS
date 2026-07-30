@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\Barangay;
 use App\Models\Employee;
 use App\Models\TanodProfile;
@@ -20,6 +21,8 @@ use Illuminate\View\View;
 
 class TanodRosterController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function index(Request $request): View
     {
         Gate::authorize('viewAny', TanodProfile::class);
@@ -79,12 +82,14 @@ class TanodRosterController extends Controller
         }
 
         $createdUser = null;
+        $createdTanodProfile = null;
 
         DB::transaction(function () use (
             $validated,
             $providedEmail,
             $barangayId,
-            &$createdUser
+            &$createdUser,
+            &$createdTanodProfile
         ): void {
             $email = $providedEmail
                 ? strtolower($providedEmail)
@@ -113,7 +118,7 @@ class TanodRosterController extends Controller
                 'is_active' => $validated['status'] !== 'off_duty',
             ]);
 
-            TanodProfile::create([
+            $createdTanodProfile = TanodProfile::create([
                 'user_id' => $createdUser->id,
                 'employee_id' => $employee->id,
                 'contact_number' => $this->nullableText(
@@ -157,6 +162,21 @@ class TanodRosterController extends Controller
             $message .= ' Add a valid email in User Management before sending a password setup link.';
         }
 
+        $this->recordOperationalActivity(
+            event: 'tanod_roster.created',
+            category: 'tanod_roster',
+            description: 'A tanod roster member was created.',
+            metadata: [
+                'tanod_profile_id' => (int) $createdTanodProfile->id,
+                'user_id' => (int) $createdUser->id,
+                'employee_id' => $createdTanodProfile->employee_id,
+                'shift' => $createdTanodProfile->shift,
+                'status' => $createdTanodProfile->status,
+                'password_setup_email_requested' => $providedEmail !== null,
+            ],
+            request: $request,
+        );
+
         return redirect()
             ->to($this->rosterIndexUrl($request))
             ->with('success', $message);
@@ -171,6 +191,9 @@ class TanodRosterController extends Controller
         $validated = $request->validate(
             $this->validationRules($tanod)
         );
+
+        $previousStatus = $tanod->status;
+        $previousShift = $tanod->shift;
 
         DB::transaction(function () use (
             $tanod,
@@ -236,6 +259,24 @@ class TanodRosterController extends Controller
             ]);
         });
 
+        $tanod->refresh();
+
+        $this->recordOperationalActivity(
+            event: 'tanod_roster.updated',
+            category: 'tanod_roster',
+            description: 'A tanod roster member was updated.',
+            metadata: [
+                'tanod_profile_id' => (int) $tanod->id,
+                'user_id' => $tanod->user_id,
+                'employee_id' => $tanod->employee_id,
+                'previous_status' => $previousStatus,
+                'new_status' => $tanod->status,
+                'previous_shift' => $previousShift,
+                'new_shift' => $tanod->shift,
+            ],
+            request: $request,
+        );
+
         return redirect()
             ->to($this->rosterIndexUrl($request))
             ->with('success', 'Tanod member updated successfully.');
@@ -246,6 +287,14 @@ class TanodRosterController extends Controller
         TanodProfile $tanod
     ): RedirectResponse {
         Gate::authorize('delete', $tanod);
+
+        $auditMetadata = [
+            'tanod_profile_id' => (int) $tanod->id,
+            'user_id' => $tanod->user_id,
+            'employee_id' => $tanod->employee_id,
+            'shift' => $tanod->shift,
+            'status' => $tanod->status,
+        ];
 
         DB::transaction(function () use ($tanod): void {
             $lockedTanod = TanodProfile::query()
@@ -266,6 +315,14 @@ class TanodRosterController extends Controller
                 $user->delete();
             }
         });
+
+        $this->recordOperationalActivity(
+            event: 'tanod_roster.deleted',
+            category: 'tanod_roster',
+            description: 'A tanod roster member was deleted.',
+            metadata: $auditMetadata,
+            request: $request,
+        );
 
         return redirect()
             ->to($this->rosterIndexUrl($request))

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\Employee;
 use App\Models\Incident;
 use App\Models\IncidentCategory;
@@ -24,11 +25,20 @@ use Illuminate\View\View;
 
 class IncidentController extends Controller
 {
+    use RecordsOperationalActivity;
+
     public function destroy(
         Request $request,
         Incident $incident
     ): RedirectResponse {
         Gate::authorize('delete', $incident);
+
+        $auditMetadata = [
+            'incident_id' => (int) $incident->id,
+            'incident_code' => $incident->incident_code,
+            'priority' => $incident->priority,
+            'status_id' => $incident->status_id,
+        ];
 
         DB::transaction(function () use ($incident): void {
             $this->deleteIncidentRelatedFiles((int) $incident->id);
@@ -36,6 +46,14 @@ class IncidentController extends Controller
 
             $incident->delete();
         });
+
+        $this->recordOperationalActivity(
+            event: 'incident.deleted',
+            category: 'incident',
+            description: 'An incident record was deleted.',
+            metadata: $auditMetadata,
+            request: $request,
+        );
 
         return redirect()
             ->route('admin.incidents.index')
@@ -348,6 +366,22 @@ $this->storeIncidentEvidence($request, $incident);
             $this->createTanodTaskFromIncident($incident, $request);
         });
 
+        $this->recordOperationalActivity(
+            event: 'incident.created',
+            category: 'incident',
+            description: 'An incident report was created.',
+            metadata: [
+                'incident_id' => (int) $incident->id,
+                'incident_code' => $incident->incident_code,
+                'category_id' => $incident->category_id,
+                'barangay_id' => $incident->barangay_id,
+                'priority' => $incident->priority,
+                'status_id' => $incident->status_id,
+                'evidence_attached' => $request->hasFile('evidence'),
+            ],
+            request: $request,
+        );
+
         $showRoute = match ($user->role) {
             'resident' => Route::has('resident.incidents.show') ? 'resident.incidents.show' : null,
             'admin' => Route::has('admin.incidents.show') ? 'admin.incidents.show' : null,
@@ -451,6 +485,14 @@ $this->storeIncidentEvidence($request, $incident);
 
         $status = Status::query()
             ->findOrFail((int) $validated['status_id']);
+
+        $previousStatusId = $incident->status_id !== null
+            ? (int) $incident->status_id
+            : null;
+
+        $previousAssignedTo = $incident->assigned_to !== null
+            ? (int) $incident->assigned_to
+            : null;
 
         $requestedAssignedTo = null;
         $assignmentWasSubmitted = false;
@@ -559,6 +601,27 @@ $this->storeIncidentEvidence($request, $incident);
             }
         });
 
+        $incident->refresh();
+
+        $this->recordOperationalActivity(
+            event: 'incident.status_updated',
+            category: 'incident',
+            description: 'An incident status or responder assignment was updated.',
+            metadata: [
+                'incident_id' => (int) $incident->id,
+                'incident_code' => $incident->incident_code,
+                'previous_status_id' => $previousStatusId,
+                'new_status_id' => (int) $status->id,
+                'new_status' => $status->status_name,
+                'previous_assigned_to' => $previousAssignedTo,
+                'new_assigned_to' => $incident->assigned_to !== null
+                    ? (int) $incident->assigned_to
+                    : null,
+                'remarks_provided' => ! empty($validated['remarks']),
+            ],
+            request: $request,
+        );
+
         return back()->with(
             'success',
             'Incident status updated successfully.'
@@ -625,6 +688,19 @@ $this->storeIncidentEvidence($request, $incident);
             );
         });
 
+        $this->recordOperationalActivity(
+            event: 'incident.escalated',
+            category: 'incident',
+            description: 'An incident was escalated to an external agency.',
+            metadata: [
+                'incident_id' => (int) $incident->id,
+                'incident_code' => $incident->incident_code,
+                'agency' => $validated['agency'],
+                'reason_provided' => ! empty($validated['reason']),
+            ],
+            request: $request,
+        );
+
         return back()->with('success', 'Incident escalated successfully.');
     }
 
@@ -647,6 +723,17 @@ $this->storeIncidentEvidence($request, $incident);
             'user_id' => $request->user()->id,
             'message' => $validated['message'],
         ]);
+
+        $this->recordOperationalActivity(
+            event: 'incident.message_added',
+            category: 'incident',
+            description: 'A message was added to an incident.',
+            metadata: [
+                'incident_id' => (int) $incident->id,
+                'incident_code' => $incident->incident_code,
+            ],
+            request: $request,
+        );
 
         return back()->with(
             'success',
@@ -764,6 +851,16 @@ $this->storeIncidentEvidence($request, $incident);
             DB::table('barangays')->insert($data);
         });
 
+        $this->recordOperationalActivity(
+            event: 'barangay.created',
+            category: 'configuration',
+            description: 'A barangay record was added.',
+            metadata: [
+                'barangay_name' => $barangayName,
+            ],
+            request: $request,
+        );
+
         return back()->with(
             'success',
             'Barangay added successfully.'
@@ -822,6 +919,16 @@ $this->storeIncidentEvidence($request, $incident);
                 ->where('id', $barangayId)
                 ->delete();
         });
+
+        $this->recordOperationalActivity(
+            event: 'barangay.deleted',
+            category: 'configuration',
+            description: 'A barangay record was removed.',
+            metadata: [
+                'barangay_id' => $barangayId,
+            ],
+            request: $request,
+        );
 
         return back()->with(
             'success',
