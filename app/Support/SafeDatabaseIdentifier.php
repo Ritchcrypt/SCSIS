@@ -17,7 +17,7 @@ final class SafeDatabaseIdentifier
      * used inside a raw SQL fragment must therefore be constrained before it is
      * quoted by the active database grammar.
      */
-    public static function wrap(
+    public static function validate(
         string $identifier
     ): string {
         $identifier = trim(
@@ -36,8 +36,52 @@ final class SafeDatabaseIdentifier
             );
         }
 
+        return $identifier;
+    }
+
+    /**
+     * Require an identifier to be both syntactically safe and explicitly
+     * approved by the caller.
+     *
+     * @param array<int, string> $allowedIdentifiers
+     */
+    public static function approved(
+        string $identifier,
+        array $allowedIdentifiers
+    ): string {
+        $identifier = self::validate(
+            $identifier
+        );
+
+        $allowedIdentifiers = array_map(
+            static fn (string $allowed): string => self::validate(
+                $allowed
+            ),
+            $allowedIdentifiers
+        );
+
+        if (! in_array(
+            $identifier,
+            $allowedIdentifiers,
+            true
+        )) {
+            throw new InvalidArgumentException(
+                'Unapproved database identifier rejected.'
+            );
+        }
+
+        return $identifier;
+    }
+
+    public static function wrap(
+        string $identifier
+    ): string {
         return DB::connection()
             ->getQueryGrammar()
-            ->wrap($identifier);
+            ->wrap(
+                self::validate(
+                    $identifier
+                )
+            );
     }
 }

@@ -7,6 +7,7 @@ use App\Models\CaseRecord;
 use App\Models\Employee;
 use App\Models\Incident;
 use App\Models\ResidentComplaint;
+use App\Support\SafeDatabaseIdentifier;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,6 +19,32 @@ use Illuminate\View\View;
 
 class ReportController extends Controller
 {
+    private const COUNTABLE_REPORT_TABLES = [
+        'case_records',
+        'announcements',
+    ];
+
+    private const INCIDENT_EVIDENCE_TABLES = [
+        'evidence',
+        'incident_evidence',
+        'incident_evidences',
+        'incident_attachments',
+    ];
+
+    private const COMPLAINT_PROOF_TABLES = [
+        'resident_complaint_proofs',
+        'resident_complaint_evidence',
+        'resident_complaint_evidences',
+        'complaint_proofs',
+        'complaint_evidence',
+        'complaint_evidences',
+    ];
+
+    private const COMPLAINT_FOREIGN_KEYS = [
+        'resident_complaint_id',
+        'complaint_id',
+    ];
+
 
     public function index(Request $request): View
     {
@@ -1109,14 +1136,14 @@ class ReportController extends Controller
 
     private function specificIncidentEvidenceRecords(Incident $incident)
     {
-        $candidateTables = [
-            'evidence',
-            'incident_evidence',
-            'incident_evidences',
-            'incident_attachments',
-        ];
+        $candidateTables = self::INCIDENT_EVIDENCE_TABLES;
 
         foreach ($candidateTables as $table) {
+            $table = SafeDatabaseIdentifier::approved(
+                $table,
+                self::INCIDENT_EVIDENCE_TABLES
+            );
+
             if (
                 ! Schema::hasTable($table)
                 || ! Schema::hasColumn($table, 'incident_id')
@@ -1124,9 +1151,24 @@ class ReportController extends Controller
                 continue;
             }
 
+            $orderColumn = Schema::hasColumn(
+                $table,
+                'created_at'
+            )
+                ? 'created_at'
+                : 'id';
+
+            $orderColumn = SafeDatabaseIdentifier::approved(
+                $orderColumn,
+                [
+                    'created_at',
+                    'id',
+                ]
+            );
+
             return DB::table($table)
                 ->where('incident_id', $incident->id)
-                ->orderByDesc(Schema::hasColumn($table, 'created_at') ? 'created_at' : 'id')
+                ->orderByDesc($orderColumn)
                 ->get()
                 ->map(function ($record) use ($table) {
                     return [
@@ -1152,33 +1194,47 @@ class ReportController extends Controller
 
     private function specificComplaintProofRecords(ResidentComplaint $complaint)
     {
-        $candidateTables = [
-            'resident_complaint_proofs',
-            'resident_complaint_evidence',
-            'resident_complaint_evidences',
-            'complaint_proofs',
-            'complaint_evidence',
-            'complaint_evidences',
-        ];
-
-        $candidateForeignKeys = [
-            'resident_complaint_id',
-            'complaint_id',
-        ];
+        $candidateTables = self::COMPLAINT_PROOF_TABLES;
+        $candidateForeignKeys = self::COMPLAINT_FOREIGN_KEYS;
 
         foreach ($candidateTables as $table) {
+            $table = SafeDatabaseIdentifier::approved(
+                $table,
+                self::COMPLAINT_PROOF_TABLES
+            );
+
             if (! Schema::hasTable($table)) {
                 continue;
             }
 
             foreach ($candidateForeignKeys as $foreignKey) {
+                $foreignKey = SafeDatabaseIdentifier::approved(
+                    $foreignKey,
+                    self::COMPLAINT_FOREIGN_KEYS
+                );
+
                 if (! Schema::hasColumn($table, $foreignKey)) {
                     continue;
                 }
 
+                $orderColumn = Schema::hasColumn(
+                    $table,
+                    'created_at'
+                )
+                    ? 'created_at'
+                    : 'id';
+
+                $orderColumn = SafeDatabaseIdentifier::approved(
+                    $orderColumn,
+                    [
+                        'created_at',
+                        'id',
+                    ]
+                );
+
                 return DB::table($table)
                     ->where($foreignKey, $complaint->id)
-                    ->orderByDesc(Schema::hasColumn($table, 'created_at') ? 'created_at' : 'id')
+                    ->orderByDesc($orderColumn)
                     ->get()
                     ->map(function ($record) {
                         return [
@@ -1316,7 +1372,8 @@ class ReportController extends Controller
     private function statusSummary(Carbon $startDate, Carbon $endDate): array
     {
         return Incident::query()
-            ->select('status_id', DB::raw('COUNT(*) as total'))
+            ->select('status_id')
+            ->selectRaw('COUNT(*) as total')
             ->with('currentStatus')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('status_id')
@@ -1338,10 +1395,24 @@ class ReportController extends Controller
         }
 
         return Incident::query()
-            ->select('priority', DB::raw('COUNT(*) as total'))
+            ->select('priority')
+            ->selectRaw('COUNT(*) as total')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('priority')
-            ->orderByRaw("FIELD(priority, 'critical', 'high', 'moderate', 'low')")
+            ->orderByRaw(
+                'CASE priority '
+                    . 'WHEN ? THEN 1 '
+                    . 'WHEN ? THEN 2 '
+                    . 'WHEN ? THEN 3 '
+                    . 'WHEN ? THEN 4 '
+                    . 'ELSE 5 END',
+                [
+                    'critical',
+                    'high',
+                    'moderate',
+                    'low',
+                ]
+            )
             ->get()
             ->map(function ($row) {
                 return [
@@ -1356,7 +1427,8 @@ class ReportController extends Controller
     private function barangaySummary(Carbon $startDate, Carbon $endDate): array
     {
         return Incident::query()
-            ->select('barangay_id', DB::raw('COUNT(*) as total'))
+            ->select('barangay_id')
+            ->selectRaw('COUNT(*) as total')
             ->with('barangay')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->groupBy('barangay_id')
@@ -1437,8 +1509,16 @@ class ReportController extends Controller
             ->values();
     }
 
-    private function countTableByDate(string $table, Carbon $startDate, Carbon $endDate): int
-    {
+    private function countTableByDate(
+        string $table,
+        Carbon $startDate,
+        Carbon $endDate
+    ): int {
+        $table = SafeDatabaseIdentifier::approved(
+            $table,
+            self::COUNTABLE_REPORT_TABLES
+        );
+
         if (! Schema::hasTable($table)) {
             return 0;
         }

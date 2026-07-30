@@ -717,14 +717,25 @@ class UserManagementController extends Controller
                 "User {$userName} was permanently deleted successfully."
             );
     }
-
     public function export(Request $request)
     {
         Gate::authorize('export', User::class);
 
-        $users = $this->filteredUsersQuery($request)
+        /*
+        |--------------------------------------------------------------------------
+        | Stream the export instead of loading every matching user into memory
+        |--------------------------------------------------------------------------
+        |
+        | The filtered query is cloned for the audit count. The original query
+        | is consumed with a database cursor while the CSV is written.
+        |
+        */
+
+        $usersQuery = $this->filteredUsersQuery($request)
             ->orderByDesc('created_at')
-            ->get();
+            ->orderByDesc('id');
+
+        $recordCount = (clone $usersQuery)->count();
 
         $barangays = $this->barangays();
         $fileName = 'users-' . now()->format('Ymd-His') . '.csv';
@@ -735,7 +746,7 @@ class UserManagementController extends Controller
             description: 'Administrator exported user account data.',
             actor: $request->user(),
             metadata: [
-                'record_count' => $users->count(),
+                'record_count' => $recordCount,
                 'filters_applied' => $request->filled('search')
                     || $request->filled('role')
                     || $request->filled('status')
@@ -744,52 +755,93 @@ class UserManagementController extends Controller
             request: $request,
         );
 
-        return response()->streamDownload(function () use ($users, $barangays): void {
-            $output = fopen('php://output', 'w');
-
-            if ($output === false) {
-                throw new \RuntimeException('Unable to open the CSV output stream.');
-            }
-
-            /* UTF-8 BOM for spreadsheet compatibility. */
-            fwrite($output, "\xEF\xBB\xBF");
-
-            fputcsv($output, [
-                'Name',
-                'Email',
-                'Contact Number',
-                'Barangay',
-                'Role',
-                'Presence',
-                'Joined Date',
-            ]);
-
-            foreach ($users as $user) {
-                $barangay = $barangays->firstWhere(
-                    'id',
-                    $user->barangay_id ?? null
+        $response = response()->streamDownload(
+            function () use (
+                $usersQuery,
+                $barangays
+            ): void {
+                $output = fopen(
+                    'php://output',
+                    'w'
                 );
 
-                fputcsv($output, [
-                    $this->csvSafeValue($user->name),
-                    $this->csvSafeValue($user->email),
-                    $this->csvSafeValue($user->contact_number ?? ''),
-                    $this->csvSafeValue(
-                        $barangay->barangay_name
-                            ?? $barangay->name
-                            ?? ''
-                    ),
-                    $this->csvSafeValue(ucfirst((string) $user->role)),
-                    $this->isUserOnline($user) ? 'Online' : 'Offline',
-                    optional($user->created_at)->format('Y-m-d H:i:s'),
-                ]);
-            }
+                if ($output === false) {
+                    throw new \RuntimeException(
+                        'Unable to open the CSV output stream.'
+                    );
+                }
 
-            fclose($output);
-        }, $fileName, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+                try {
+                    /* UTF-8 BOM for spreadsheet compatibility. */
+                    fwrite(
+                        $output,
+                        "\xEF\xBB\xBF"
+                    );
+
+                    fputcsv($output, [
+                        'Name',
+                        'Email',
+                        'Contact Number',
+                        'Barangay',
+                        'Role',
+                        'Presence',
+                        'Joined Date',
+                    ]);
+
+                    foreach ($usersQuery->cursor() as $user) {
+                        $barangay = $barangays->firstWhere(
+                            'id',
+                            $user->barangay_id ?? null
+                        );
+
+                        fputcsv($output, [
+                            $this->csvSafeValue(
+                                $user->name
+                            ),
+                            $this->csvSafeValue(
+                                $user->email
+                            ),
+                            $this->csvSafeValue(
+                                $user->contact_number ?? ''
+                            ),
+                            $this->csvSafeValue(
+                                $barangay->barangay_name
+                                    ?? $barangay->name
+                                    ?? ''
+                            ),
+                            $this->csvSafeValue(
+                                ucfirst(
+                                    (string) $user->role
+                                )
+                            ),
+                            $this->isUserOnline($user)
+                                ? 'Online'
+                                : 'Offline',
+                            optional(
+                                $user->created_at
+                            )->format(
+                                'Y-m-d H:i:s'
+                            ),
+                        ]);
+                    }
+                } finally {
+                    fclose($output);
+                }
+            },
+            $fileName,
+            [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'X-Content-Type-Options' => 'nosniff',
+            ]
+        );
+
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective(
+            'no-store',
+            true
+        );
+
+        return $response;
     }
 
     private function filteredUsersQuery(Request $request)
