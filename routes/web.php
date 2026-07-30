@@ -82,6 +82,9 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::match(['patch', 'put'], '/profile/password', [ProfileController::class, 'updatePassword'])
         ->name('profile.password.update');
 
+    Route::delete('/profile/other-sessions', [ProfileController::class, 'destroyOtherSessions'])
+        ->name('profile.other-sessions.destroy');
+
     Route::delete('/profile/self-delete', [ProfileController::class, 'destroyOwnAccount'])
         ->name('profile.self-delete');
 });

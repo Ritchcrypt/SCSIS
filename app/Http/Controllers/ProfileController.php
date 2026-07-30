@@ -198,6 +198,117 @@ class ProfileController extends Controller
             );
     }
 
+
+    public function destroyOtherSessions(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user, 403, 'Unauthorized access.');
+
+        $request->validateWithBag('logoutOtherSessions', [
+            'password' => [
+                'required',
+                'string',
+                'current_password',
+            ],
+        ]);
+
+        $currentSessionId = $request->session()->getId();
+
+        DB::transaction(function () use (
+            $user,
+            $currentSessionId
+        ): void {
+            /*
+            |--------------------------------------------------------------------------
+            | Invalidate persistent authentication
+            |--------------------------------------------------------------------------
+            |
+            | Rotating the remember token prevents old remember-me cookies on
+            | other devices from restoring an authenticated session.
+            |
+            */
+
+            $user->forceFill([
+                'remember_token' => Str::random(60),
+            ])->save();
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delete other database sessions
+            |--------------------------------------------------------------------------
+            |
+            | The current browser session is preserved. Sessions belonging to
+            | other users are never touched.
+            |
+            */
+
+            if (
+                Schema::hasTable('sessions')
+                && Schema::hasColumn('sessions', 'user_id')
+            ) {
+                $sessions = DB::table('sessions')
+                    ->where('user_id', $user->id);
+
+                if (
+                    $currentSessionId !== ''
+                    && Schema::hasColumn('sessions', 'id')
+                ) {
+                    $sessions->where('id', '!=', $currentSessionId);
+                }
+
+                $sessions->delete();
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Revoke personal access tokens
+            |--------------------------------------------------------------------------
+            |
+            | Personal access tokens may represent other authenticated devices
+            | or clients, so they are revoked with the other sessions.
+            |
+            */
+
+            if (
+                Schema::hasTable('personal_access_tokens')
+                && Schema::hasColumn(
+                    'personal_access_tokens',
+                    'tokenable_id'
+                )
+                && Schema::hasColumn(
+                    'personal_access_tokens',
+                    'tokenable_type'
+                )
+            ) {
+                DB::table('personal_access_tokens')
+                    ->where('tokenable_id', $user->id)
+                    ->where('tokenable_type', User::class)
+                    ->delete();
+            }
+        });
+
+        /*
+        |--------------------------------------------------------------------------
+        | Rotate this browser's session security values
+        |--------------------------------------------------------------------------
+        */
+
+        $request->session()->regenerate();
+        $request->session()->regenerateToken();
+        $request->session()->put(
+            'security.last_activity_at',
+            time()
+        );
+
+        return redirect()
+            ->route('profile.edit')
+            ->with(
+                'success',
+                'Other browser and device sessions were signed out successfully.'
+            );
+    }
+
     public function destroyOwnAccount(Request $request): RedirectResponse
 {
     $user = $request->user();
