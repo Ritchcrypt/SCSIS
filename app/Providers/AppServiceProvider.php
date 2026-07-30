@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Listeners\RecordAuthenticationActivity;
 use App\Models\Announcement;
 use App\Models\CaseRecord;
 use App\Models\EmergencyHotline;
@@ -18,6 +19,14 @@ use App\Policies\ResidentComplaintPolicy;
 use App\Policies\TanodProfilePolicy;
 use App\Policies\UserNotificationPolicy;
 use App\Policies\UserPolicy;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Lockout;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Auth\Events\Verified;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -31,6 +40,31 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Authentication security audit events
+        |--------------------------------------------------------------------------
+        |
+        | Authentication events are recorded without storing passwords,
+        | reset tokens, cookies, or raw login identifiers.
+        |
+        */
+
+        foreach ([
+            Login::class,
+            Logout::class,
+            Failed::class,
+            Lockout::class,
+            Registered::class,
+            PasswordReset::class,
+            Verified::class,
+        ] as $authenticationEvent) {
+            Event::listen(
+                $authenticationEvent,
+                RecordAuthenticationActivity::class
+            );
+        }
+
         Gate::policy(Announcement::class, AnnouncementPolicy::class);
         Gate::policy(CaseRecord::class, CaseRecordPolicy::class);
         Gate::policy(EmergencyHotline::class, EmergencyHotlinePolicy::class);

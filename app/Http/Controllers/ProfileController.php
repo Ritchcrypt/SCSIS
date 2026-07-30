@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +18,11 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        private readonly ActivityLogger $activityLogger
+    ) {
+    }
+
     public function edit(Request $request): View
     {
         $authUser = $request->user();
@@ -41,6 +47,13 @@ class ProfileController extends Controller
         }
 
         $userRecord = User::query()->findOrFail($authUser->id);
+
+        $originalValues = [
+            'name' => (string) $userRecord->name,
+            'email' => (string) $userRecord->email,
+            'contact_number' => (string) ($userRecord->contact_number ?? ''),
+            'address' => (string) ($userRecord->address ?? ''),
+        ];
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -107,6 +120,55 @@ class ProfileController extends Controller
             ) {
                 Storage::disk('public')->delete($oldProfilePhotoPath);
             }
+        }
+
+        $userRecord->refresh();
+
+        $changedFields = [];
+
+        if ($originalValues['name'] !== (string) $userRecord->name) {
+            $changedFields[] = 'name';
+        }
+
+        if (
+            strcasecmp(
+                $originalValues['email'],
+                (string) $userRecord->email
+            ) !== 0
+        ) {
+            $changedFields[] = 'email';
+        }
+
+        if (
+            $originalValues['contact_number']
+            !== (string) ($userRecord->contact_number ?? '')
+        ) {
+            $changedFields[] = 'contact_number';
+        }
+
+        if (
+            $originalValues['address']
+            !== (string) ($userRecord->address ?? '')
+        ) {
+            $changedFields[] = 'address';
+        }
+
+        if ($newProfilePhotoPath) {
+            $changedFields[] = 'profile_photo';
+        }
+
+        if ($changedFields !== []) {
+            $this->activityLogger->record(
+                event: 'account.profile_updated',
+                category: 'account',
+                description: 'User updated their profile information.',
+                actor: $userRecord,
+                target: $userRecord,
+                metadata: [
+                    'changed_fields' => $changedFields,
+                ],
+                request: $request,
+            );
         }
 
         return redirect()
@@ -188,6 +250,21 @@ class ProfileController extends Controller
         $request->session()->put(
             'security.last_activity_at',
             time()
+        );
+
+        $user->refresh();
+
+        $this->activityLogger->record(
+            event: 'auth.password_changed',
+            category: 'authentication',
+            description: 'User changed their account password.',
+            actor: $user,
+            target: $user,
+            metadata: [
+                'other_sessions_revoked' => true,
+                'remember_token_rotated' => true,
+            ],
+            request: $request,
         );
 
         return redirect()
@@ -301,6 +378,22 @@ class ProfileController extends Controller
             time()
         );
 
+        $user->refresh();
+
+        $this->activityLogger->record(
+            event: 'auth.other_sessions_revoked',
+            category: 'authentication',
+            description: 'User signed out other browsers and devices.',
+            actor: $user,
+            target: $user,
+            metadata: [
+                'current_session_preserved' => true,
+                'remember_token_rotated' => true,
+                'personal_access_tokens_revoked' => true,
+            ],
+            request: $request,
+        );
+
         return redirect()
             ->route('profile.edit')
             ->with(
@@ -310,59 +403,74 @@ class ProfileController extends Controller
     }
 
     public function destroyOwnAccount(Request $request): RedirectResponse
-{
-    $user = $request->user();
+    {
+        $user = $request->user();
 
-    abort_unless(
-        $user && in_array(
-            strtolower((string) $user->role),
-            [
-                'official',
-                'dao',
-                'tanod',
-                'resident',
+        abort_unless(
+            $user && in_array(
+                strtolower((string) $user->role),
+                [
+                    'official',
+                    'dao',
+                    'tanod',
+                    'resident',
+                ],
+                true
+            ),
+            403
+        );
+
+        $request->validateWithBag('userDeletion', [
+            'password' => [
+                'required',
+                'current_password',
             ],
-            true
-        ),
-        403
-    );
+        ]);
 
-    $request->validateWithBag('userDeletion', [
-        'password' => [
-            'required',
-            'current_password',
-        ],
-    ]);
+        /*
+        |--------------------------------------------------------------------------
+        | Log out before deleting the authenticated model
+        |--------------------------------------------------------------------------
+        |
+        | Laravel rotates the remember token during logout. Logging out after
+        | deletion could cause the deleted Eloquent user model to be saved again.
+        |
+        */
 
-    /*
-    |--------------------------------------------------------------------------
-    | Log out before deleting the authenticated model
-    |--------------------------------------------------------------------------
-    |
-    | Laravel rotates the remember token during logout. Logging out after
-    | deletion could cause the deleted Eloquent user model to be saved again.
-    |
-    */
+        Auth::guard('web')->logout();
 
-    Auth::guard('web')->logout();
+        DB::transaction(function () use (
+            $request,
+            $user
+        ): void {
+            $this->revokeAuthenticationArtifacts($user);
 
-    DB::transaction(function () use ($user): void {
-        $this->revokeAuthenticationArtifacts($user);
+            $deleted = $user->delete();
 
-        $deleted = $user->delete();
+            if (! $deleted) {
+                throw new \RuntimeException(
+                    'The user account could not be deleted.'
+                );
+            }
 
-        if (! $deleted) {
-            throw new \RuntimeException(
-                'The user account could not be deleted.'
+            $this->activityLogger->record(
+                event: 'account.self_deleted',
+                category: 'account',
+                description: 'User permanently deleted their own account.',
+                actor: $user,
+                target: $user,
+                metadata: [
+                    'role' => strtolower((string) $user->role),
+                ],
+                request: $request,
             );
-        }
-    });
+        });
 
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
-    return redirect('/');
-}
+        return redirect('/');
+    }
 
     private function revokeAuthenticationArtifacts(
         User $user,

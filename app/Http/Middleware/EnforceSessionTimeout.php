@@ -40,6 +40,17 @@ class EnforceSessionTimeout
         ) {
             $userId = (int) $user->id;
 
+            /*
+            |--------------------------------------------------------------------------
+            | Preserve the security reason for the logout audit event
+            |--------------------------------------------------------------------------
+            */
+
+            $request->session()->put(
+                'security.logout_reason',
+                'inactivity_timeout'
+            );
+
             Auth::guard('web')->logout();
 
             $request->session()->invalidate();

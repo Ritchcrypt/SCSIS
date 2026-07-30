@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,11 @@ use Illuminate\View\View;
 
 class UserManagementController extends Controller
 {
+    public function __construct(
+        private readonly ActivityLogger $activityLogger
+    ) {
+    }
+
     private const DELETED_USER_EMAIL = 'deleted-user@tabangnow.local';
     private const ONLINE_WINDOW_MINUTES = 2;
 
@@ -70,7 +76,10 @@ class UserManagementController extends Controller
         $profilePhotoPath = $this->storeProfilePhoto($request);
 
         try {
-            DB::transaction(function () use ($validated, $profilePhotoPath): void {
+            $createdUser = DB::transaction(function () use (
+                $validated,
+                $profilePhotoPath
+            ): User {
                 $user = new User();
 
                 $user->name = $validated['name'];
@@ -105,12 +114,27 @@ class UserManagementController extends Controller
                 $user->refresh();
 
                 $this->syncEmployeeProfile($user);
+
+                return $user;
             });
         } catch (\Throwable $exception) {
             $this->deletePublicFile($profilePhotoPath);
 
             throw $exception;
         }
+
+        $this->activityLogger->record(
+            event: 'user_management.created',
+            category: 'user_management',
+            description: 'Administrator created a user account.',
+            actor: $request->user(),
+            target: $createdUser,
+            metadata: [
+                'role' => strtolower((string) $createdUser->role),
+                'is_active' => $this->isUserActive($createdUser),
+            ],
+            request: $request,
+        );
 
         return redirect()
             ->route('admin.users.index')
@@ -187,8 +211,10 @@ class UserManagementController extends Controller
         ]);
     }
 
-    public function update(Request $request, User $user): RedirectResponse
-    {
+    public function update(
+        Request $request,
+        User $user
+    ): RedirectResponse {
         Gate::authorize('update', $user);
         $this->ensureNotDeletedPlaceholder($user);
 
@@ -201,6 +227,7 @@ class UserManagementController extends Controller
         | Fast validation before storing a replacement profile photo
         |--------------------------------------------------------------------------
         */
+
         $this->assertSafeAdministratorStateChange(
             $request->user(),
             $user,
@@ -212,17 +239,18 @@ class UserManagementController extends Controller
         $oldProfilePhotoPath = $this->normalizeProfilePhotoPath(
             $user->profile_photo_path ?? null
         );
+
         $newProfilePhotoPath = $this->storeProfilePhoto($request);
 
         try {
-            DB::transaction(function () use (
+            $auditContext = DB::transaction(function () use (
                 $request,
                 $user,
                 $validated,
                 $newRole,
                 $newActive,
                 $newProfilePhotoPath
-            ): void {
+            ): array {
                 $lockedUser = User::query()
                     ->whereKey($user->id)
                     ->lockForUpdate()
@@ -235,6 +263,7 @@ class UserManagementController extends Controller
                 | Race-safe administrator protection
                 |------------------------------------------------------------------
                 */
+
                 $this->assertSafeAdministratorStateChange(
                     $request->user(),
                     $lockedUser,
@@ -246,14 +275,81 @@ class UserManagementController extends Controller
                 $oldRole = strtolower(trim((string) $lockedUser->role));
                 $oldActive = $this->isUserActive($lockedUser);
                 $oldEmail = (string) $lockedUser->email;
-                $passwordChanged = array_key_exists('password', $validated);
+                $passwordChanged = array_key_exists(
+                    'password',
+                    $validated
+                );
+
+                $changedFields = [];
+
+                if (
+                    (string) $lockedUser->name
+                    !== (string) $validated['name']
+                ) {
+                    $changedFields[] = 'name';
+                }
+
+                if (
+                    strcasecmp(
+                        (string) $lockedUser->email,
+                        strtolower(trim($validated['email']))
+                    ) !== 0
+                ) {
+                    $changedFields[] = 'email';
+                }
+
+                if ($oldRole !== $newRole) {
+                    $changedFields[] = 'role';
+                }
+
+                if ($oldActive !== $newActive) {
+                    $changedFields[] = 'is_active';
+                }
+
+                if ($passwordChanged) {
+                    $changedFields[] = 'password';
+                }
+
+                if (
+                    Schema::hasColumn('users', 'contact_number')
+                    && (string) ($lockedUser->contact_number ?? '')
+                        !== (string) $this->normalizeContactNumber(
+                            $validated['contact_number'] ?? null
+                        )
+                ) {
+                    $changedFields[] = 'contact_number';
+                }
+
+                if (
+                    Schema::hasColumn('users', 'barangay_id')
+                    && (string) ($lockedUser->barangay_id ?? '')
+                        !== (string) ($validated['barangay_id'] ?? '')
+                ) {
+                    $changedFields[] = 'barangay_id';
+                }
+
+                if (
+                    Schema::hasColumn('users', 'address')
+                    && (string) ($lockedUser->address ?? '')
+                        !== (string) ($validated['address'] ?? '')
+                ) {
+                    $changedFields[] = 'address';
+                }
+
+                if ($newProfilePhotoPath) {
+                    $changedFields[] = 'profile_photo';
+                }
 
                 $lockedUser->name = $validated['name'];
-                $lockedUser->email = strtolower(trim($validated['email']));
+                $lockedUser->email = strtolower(
+                    trim($validated['email'])
+                );
                 $lockedUser->role = $newRole;
 
                 if ($passwordChanged) {
-                    $lockedUser->password = Hash::make($validated['password']);
+                    $lockedUser->password = Hash::make(
+                        $validated['password']
+                    );
                     $lockedUser->remember_token = null;
                 }
 
@@ -271,16 +367,24 @@ class UserManagementController extends Controller
                 }
 
                 if (Schema::hasColumn('users', 'barangay_id')) {
-                    $lockedUser->barangay_id = $validated['barangay_id'] ?? null;
+                    $lockedUser->barangay_id =
+                        $validated['barangay_id'] ?? null;
                 }
 
                 if (Schema::hasColumn('users', 'address')) {
-                    $lockedUser->address = $validated['address'] ?? null;
+                    $lockedUser->address =
+                        $validated['address'] ?? null;
                 }
 
-                $this->setUserActiveState($lockedUser, $newActive);
+                $this->setUserActiveState(
+                    $lockedUser,
+                    $newActive
+                );
 
-                if (! $newActive && Schema::hasColumn('users', 'last_seen_at')) {
+                if (
+                    ! $newActive
+                    && Schema::hasColumn('users', 'last_seen_at')
+                ) {
                     $lockedUser->last_seen_at = null;
                 }
 
@@ -295,9 +399,16 @@ class UserManagementController extends Controller
 
                 $roleChanged = $oldRole !== $newRole;
                 $activeStateChanged = $oldActive !== $newActive;
-                $emailChanged = strcasecmp($oldEmail, (string) $lockedUser->email) !== 0;
+                $emailChanged = strcasecmp(
+                    $oldEmail,
+                    (string) $lockedUser->email
+                ) !== 0;
 
-                if ($roleChanged || $activeStateChanged || $passwordChanged) {
+                if (
+                    $roleChanged
+                    || $activeStateChanged
+                    || $passwordChanged
+                ) {
                     $this->revokeUserAuthentication(
                         (int) $lockedUser->id,
                         $oldEmail
@@ -305,6 +416,18 @@ class UserManagementController extends Controller
                 } elseif ($emailChanged) {
                     $this->deletePasswordResetTokens($oldEmail);
                 }
+
+                return [
+                    'target' => $lockedUser,
+                    'changed_fields' => array_values(
+                        array_unique($changedFields)
+                    ),
+                    'old_role' => $oldRole,
+                    'new_role' => $newRole,
+                    'old_active' => $oldActive,
+                    'new_active' => $newActive,
+                    'password_changed' => $passwordChanged,
+                ];
             });
         } catch (\Throwable $exception) {
             $this->deletePublicFile($newProfilePhotoPath);
@@ -316,13 +439,36 @@ class UserManagementController extends Controller
             $this->deletePublicFile($oldProfilePhotoPath);
         }
 
+        /** @var User $updatedUser */
+        $updatedUser = $auditContext['target'];
+
+        $this->activityLogger->record(
+            event: 'user_management.updated',
+            category: 'user_management',
+            description: 'Administrator updated a user account.',
+            actor: $request->user(),
+            target: $updatedUser,
+            metadata: [
+                'changed_fields' => $auditContext['changed_fields'],
+                'old_role' => $auditContext['old_role'],
+                'new_role' => $auditContext['new_role'],
+                'old_active' => $auditContext['old_active'],
+                'new_active' => $auditContext['new_active'],
+                'password_changed' =>
+                    $auditContext['password_changed'],
+            ],
+            request: $request,
+        );
+
         return redirect()
             ->route('admin.users.index')
             ->with('success', 'User account updated successfully.');
     }
 
-    public function activate(Request $request, User $user): RedirectResponse
-    {
+    public function activate(
+        Request $request,
+        User $user
+    ): RedirectResponse {
         Gate::authorize('activate', $user);
         $this->ensureNotDeletedPlaceholder($user);
 
@@ -339,15 +485,37 @@ class UserManagementController extends Controller
             $this->syncEmployeeProfile($lockedUser);
         });
 
-        return back()->with('success', 'User account activated successfully.');
+        $user->refresh();
+
+        $this->activityLogger->record(
+            event: 'user_management.activated',
+            category: 'user_management',
+            description: 'Administrator activated a user account.',
+            actor: $request->user(),
+            target: $user,
+            metadata: [
+                'is_active' => true,
+            ],
+            request: $request,
+        );
+
+        return back()->with(
+            'success',
+            'User account activated successfully.'
+        );
     }
 
-    public function deactivate(Request $request, User $user): RedirectResponse
-    {
+    public function deactivate(
+        Request $request,
+        User $user
+    ): RedirectResponse {
         Gate::authorize('deactivate', $user);
         $this->ensureNotDeletedPlaceholder($user);
 
-        DB::transaction(function () use ($request, $user): void {
+        DB::transaction(function () use (
+            $request,
+            $user
+        ): void {
             $lockedUser = User::query()
                 ->whereKey($user->id)
                 ->lockForUpdate()
@@ -372,17 +540,38 @@ class UserManagementController extends Controller
             $lockedUser->refresh();
 
             $this->syncEmployeeProfile($lockedUser);
+
             $this->revokeUserAuthentication(
                 (int) $lockedUser->id,
                 (string) $lockedUser->email
             );
         });
 
-        return back()->with('success', 'User account deactivated successfully.');
+        $user->refresh();
+
+        $this->activityLogger->record(
+            event: 'user_management.deactivated',
+            category: 'user_management',
+            description: 'Administrator deactivated a user account.',
+            actor: $request->user(),
+            target: $user,
+            metadata: [
+                'is_active' => false,
+                'sessions_revoked' => true,
+            ],
+            request: $request,
+        );
+
+        return back()->with(
+            'success',
+            'User account deactivated successfully.'
+        );
     }
 
-    public function resetPassword(Request $request, User $user): RedirectResponse
-    {
+    public function resetPassword(
+        Request $request,
+        User $user
+    ): RedirectResponse {
         Gate::authorize('resetPassword', $user);
         $this->ensureNotDeletedPlaceholder($user);
 
@@ -391,9 +580,23 @@ class UserManagementController extends Controller
         ]);
 
         if ($status === PasswordBroker::RESET_LINK_SENT) {
+            $this->activityLogger->record(
+                event: 'user_management.password_reset_link_sent',
+                category: 'user_management',
+                description: 'Administrator sent a password reset link.',
+                actor: $request->user(),
+                target: $user,
+                metadata: [
+                    'delivery_channel' => 'email',
+                ],
+                request: $request,
+            );
+
             return back()->with(
                 'success',
-                'A secure password reset link was sent to ' . $user->email . '.'
+                'A secure password reset link was sent to '
+                    . $user->email
+                    . '.'
             );
         }
 
@@ -403,17 +606,23 @@ class UserManagementController extends Controller
         );
     }
 
-    public function destroy(Request $request, User $user): RedirectResponse
-    {
+    public function destroy(
+        Request $request,
+        User $user
+    ): RedirectResponse {
         Gate::authorize('delete', $user);
         $this->ensureNotDeletedPlaceholder($user);
 
         $userName = $user->name;
+
         $profilePhotoPath = $this->normalizeProfilePhotoPath(
             $user->profile_photo_path ?? null
         );
 
-        DB::transaction(function () use ($request, $user): void {
+        DB::transaction(function () use (
+            $request,
+            $user
+        ): void {
             $lockedUser = User::query()
                 ->whereKey($user->id)
                 ->lockForUpdate()
@@ -428,7 +637,10 @@ class UserManagementController extends Controller
             );
 
             $deletedUserId = $this->deletedUserId();
-            $employeeIds = $this->employeeIdsForUser((int) $lockedUser->id);
+
+            $employeeIds = $this->employeeIdsForUser(
+                (int) $lockedUser->id
+            );
 
             $this->reassignHistoricalUserReferences(
                 (int) $lockedUser->id,
@@ -440,7 +652,27 @@ class UserManagementController extends Controller
                 $employeeIds
             );
 
-            $lockedUser->delete();
+            $deleted = $lockedUser->delete();
+
+            if (! $deleted) {
+                throw new \RuntimeException(
+                    'The user account could not be deleted.'
+                );
+            }
+
+            $this->activityLogger->record(
+                event: 'user_management.deleted',
+                category: 'user_management',
+                description: 'Administrator permanently deleted a user account.',
+                actor: $request->user(),
+                target: $lockedUser,
+                metadata: [
+                    'deleted_role' => strtolower(
+                        (string) $lockedUser->role
+                    ),
+                ],
+                request: $request,
+            );
         });
 
         $this->deletePublicFile($profilePhotoPath);
@@ -463,6 +695,21 @@ class UserManagementController extends Controller
 
         $barangays = $this->barangays();
         $fileName = 'users-' . now()->format('Ymd-His') . '.csv';
+
+        $this->activityLogger->record(
+            event: 'user_management.exported',
+            category: 'user_management',
+            description: 'Administrator exported user account data.',
+            actor: $request->user(),
+            metadata: [
+                'record_count' => $users->count(),
+                'filters_applied' => $request->filled('search')
+                    || $request->filled('role')
+                    || $request->filled('status')
+                    || $request->filled('date'),
+            ],
+            request: $request,
+        );
 
         return response()->streamDownload(function () use ($users, $barangays): void {
             $output = fopen('php://output', 'w');
