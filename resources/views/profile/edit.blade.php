@@ -13,6 +13,114 @@
     $profileInitial = strtoupper(mb_substr($userRecord->name ?? 'U', 0, 1));
 @endphp
 
+<style>
+    /*
+    |--------------------------------------------------------------------------
+    | Session Security theme compatibility
+    |--------------------------------------------------------------------------
+    |
+    | TabangNow uses html[data-theme='dark'] and html[data-theme='system']
+    | rather than Tailwind's .dark class. These selectors affect only the
+    | Session Security panel on this page.
+    |
+    */
+
+    .tn-session-security-panel {
+        border-color: #bfdbfe;
+        background-color: #eff6ff;
+    }
+
+    .tn-session-security-title {
+        color: #1e3a8a;
+    }
+
+    .tn-session-security-description {
+        color: #1e40af;
+    }
+
+    .tn-session-security-label {
+        color: #334155;
+    }
+
+    .tn-session-security-input {
+        border-color: #cbd5e1;
+        background-color: #ffffff;
+        color: #0f172a;
+        caret-color: #0f172a;
+    }
+
+    .tn-session-security-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(191, 219, 254, 0.75);
+    }
+
+    html[data-theme='dark'] .tn-session-security-panel {
+        border-color: #334155;
+        background-color: #0f172a;
+    }
+
+    html[data-theme='dark'] .tn-session-security-title {
+        color: #93c5fd;
+    }
+
+    html[data-theme='dark'] .tn-session-security-description {
+        color: #cbd5e1;
+    }
+
+    html[data-theme='dark'] .tn-session-security-label {
+        color: #e2e8f0;
+    }
+
+    html[data-theme='dark'] .tn-session-security-input {
+        border-color: #475569;
+        background-color: #020617;
+        color: #f8fafc;
+        caret-color: #ffffff;
+    }
+
+    html[data-theme='dark'] .tn-session-security-input:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.45);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        html[data-theme='system'] .tn-session-security-panel,
+        html:not([data-theme]) .tn-session-security-panel {
+            border-color: #334155;
+            background-color: #0f172a;
+        }
+
+        html[data-theme='system'] .tn-session-security-title,
+        html:not([data-theme]) .tn-session-security-title {
+            color: #93c5fd;
+        }
+
+        html[data-theme='system'] .tn-session-security-description,
+        html:not([data-theme]) .tn-session-security-description {
+            color: #cbd5e1;
+        }
+
+        html[data-theme='system'] .tn-session-security-label,
+        html:not([data-theme]) .tn-session-security-label {
+            color: #e2e8f0;
+        }
+
+        html[data-theme='system'] .tn-session-security-input,
+        html:not([data-theme]) .tn-session-security-input {
+            border-color: #475569;
+            background-color: #020617;
+            color: #f8fafc;
+            caret-color: #ffffff;
+        }
+
+        html[data-theme='system'] .tn-session-security-input:focus,
+        html:not([data-theme]) .tn-session-security-input:focus {
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.45);
+        }
+    }
+</style>
+
 <div class="space-y-6">
     <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <a href="{{ route('dashboard') }}"
@@ -203,12 +311,12 @@
         </form>
 
         <div class="border-t border-slate-200 px-6 py-5">
-            <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                <h2 class="text-lg font-bold text-blue-900">
+            <div class="tn-session-security-panel rounded-2xl border p-5">
+                <h2 class="tn-session-security-title text-lg font-bold">
                     Session Security
                 </h2>
 
-                <p class="mt-1 text-sm leading-6 text-blue-800">
+                <p class="tn-session-security-description mt-1 text-sm leading-6">
                     Sign out this account from every other browser or device.
                     This browser will remain signed in.
                 </p>
@@ -221,7 +329,7 @@
 
                     <div>
                         <label for="other_sessions_password"
-                               class="mb-2 block text-sm font-semibold text-slate-700">
+                               class="tn-session-security-label mb-2 block text-sm font-semibold">
                             Current Password
                         </label>
 
@@ -230,7 +338,7 @@
                                type="password"
                                required
                                autocomplete="current-password"
-                               class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                               class="tn-session-security-input w-full rounded-xl border px-4 py-2.5 text-sm shadow-sm outline-none transition">
 
                         @error('password', 'logoutOtherSessions')
                             <p class="mt-2 text-sm font-medium text-red-600">
