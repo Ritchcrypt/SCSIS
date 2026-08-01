@@ -38,6 +38,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta
+        name="theme-preference-url"
+        content="{{ route('theme-preference.update') }}"
+    >
     <title>TabangNow</title>
     <link
     rel="icon"
@@ -56,6 +60,855 @@
 </head>
 
 <body class="bg-slate-100 text-slate-900">
+    <script>
+        (() => {
+            if (window.__tabangNowThemeNoReloadInstalled) {
+                return;
+            }
+
+            window.__tabangNowThemeNoReloadInstalled = true;
+
+            const themeUrl = document
+                .querySelector('meta[name="theme-preference-url"]')
+                ?.getAttribute('content') ?? '';
+
+            const csrfToken = document
+                .querySelector('meta[name="csrf-token"]')
+                ?.getAttribute('content') ?? '';
+
+            const root = document.documentElement;
+
+            let pendingRequest = null;
+            let latestRequestId = 0;
+
+            if (!themeUrl) {
+                console.error(
+                    'Theme preference URL is missing.'
+                );
+
+                return;
+            }
+
+            function normalizeThemeMode(mode) {
+                const normalized = String(mode ?? '')
+                    .trim()
+                    .toLowerCase();
+
+                return normalized === 'white'
+                    ? 'light'
+                    : normalized;
+            }
+
+            function getThemeLabel(mode) {
+                const labels = {
+                    light: 'White',
+                    dark: 'Dark',
+                    system: 'System',
+                    custom: 'Custom',
+                };
+
+                return labels[
+                    normalizeThemeMode(mode)
+                ] ?? 'System';
+            }
+
+            function sameThemePath(url) {
+                try {
+                    const candidate = new URL(
+                        url,
+                        window.location.href
+                    );
+
+                    const expected = new URL(
+                        themeUrl,
+                        window.location.href
+                    );
+
+                    return (
+                        candidate.pathname
+                        === expected.pathname
+                    );
+                } catch (error) {
+                    return false;
+                }
+            }
+
+            function isThemeForm(form) {
+                if (
+                    !(form instanceof HTMLFormElement)
+                ) {
+                    return false;
+                }
+
+                return sameThemePath(form.action)
+                    || form.querySelector(
+                        '[name="theme_mode"]'
+                    ) !== null;
+            }
+
+            function getThemeForm(control) {
+                if (!control) {
+                    return null;
+                }
+
+                const form = control.form
+                    || control.closest?.('form')
+                    || null;
+
+                return isThemeForm(form)
+                    ? form
+                    : null;
+            }
+
+            function getControlThemeMode(control) {
+                if (!control) {
+                    return '';
+                }
+
+                const dataMode = control.getAttribute?.(
+                    'data-theme-mode'
+                );
+
+                if (dataMode) {
+                    return normalizeThemeMode(
+                        dataMode
+                    );
+                }
+
+                if (
+                    control.getAttribute?.('name')
+                    === 'theme_mode'
+                ) {
+                    return normalizeThemeMode(
+                        control.value
+                    );
+                }
+
+                const nestedControl =
+                    control.querySelector?.(
+                        '[name="theme_mode"],'
+                        + '[data-theme-mode]'
+                    );
+
+                if (nestedControl) {
+                    return getControlThemeMode(
+                        nestedControl
+                    );
+                }
+
+                const form = getThemeForm(control);
+
+                if (!form) {
+                    return '';
+                }
+
+                const checkedControl =
+                    form.querySelector(
+                        '[name="theme_mode"]:checked'
+                    );
+
+                if (checkedControl) {
+                    return normalizeThemeMode(
+                        checkedControl.value
+                    );
+                }
+
+                const themeField =
+                    form.querySelector(
+                        '[name="theme_mode"]'
+                    );
+
+                return normalizeThemeMode(
+                    themeField?.value ?? ''
+                );
+            }
+
+            function getThemeMode(
+                form,
+                submitter = null
+            ) {
+                const submitterMode =
+                    getControlThemeMode(submitter);
+
+                if (submitterMode) {
+                    return submitterMode;
+                }
+
+                const checkedControl =
+                    form.querySelector(
+                        '[name="theme_mode"]:checked'
+                    );
+
+                if (checkedControl) {
+                    return normalizeThemeMode(
+                        checkedControl.value
+                    );
+                }
+
+                const themeField =
+                    form.querySelector(
+                        '[name="theme_mode"]'
+                    );
+
+                return normalizeThemeMode(
+                    themeField?.value ?? ''
+                );
+            }
+
+            function getCustomColor(form) {
+                const field = form.querySelector(
+                    '[name="theme_custom_color"]'
+                );
+
+                return String(
+                    field?.value ?? ''
+                ).trim();
+            }
+
+            function getThemeOptionRow(control) {
+                if (!control) {
+                    return null;
+                }
+
+                const directRow = control.closest?.(
+                    '[data-theme-option],'
+                    + '[role="menuitemradio"],'
+                    + '[role="radio"],'
+                    + 'button,'
+                    + 'label'
+                );
+
+                if (directRow) {
+                    return directRow;
+                }
+
+                const form = getThemeForm(control);
+
+                if (!form) {
+                    return control.parentElement;
+                }
+
+                return form.querySelector(
+                    '[data-theme-option],'
+                    + '[role="menuitemradio"],'
+                    + '[role="radio"],'
+                    + 'button,'
+                    + 'label'
+                ) || form;
+            }
+
+            function getThemeTitleElement(
+                row,
+                mode
+            ) {
+                if (!row) {
+                    return null;
+                }
+
+                const expectedLabel =
+                    getThemeLabel(mode);
+
+                const descendants = Array.from(
+                    row.querySelectorAll(
+                        'span, p, strong, div'
+                    )
+                );
+
+                return descendants.find(
+                    (element) => (
+                        element.children.length === 0
+                        && element.textContent
+                            .trim()
+                            .toLowerCase()
+                            === expectedLabel
+                                .toLowerCase()
+                    )
+                ) || null;
+            }
+
+            function hideServerCheckmarks(row) {
+                if (!row) {
+                    return;
+                }
+
+                row.querySelectorAll(
+                    '[data-theme-check]'
+                ).forEach((checkmark) => {
+                    checkmark.hidden = true;
+                });
+
+                Array.from(
+                    row.querySelectorAll('span')
+                ).forEach((span) => {
+                    if (
+                        !span.hasAttribute(
+                            'data-theme-live-check'
+                        )
+                        && span.textContent.trim()
+                            === '✓'
+                    ) {
+                        span.hidden = true;
+                    }
+                });
+            }
+
+            function ensureLiveCheckmark(row) {
+                let checkmark = row.querySelector(
+                    '[data-theme-live-check]'
+                );
+
+                if (checkmark) {
+                    return checkmark;
+                }
+
+                checkmark =
+                    document.createElement('span');
+
+                checkmark.setAttribute(
+                    'data-theme-live-check',
+                    ''
+                );
+
+                checkmark.setAttribute(
+                    'aria-hidden',
+                    'true'
+                );
+
+                checkmark.textContent = '✓';
+
+                Object.assign(
+                    checkmark.style,
+                    {
+                        position: 'absolute',
+                        top: '50%',
+                        right: '0.9rem',
+                        transform:
+                            'translateY(-50%)',
+                        color: '#2563eb',
+                        fontSize: '1.1rem',
+                        fontWeight: '700',
+                        lineHeight: '1',
+                        pointerEvents: 'none',
+                    }
+                );
+
+                row.appendChild(checkmark);
+
+                return checkmark;
+            }
+
+            function syncThemePreferenceUi(mode) {
+                const selectedMode =
+                    normalizeThemeMode(mode);
+
+                const controls = Array.from(
+                    document.querySelectorAll(
+                        '[name="theme_mode"],'
+                        + '[data-theme-mode]'
+                    )
+                );
+
+                const processedRows = new Set();
+
+                controls.forEach((control) => {
+                    const controlMode =
+                        getControlThemeMode(control);
+
+                    if (!controlMode) {
+                        return;
+                    }
+
+                    const selected =
+                        controlMode === selectedMode;
+
+                    if (
+                        control
+                        instanceof HTMLInputElement
+                        && (
+                            control.type === 'radio'
+                            || control.type
+                                === 'checkbox'
+                        )
+                    ) {
+                        control.checked = selected;
+                    }
+
+                    control.setAttribute(
+                        'aria-checked',
+                        selected
+                            ? 'true'
+                            : 'false'
+                    );
+
+                    const row =
+                        getThemeOptionRow(control);
+
+                    if (
+                        !row
+                        || processedRows.has(row)
+                    ) {
+                        return;
+                    }
+
+                    processedRows.add(row);
+
+                    row.setAttribute(
+                        'data-theme-selected',
+                        selected
+                            ? 'true'
+                            : 'false'
+                    );
+
+                    row.setAttribute(
+                        'aria-checked',
+                        selected
+                            ? 'true'
+                            : 'false'
+                    );
+
+                    row.style.position = 'relative';
+                    row.style.paddingRight =
+                        '2.75rem';
+
+                    row.style.backgroundColor =
+                        selected
+                            ? '#eff6ff'
+                            : 'transparent';
+
+                    row.style.boxShadow = selected
+                        ? 'inset 0 0 0 1px '
+                            + 'rgba(191, 219, 254, 0.7)'
+                        : 'none';
+
+                    const title =
+                        getThemeTitleElement(
+                            row,
+                            controlMode
+                        );
+
+                    if (title) {
+                        title.style.color = selected
+                            ? '#1d4ed8'
+                            : '#0f172a';
+                    }
+
+                    hideServerCheckmarks(row);
+
+                    const liveCheckmark =
+                        ensureLiveCheckmark(row);
+
+                    liveCheckmark.hidden =
+                        !selected;
+                });
+
+                document.querySelectorAll(
+                    '[data-theme-current]'
+                ).forEach((element) => {
+                    element.textContent =
+                        'Current: '
+                        + getThemeLabel(
+                            selectedMode
+                        );
+                });
+
+                document.querySelectorAll(
+                    'p, span, small'
+                ).forEach((element) => {
+                    if (
+                        element.children.length > 0
+                    ) {
+                        return;
+                    }
+
+                    const text =
+                        element.textContent.trim();
+
+                    if (
+                        /^Current:\s*(White|Light|Dark|System|Custom)$/i
+                            .test(text)
+                    ) {
+                        element.textContent =
+                            'Current: '
+                            + getThemeLabel(
+                                selectedMode
+                            );
+                    }
+                });
+            }
+
+            function applyTheme(
+                mode,
+                customColor = ''
+            ) {
+                const normalizedMode =
+                    normalizeThemeMode(mode);
+
+                const allowedModes = [
+                    'light',
+                    'dark',
+                    'system',
+                    'custom',
+                ];
+
+                if (
+                    !allowedModes.includes(
+                        normalizedMode
+                    )
+                ) {
+                    return;
+                }
+
+                root.setAttribute(
+                    'data-theme',
+                    normalizedMode
+                );
+
+                const systemUsesDark =
+                    window.matchMedia(
+                        '(prefers-color-scheme: dark)'
+                    ).matches;
+
+                const resolvedDark =
+                    normalizedMode === 'dark'
+                    || (
+                        normalizedMode === 'system'
+                        && systemUsesDark
+                    );
+
+                root.classList.toggle(
+                    'dark',
+                    resolvedDark
+                );
+
+                if (
+                    normalizedMode === 'custom'
+                    && /^#[0-9A-Fa-f]{6}$/.test(
+                        customColor
+                    )
+                ) {
+                    const normalizedColor =
+                        customColor.toLowerCase();
+
+                    root.setAttribute(
+                        'data-theme-custom-color',
+                        normalizedColor
+                    );
+
+                    root.style.setProperty(
+                        '--tn-accent',
+                        normalizedColor
+                    );
+                } else {
+                    root.removeAttribute(
+                        'data-theme-custom-color'
+                    );
+
+                    root.style.removeProperty(
+                        '--tn-accent'
+                    );
+                }
+
+                syncThemePreferenceUi(
+                    normalizedMode
+                );
+
+                window.dispatchEvent(
+                    new CustomEvent(
+                        'tabangnow:theme-changed',
+                        {
+                            detail: {
+                                mode:
+                                    normalizedMode,
+                                customColor,
+                            },
+                        }
+                    )
+                );
+            }
+
+            async function saveTheme(
+                form,
+                submitter = null
+            ) {
+                if (!isThemeForm(form)) {
+                    return;
+                }
+
+                const mode = getThemeMode(
+                    form,
+                    submitter
+                );
+
+                if (!mode) {
+                    console.error(
+                        'No theme mode was selected.'
+                    );
+
+                    return;
+                }
+
+                const customColor =
+                    getCustomColor(form);
+
+                const previousMode =
+                    root.getAttribute(
+                        'data-theme'
+                    ) || 'system';
+
+                const previousCustomColor =
+                    root.getAttribute(
+                        'data-theme-custom-color'
+                    ) || '';
+
+                applyTheme(
+                    mode,
+                    customColor
+                );
+
+                if (pendingRequest) {
+                    pendingRequest.abort();
+                }
+
+                const requestController =
+                    new AbortController();
+
+                pendingRequest =
+                    requestController;
+
+                const requestId =
+                    ++latestRequestId;
+
+                form.setAttribute(
+                    'aria-busy',
+                    'true'
+                );
+
+                const formData =
+                    new FormData(form);
+
+                formData.set(
+                    '_token',
+                    csrfToken
+                );
+
+                formData.set(
+                    '_method',
+                    'PATCH'
+                );
+
+                formData.set(
+                    'theme_mode',
+                    mode
+                );
+
+                if (
+                    mode === 'custom'
+                    && customColor !== ''
+                ) {
+                    formData.set(
+                        'theme_custom_color',
+                        customColor
+                    );
+                } else {
+                    formData.delete(
+                        'theme_custom_color'
+                    );
+                }
+
+                try {
+                    const response = await fetch(
+                        themeUrl,
+                        {
+                            method: 'POST',
+                            body: formData,
+                            credentials:
+                                'same-origin',
+                            redirect: 'follow',
+                            signal:
+                                requestController
+                                    .signal,
+                            headers: {
+                                Accept:
+                                    'application/json',
+                                'X-Requested-With':
+                                    'XMLHttpRequest',
+                                'X-CSRF-TOKEN':
+                                    csrfToken,
+                            },
+                        }
+                    );
+
+                    if (!response.ok) {
+                        let message =
+                            'The theme could not '
+                            + 'be saved.';
+
+                        try {
+                            const data =
+                                await response.json();
+
+                            message =
+                                data.message
+                                || message;
+                        } catch (error) {
+                            // Keep the safe message.
+                        }
+
+                        throw new Error(message);
+                    }
+                } catch (error) {
+                    if (
+                        error.name ===
+                        'AbortError'
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        requestId
+                        === latestRequestId
+                    ) {
+                        applyTheme(
+                            previousMode,
+                            previousCustomColor
+                        );
+
+                        console.error(error);
+
+                        window.alert(
+                            error.message
+                            || (
+                                'The theme could '
+                                + 'not be saved. '
+                                + 'Please try again.'
+                            )
+                        );
+                    }
+                } finally {
+                    form.removeAttribute(
+                        'aria-busy'
+                    );
+
+                    if (
+                        pendingRequest
+                        === requestController
+                    ) {
+                        pendingRequest = null;
+                    }
+                }
+            }
+
+            document.addEventListener(
+                'submit',
+                (event) => {
+                    const form = event.target;
+
+                    if (!isThemeForm(form)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+
+                    saveTheme(
+                        form,
+                        event.submitter
+                    );
+                },
+                true
+            );
+
+            document.addEventListener(
+                'change',
+                (event) => {
+                    const control =
+                        event.target;
+
+                    if (
+                        !control.matches?.(
+                            '[name="theme_mode"],'
+                            + '[name="theme_custom_color"]'
+                        )
+                    ) {
+                        return;
+                    }
+
+                    const form =
+                        getThemeForm(control);
+
+                    if (!form) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+
+                    saveTheme(
+                        form,
+                        control
+                    );
+                },
+                true
+            );
+
+            const nativeSubmit =
+                HTMLFormElement.prototype.submit;
+
+            HTMLFormElement.prototype.submit =
+                function () {
+                    if (isThemeForm(this)) {
+                        saveTheme(this);
+
+                        return;
+                    }
+
+                    nativeSubmit.call(this);
+                };
+
+            function initializeThemeUi() {
+                syncThemePreferenceUi(
+                    root.getAttribute(
+                        'data-theme'
+                    ) || 'system'
+                );
+            }
+
+            if (
+                document.readyState
+                === 'loading'
+            ) {
+                document.addEventListener(
+                    'DOMContentLoaded',
+                    initializeThemeUi,
+                    {
+                        once: true,
+                    }
+                );
+            } else {
+                initializeThemeUi();
+            }
+
+            document.addEventListener(
+                'livewire:navigated',
+                initializeThemeUi
+            );
+
+            window.matchMedia(
+                '(prefers-color-scheme: dark)'
+            ).addEventListener(
+                'change',
+                () => {
+                    if (
+                        root.getAttribute(
+                            'data-theme'
+                        ) === 'system'
+                    ) {
+                        applyTheme('system');
+                    }
+                }
+            );
+        })();
+    </script>
     <div class="flex min-h-screen">
         <aside id="adminSidebar"
                class="fixed left-0 top-0 z-30 flex h-screen w-72 translate-x-0 flex-col overflow-hidden bg-blue-950 text-white transition-transform duration-300 ease-in-out">

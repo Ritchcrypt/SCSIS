@@ -93,9 +93,9 @@
     <form method="POST" action="{{ $storeUrl }}" enctype="multipart/form-data" class="space-y-6">
         @csrf
 
-        <div class="grid gap-6 xl:grid-cols-3">
-            {{-- Main Form --}}
-            <div class="space-y-6 xl:col-span-2">
+        <div class="grid w-full min-w-0 gap-6">
+    {{-- Main Form --}}
+    <div class="w-full min-w-0 space-y-6">
                 {{-- Incident Details --}}
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-6 py-4">
@@ -379,7 +379,11 @@
                 </button>
             </div>
 
-            <div id="incidentCreateMap" class="h-[360px] w-full rounded-2xl border border-slate-200"></div>
+            <div
+    id="incidentCreateMap"
+    class="relative isolate h-[360px] w-full overflow-hidden rounded-2xl border border-slate-200"
+    style="z-index: 0 !important; contain: paint;"
+></div>
         </div>
 
         <input id="latitude" type="hidden" name="latitude" value="{{ old('latitude') }}">
@@ -423,7 +427,7 @@
 </div>
 
             {{-- Right Panel --}}
-            <div class="space-y-6">
+<div class="w-full min-w-0 space-y-6">
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-6 py-4">
                         <h2 class="text-base font-bold text-slate-900">
@@ -517,6 +521,17 @@
 
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+      
+      <style>
+    #incidentCreateMap,
+    #incidentCreateMap.leaflet-container {
+        position: relative !important;
+        z-index: 0 !important;
+        isolation: isolate !important;
+        overflow: hidden !important;
+        contain: paint;
+    }
+</style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 

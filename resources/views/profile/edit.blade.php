@@ -54,6 +54,64 @@
         box-shadow: 0 0 0 3px rgba(191, 219, 254, 0.75);
     }
 
+    .tn-password-wrapper {
+        position: relative;
+    }
+
+    .tn-password-input {
+        padding-right: 3rem !important;
+        background-color: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+        caret-color: #ffffff !important;
+    }
+
+    .tn-password-input::placeholder {
+        color: #94a3b8 !important;
+        -webkit-text-fill-color: #94a3b8 !important;
+        opacity: 1;
+    }
+
+    #selfResetPasswordPanel label {
+        color: #78350f !important;
+    }
+
+    #selfDeleteAccountPanel label {
+        color: #991b1b !important;
+    }
+
+    .tn-password-toggle {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        display: inline-flex;
+        width: 3rem;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 0 0.75rem 0.75rem 0;
+        background: transparent;
+        color: #64748b;
+        cursor: pointer;
+    }
+
+    .tn-password-toggle:hover {
+        color: #1d4ed8;
+    }
+
+    .tn-password-toggle:focus-visible {
+        outline: 2px solid #3b82f6;
+        outline-offset: -2px;
+    }
+
+    .tn-password-toggle svg {
+        width: 1.25rem;
+        height: 1.25rem;
+        pointer-events: none;
+    }
+
     html[data-theme='dark'] .tn-session-security-panel {
         border-color: #334155;
         background-color: #0f172a;
@@ -81,6 +139,14 @@
     html[data-theme='dark'] .tn-session-security-input:focus {
         border-color: #60a5fa;
         box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.45);
+    }
+
+    html[data-theme='dark'] .tn-password-toggle {
+        color: #cbd5e1;
+    }
+
+    html[data-theme='dark'] .tn-password-toggle:hover {
+        color: #93c5fd;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -118,7 +184,118 @@
             border-color: #60a5fa;
             box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.45);
         }
+
+        html[data-theme='system'] .tn-password-toggle,
+        html:not([data-theme]) .tn-password-toggle {
+            color: #cbd5e1;
+        }
+
+        html[data-theme='system'] .tn-password-toggle:hover,
+        html:not([data-theme]) .tn-password-toggle:hover {
+            color: #93c5fd;
+        }
     }
+
+    /* --------------------------------------------------------------------------
+   Final password-field color correction
+   -------------------------------------------------------------------------- */
+
+input.tn-password-input {
+    padding-right: 3rem !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+}
+
+/* Light, white, and custom themes */
+html[data-theme='light'] input.tn-password-input,
+html[data-theme='white'] input.tn-password-input,
+html[data-theme='custom'] input.tn-password-input,
+html:not([data-theme]) input.tn-password-input {
+    border-color: #cbd5e1 !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a !important;
+}
+
+/* Light-mode placeholders */
+html[data-theme='light'] input.tn-password-input::placeholder,
+html[data-theme='white'] input.tn-password-input::placeholder,
+html[data-theme='custom'] input.tn-password-input::placeholder,
+html:not([data-theme]) input.tn-password-input::placeholder {
+    color: #64748b !important;
+    -webkit-text-fill-color: #64748b !important;
+    opacity: 1 !important;
+}
+
+/* Dark theme */
+html[data-theme='dark'] input.tn-password-input {
+    border-color: #475569 !important;
+    background-color: #020617 !important;
+    color: #f8fafc !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    caret-color: #ffffff !important;
+}
+
+html[data-theme='dark'] input.tn-password-input::placeholder {
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
+    opacity: 1 !important;
+}
+
+/* System theme when the computer uses light mode */
+@media (prefers-color-scheme: light) {
+    html[data-theme='system'] input.tn-password-input {
+        border-color: #cbd5e1 !important;
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        -webkit-text-fill-color: #0f172a !important;
+        caret-color: #0f172a !important;
+    }
+
+    html[data-theme='system'] input.tn-password-input::placeholder {
+        color: #64748b !important;
+        -webkit-text-fill-color: #64748b !important;
+        opacity: 1 !important;
+    }
+}
+
+/* System theme when the computer uses dark mode */
+@media (prefers-color-scheme: dark) {
+    html[data-theme='system'] input.tn-password-input {
+        border-color: #475569 !important;
+        background-color: #020617 !important;
+        color: #f8fafc !important;
+        -webkit-text-fill-color: #f8fafc !important;
+        caret-color: #ffffff !important;
+    }
+
+    html[data-theme='system'] input.tn-password-input::placeholder {
+        color: #94a3b8 !important;
+        -webkit-text-fill-color: #94a3b8 !important;
+        opacity: 1 !important;
+    }
+}
+
+/* Keep browser autofill text readable */
+html[data-theme='light'] input.tn-password-input:-webkit-autofill,
+html[data-theme='white'] input.tn-password-input:-webkit-autofill,
+html[data-theme='custom'] input.tn-password-input:-webkit-autofill {
+    -webkit-text-fill-color: #0f172a !important;
+}
+
+html[data-theme='dark'] input.tn-password-input:-webkit-autofill {
+    -webkit-text-fill-color: #f8fafc !important;
+}
+
+/* Readable labels on the warning panels */
+#selfResetPasswordPanel label {
+    color: #78350f !important;
+}
+
+#selfDeleteAccountPanel label {
+    color: #991b1b !important;
+}
 </style>
 
 <div class="space-y-6">
@@ -297,7 +474,7 @@
                 </div>
             </div>
 
-                        <div class="flex justify-end gap-3">
+            <div class="flex justify-end gap-3">
                 <a href="{{ route('dashboard') }}"
                    class="inline-flex rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                     Cancel
@@ -333,12 +510,30 @@
                             Current Password
                         </label>
 
-                        <input id="other_sessions_password"
-                               name="password"
-                               type="password"
-                               required
-                               autocomplete="current-password"
-                               class="tn-session-security-input w-full rounded-xl border px-4 py-2.5 text-sm shadow-sm outline-none transition">
+                        <div class="tn-password-wrapper">
+                            <input id="other_sessions_password"
+                                   name="password"
+                                   type="password"
+                                   required
+                                   autocomplete="current-password"
+                                   class="tn-session-security-input tn-password-input w-full rounded-xl border px-4 py-2.5 text-sm shadow-sm outline-none transition">
+
+                            <button type="button"
+                                    class="tn-password-toggle"
+                                    data-password-toggle="other_sessions_password"
+                                    aria-label="Show password"
+                                    aria-pressed="false">
+                                <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+
+                                <svg data-eye-closed class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.6 5.4A9.8 9.8 0 0 1 12 5.25C18 5.25 21.75 12 21.75 12a16.8 16.8 0 0 1-3.1 3.95M6.1 6.1C3.65 7.75 2.25 12 2.25 12S6 18.75 12 18.75a9.9 9.9 0 0 0 3.2-.53M9.88 9.88a3 3 0 0 0 4.24 4.24"/>
+                                </svg>
+                            </button>
+                        </div>
 
                         @error('password', 'logoutOtherSessions')
                             <p class="mt-2 text-sm font-medium text-red-600">
@@ -388,7 +583,7 @@
                     </p>
 
                     <form method="POST"
-                         action="{{ route('profile.password.update') }}"
+                          action="{{ route('profile.password.update') }}"
                           class="mt-5 space-y-4">
                         @csrf
                         @method('PATCH')
@@ -398,11 +593,29 @@
                                 Current Password
                             </label>
 
-                            <input id="current_password"
-                                   name="current_password"
-                                   type="password"
-                                   autocomplete="current-password"
-                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                            <div class="tn-password-wrapper">
+                                <input id="current_password"
+                                       name="current_password"
+                                       type="password"
+                                       autocomplete="current-password"
+                                       class="tn-password-input w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                                <button type="button"
+                                        class="tn-password-toggle"
+                                        data-password-toggle="current_password"
+                                        aria-label="Show password"
+                                        aria-pressed="false">
+                                    <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+
+                                    <svg data-eye-closed class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.6 5.4A9.8 9.8 0 0 1 12 5.25C18 5.25 21.75 12 21.75 12a16.8 16.8 0 0 1-3.1 3.95M6.1 6.1C3.65 7.75 2.25 12 2.25 12S6 18.75 12 18.75a9.9 9.9 0 0 0 3.2-.53M9.88 9.88a3 3 0 0 0 4.24 4.24"/>
+                                    </svg>
+                                </button>
+                            </div>
 
                             @error('current_password', 'updatePassword')
                                 <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
@@ -414,11 +627,29 @@
                                 New Password
                             </label>
 
-                            <input id="password"
-                                   name="password"
-                                   type="password"
-                                   autocomplete="new-password"
-                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                            <div class="tn-password-wrapper">
+                                <input id="password"
+                                       name="password"
+                                       type="password"
+                                       autocomplete="new-password"
+                                       class="tn-password-input w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                                <button type="button"
+                                        class="tn-password-toggle"
+                                        data-password-toggle="password"
+                                        aria-label="Show password"
+                                        aria-pressed="false">
+                                    <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+
+                                    <svg data-eye-closed class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.6 5.4A9.8 9.8 0 0 1 12 5.25C18 5.25 21.75 12 21.75 12a16.8 16.8 0 0 1-3.1 3.95M6.1 6.1C3.65 7.75 2.25 12 2.25 12S6 18.75 12 18.75a9.9 9.9 0 0 0 3.2-.53M9.88 9.88a3 3 0 0 0 4.24 4.24"/>
+                                    </svg>
+                                </button>
+                            </div>
 
                             @error('password', 'updatePassword')
                                 <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
@@ -430,11 +661,29 @@
                                 Confirm New Password
                             </label>
 
-                            <input id="password_confirmation"
-                                   name="password_confirmation"
-                                   type="password"
-                                   autocomplete="new-password"
-                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                            <div class="tn-password-wrapper">
+                                <input id="password_confirmation"
+                                       name="password_confirmation"
+                                       type="password"
+                                       autocomplete="new-password"
+                                       class="tn-password-input w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+
+                                <button type="button"
+                                        class="tn-password-toggle"
+                                        data-password-toggle="password_confirmation"
+                                        aria-label="Show password"
+                                        aria-pressed="false">
+                                    <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+
+                                    <svg data-eye-closed class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.6 5.4A9.8 9.8 0 0 1 12 5.25C18 5.25 21.75 12 21.75 12a16.8 16.8 0 0 1-3.1 3.95M6.1 6.1C3.65 7.75 2.25 12 2.25 12S6 18.75 12 18.75a9.9 9.9 0 0 0 3.2-.53M9.88 9.88a3 3 0 0 0 4.24 4.24"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="flex justify-end">
@@ -456,10 +705,10 @@
                         This will permanently delete your account. This action cannot be undone.
                     </p>
 
-                    <form method="POST"
+                    <form id="selfDeleteAccountForm"
+                          method="POST"
                           action="{{ route('profile.self-delete') }}"
-                          class="mt-5 space-y-4"
-                          onsubmit="return confirm('Permanently delete this account? This cannot be undone.');">
+                          class="mt-5 space-y-4">
                         @csrf
                         @method('DELETE')
 
@@ -468,11 +717,30 @@
                                 Confirm Password
                             </label>
 
-                            <input id="delete_password"
-                                   name="password"
-                                   type="password"
-                                   autocomplete="current-password"
-                                   class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100">
+                            <div class="tn-password-wrapper">
+                                <input id="delete_password"
+                                       name="password"
+                                       type="password"
+                                       required
+                                       autocomplete="current-password"
+                                       class="tn-password-input w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-100">
+
+                                <button type="button"
+                                        class="tn-password-toggle"
+                                        data-password-toggle="delete_password"
+                                        aria-label="Show password"
+                                        aria-pressed="false">
+                                    <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12s3.75-6.75 9.75-6.75S21.75 12 21.75 12 18 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+
+                                    <svg data-eye-closed class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.6 5.4A9.8 9.8 0 0 1 12 5.25C18 5.25 21.75 12 21.75 12a16.8 16.8 0 0 1-3.1 3.95M6.1 6.1C3.65 7.75 2.25 12 2.25 12S6 18.75 12 18.75a9.9 9.9 0 0 0 3.2-.53M9.88 9.88a3 3 0 0 0 4.24 4.24"/>
+                                    </svg>
+                                </button>
+                            </div>
 
                             @error('password', 'userDeletion')
                                 <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
@@ -491,4 +759,119 @@
         @endif
     </div>
 </div>
+
+<script>
+    (function () {
+        function initializePasswordToggles(root) {
+            const scope = root instanceof Element || root instanceof Document
+                ? root
+                : document;
+
+            scope.querySelectorAll('[data-password-toggle]').forEach(function (button) {
+                if (button.dataset.passwordToggleReady === 'true') {
+                    return;
+                }
+
+                button.dataset.passwordToggleReady = 'true';
+
+                button.addEventListener('click', function () {
+                    const inputId = button.getAttribute('data-password-toggle');
+                    const input = document.getElementById(inputId);
+
+                    if (! input) {
+                        return;
+                    }
+
+                    const shouldShow = input.type === 'password';
+
+                    input.type = shouldShow ? 'text' : 'password';
+                    button.setAttribute('aria-pressed', shouldShow ? 'true' : 'false');
+                    button.setAttribute(
+                        'aria-label',
+                        shouldShow ? 'Hide password' : 'Show password'
+                    );
+
+                    const openEye = button.querySelector('[data-eye-open]');
+                    const closedEye = button.querySelector('[data-eye-closed]');
+
+                    if (openEye) {
+                        openEye.classList.toggle('hidden', shouldShow);
+                    }
+
+                    if (closedEye) {
+                        closedEye.classList.toggle('hidden', ! shouldShow);
+                    }
+
+                    input.focus({ preventScroll: true });
+
+                    const cursorPosition = input.value.length;
+
+                    try {
+                        input.setSelectionRange(cursorPosition, cursorPosition);
+                    } catch (error) {
+                        // Some browser/input combinations do not support selection ranges.
+                    }
+                });
+            });
+        }
+
+        function initializeDeleteConfirmation() {
+            const form = document.getElementById('selfDeleteAccountForm');
+            const passwordInput = document.getElementById('delete_password');
+
+            if (
+                ! form
+                || ! passwordInput
+                || form.dataset.deleteConfirmationReady === 'true'
+            ) {
+                return;
+            }
+
+            form.dataset.deleteConfirmationReady = 'true';
+
+            form.addEventListener('submit', function (event) {
+                const passwordValue = passwordInput.value.trim();
+
+                if (! passwordValue) {
+                    event.preventDefault();
+
+                    passwordInput.setCustomValidity(
+                        'Enter your current password before deleting the account.'
+                    );
+                    passwordInput.reportValidity();
+                    passwordInput.focus({ preventScroll: false });
+
+                    window.setTimeout(function () {
+                        passwordInput.setCustomValidity('');
+                    }, 0);
+
+                    return;
+                }
+
+                const confirmed = window.confirm(
+                    'Permanently delete this account? This action cannot be undone.'
+                );
+
+                if (! confirmed) {
+                    event.preventDefault();
+                }
+            });
+        }
+
+        function bootPasswordToggles() {
+            initializePasswordToggles(document);
+            initializeDeleteConfirmation();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootPasswordToggles, {
+                once: true,
+            });
+        } else {
+            bootPasswordToggles();
+        }
+
+        document.addEventListener('livewire:navigated', bootPasswordToggles);
+    })();
+</script>
 @endsection
