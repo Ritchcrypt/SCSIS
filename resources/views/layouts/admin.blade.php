@@ -1438,5 +1438,92 @@
             });
         });
     </script>
+
+    <script>
+        (() => {
+            if (window.__tabangNowHistorySecurityV2Installed) {
+                return;
+            }
+
+            window.__tabangNowHistorySecurityV2Installed = true;
+
+            const root = document.documentElement;
+
+            function concealAuthenticatedDocument() {
+                root.setAttribute(
+                    'data-auth-history-hidden',
+                    'true'
+                );
+
+                root.style.setProperty(
+                    'visibility',
+                    'hidden',
+                    'important'
+                );
+
+                root.style.setProperty(
+                    'pointer-events',
+                    'none',
+                    'important'
+                );
+            }
+
+            function revealAuthenticatedDocument() {
+                root.removeAttribute(
+                    'data-auth-history-hidden'
+                );
+
+                root.style.removeProperty(
+                    'visibility'
+                );
+
+                root.style.removeProperty(
+                    'pointer-events'
+                );
+            }
+
+            function isHistoryTraversal(event = null) {
+                const navigationEntry = performance
+                    .getEntriesByType('navigation')[0];
+
+                return Boolean(
+                    event?.persisted
+                    || navigationEntry?.type
+                        === 'back_forward'
+                );
+            }
+
+            function refreshThroughLaravel() {
+                concealAuthenticatedDocument();
+                window.location.reload();
+            }
+
+            window.addEventListener(
+                'pagehide',
+                function () {
+                    concealAuthenticatedDocument();
+                }
+            );
+
+            window.addEventListener(
+                'pageshow',
+                function (event) {
+                    if (isHistoryTraversal(event)) {
+                        refreshThroughLaravel();
+                        return;
+                    }
+
+                    revealAuthenticatedDocument();
+                }
+            );
+
+            window.addEventListener(
+                'popstate',
+                function () {
+                    refreshThroughLaravel();
+                }
+            );
+        })();
+    </script>
 </body>
 </html>

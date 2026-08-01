@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->appendToGroup('web', [
+            \App\Http\Middleware\PreventAuthenticatedPageCaching::class,
+        ]);
+
         /*
         |--------------------------------------------------------------------------
         | Reverse-proxy HTTPS detection
@@ -70,6 +74,44 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        /*
+        |--------------------------------------------------------------------------
+        | TABANGNOW_EXPIRED_LOGOUT_REDIRECT
+        |--------------------------------------------------------------------------
+        |
+        | When the session has already expired, the logout form contains an old
+        | CSRF token. Redirect only that stale logout request to the login page.
+        | Other CSRF failures keep Laravel's normal 419 response.
+        |
+        */
+
+        $exceptions->render(function (
+            \Illuminate\Session\TokenMismatchException $exception,
+            \Illuminate\Http\Request $request
+        ) {
+            if ($request->expectsJson()) {
+                return null;
+            }
+
+            $isLogoutRequest =
+                $request->routeIs('logout')
+                || (
+                    $request->isMethod('post')
+                    && $request->is('logout')
+                );
+
+            if (! $isLogoutRequest) {
+                return null;
+            }
+
+            return redirect()
+                ->route('login')
+                ->with(
+                    'status',
+                    'Your session expired. Please sign in again.'
+                );
+        });
+
         //
     })
     ->create();
