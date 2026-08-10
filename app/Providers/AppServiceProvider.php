@@ -30,6 +30,7 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -37,11 +38,11 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        if ($this->app->environment('production')) {
+        URL::forceScheme('https');
     }
 
-    public function boot(): void
-    {
+    
         /*
         |--------------------------------------------------------------------------
         | Authentication security audit events
