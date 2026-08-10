@@ -19,6 +19,7 @@ use App\Http\Controllers\TanodRosterController;
 use App\Http\Controllers\TanodTaskController;
 use App\Http\Controllers\ThemePreferenceController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\NotificationPulseController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -67,6 +68,19 @@ Route::middleware(['auth', 'active.user'])->group(function () {
 
     Route::get('/incident-evidence/{evidenceId}/file', [IncidentController::class, 'showEvidenceFile'])
         ->name('incident-evidence.file');
+
+    Route::get(
+    '/notifications/pulse',
+    NotificationPulseController::class
+)
+    ->middleware('throttle:20,1')
+    ->name('notifications.pulse');
+
+Route::post(
+    '/notifications/{notification}/open',
+    [NotificationOpenController::class, 'open']
+)
+    ->name('notifications.open');
 
     Route::post('/notifications/{notification}/open', [NotificationOpenController::class, 'open'])
         ->name('notifications.open');
@@ -227,9 +241,6 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::get('/map', [BarangayMapController::class, 'index'])
             ->name('map.index');
-
-        Route::get('/tanods', [TanodRosterController::class, 'index'])
-            ->name('tanods.index');
 
         Route::post('/tanods', [TanodRosterController::class, 'store'])
             ->name('tanods.store');
@@ -415,6 +426,9 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
 
         Route::patch('/tanod-tasks/responses/{response}', [TanodTaskController::class, 'respond'])
             ->name('tanod-tasks.respond');
+
+Route::patch('/tanod-tasks/responses/{response}', [TanodTaskController::class, 'respond'])
+    ->name('tanod-tasks.respond');
 
         Route::get('/alerts', [TanodAlertController::class, 'index'])
             ->name('tanod-alerts.index');

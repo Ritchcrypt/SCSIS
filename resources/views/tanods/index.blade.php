@@ -3,6 +3,26 @@
 @section('title', 'Tanod Roster | DaoSystem')
 
 @section('content')
+@php
+    $authUser = auth()->user();
+
+    $isAdmin = $authUser?->isAdmin() ?? false;
+    $isOfficial = $authUser?->isOfficial() ?? false;
+
+    $canManageRoster = $isAdmin || $isOfficial;
+
+    $rosterRoutePrefix = match (true) {
+        $isAdmin => 'admin',
+        $isOfficial => 'official',
+        default => 'tanod',
+    };
+
+    $rosterIndexRoute = $rosterRoutePrefix . '.tanods.index';
+
+    $tableColumnCount = $canManageRoster
+        ? 7
+        : 6;
+@endphp
 <div class="space-y-6">
     {{-- Header --}}
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -16,11 +36,13 @@
             </p>
         </div>
 
-        <button type="button"
-                onclick="openAddTanodModal()"
-                class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
-            + Add Tanod
-        </button>
+        @if ($canManageRoster)
+    <button type="button"
+            onclick="openAddTanodModal()"
+            class="inline-flex items-center justify-center rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-900">
+        + Add Tanod
+    </button>
+@endif
     </div>
 
     {{-- Flash Messages --}}
@@ -43,7 +65,9 @@
     @endif
 
     {{-- Search --}}
-    <form method="GET" action="{{ route('admin.tanods.index') }}" class="max-w-xl">
+    <form method="GET"
+      action="{{ route($rosterIndexRoute) }}"
+      class="max-w-xl">
         <div class="relative">
             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
 
@@ -62,8 +86,8 @@
             <thead class="bg-slate-50">
                 <tr>
                     <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                        #
-                    </th>
+    Rank
+</th>
 
                     <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                         Tanod Member
@@ -78,6 +102,10 @@
                     </th>
 
                     <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+    No. of Responses
+</th>
+
+                    <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
                         Status
                     </th>
 
@@ -90,14 +118,13 @@
             <tbody class="divide-y divide-slate-200 bg-white">
                 @forelse ($tanods as $tanod)
                     @php
-                        $user = $tanod->user;
-                        $rowNumber = ($tanods->currentPage() - 1) * $tanods->perPage() + $loop->iteration;
-                    @endphp
+    $user = $tanod->user;
+@endphp
 
                     <tr>
                         <td class="whitespace-nowrap px-5 py-4 text-sm font-bold text-slate-600">
-                            #{{ $rowNumber }}
-                        </td>
+    #{{ (int) ($tanod->response_rank ?? 0) }}
+</td>
 
                         <td class="px-5 py-4">
                             <div class="flex items-center gap-4">
@@ -128,16 +155,29 @@
                         </td>
 
                         <td class="whitespace-nowrap px-5 py-4">
+    <span
+        title="Accepted task responses"
+        class="inline-flex min-w-10 items-center justify-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100"
+    >
+        {{ (int) ($tanod->accepted_responses_count ?? 0) }}
+    </span>
+</td>
+
+                        <td class="whitespace-nowrap px-5 py-4">
                             <span class="rounded-full border px-3 py-1 text-xs font-bold {{ $tanod->status_badge_class }}">
                                 {{ $tanod->display_status }}
                             </span>
                         </td>
 
+                        @if ($canManageRoster)
                         <td class="whitespace-nowrap px-5 py-4 text-right">
                             <div class="flex items-center justify-end gap-2">
                                 <button type="button"
                                         onclick="openEditTanodModal(this)"
-                                        data-update-url="{{ route('admin.tanods.update', $tanod) }}"
+                                        data-update-url="{{ route(
+    $rosterRoutePrefix . '.tanods.update',
+    $tanod
+) }}"
                                         data-full-name="{{ e($user?->name) }}"
                                         data-contact-number="{{ e($tanod->contact_number) }}"
                                         data-email="{{ e($user?->email) }}"
@@ -164,7 +204,10 @@
                                 </button>
 
                                 <form method="POST"
-                                      action="{{ route('admin.tanods.destroy', $tanod) }}"
+                                      action="{{ route(
+    $rosterRoutePrefix . '.tanods.destroy',
+    $tanod
+) }}"
                                       class="m-0">
                                     @csrf
                                     @method('DELETE')
@@ -192,10 +235,12 @@
                                 </form>
                             </div>
                         </td>
+                        @endif
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="px-5 py-14 text-center">
+                        <td colspan="{{ $tableColumnCount }}"
+    class="px-5 py-14 text-center"> class="px-5 py-14 text-center">
                             <p class="text-sm font-semibold text-slate-700">
                                 No tanod members found.
                             </p>
@@ -217,6 +262,7 @@
     @endif
 </div>
 
+@if ($canManageRoster)
 {{-- Add Tanod Modal --}}
 <div id="addTanodModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
     <div class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
@@ -232,7 +278,9 @@
             </button>
         </div>
 
-        <form method="POST" action="{{ route('admin.tanods.store') }}" class="space-y-5">
+        <form method="POST"
+      action="{{ route($rosterRoutePrefix . '.tanods.store') }}"
+      class="space-y-5">
             @csrf
 
             <div class="grid gap-5 md:grid-cols-2">
@@ -326,6 +374,7 @@
                 &times;
             </button>
         </div>
+        @endif
 
         <form id="editTanodForm" method="POST" action="#" class="space-y-5">
             @csrf

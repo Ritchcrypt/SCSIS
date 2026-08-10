@@ -110,76 +110,123 @@ class CaseManagementController extends Controller
     }
 
     public function store(Request $request): RedirectResponse
-    {
-        Gate::authorize('create', CaseRecord::class);
+{
+    Gate::authorize('create', CaseRecord::class);
 
-        $validated = $request->validate($this->validationRules());
+    $validated = $request->validate(
+        $this->validationRules()
+    );
 
-        $createdCase = null;
+    $createdCase = null;
 
-        DB::transaction(function () use (
-            $request,
-            $validated,
-            &$createdCase
-        ): void {
-            $caseNumber = trim((string) ($validated['case_number'] ?? ''));
-
-            if (
-                $caseNumber === ''
-                || strtoupper($caseNumber) === 'AUTO-GENERATED'
-            ) {
-                $caseNumber = $this->generateCaseNumber();
-            }
-
-            if (
-                CaseRecord::query()
-                    ->where('case_number', $caseNumber)
-                    ->exists()
-            ) {
-                throw ValidationException::withMessages([
-                    'case_number' => 'The case number has already been taken.',
-                ]);
-            }
-
-            $createdCase = CaseRecord::create([
-                'case_number' => $caseNumber,
-                'case_type' => $validated['case_type'],
-                'subject_name' => $validated['subject_name'],
-                'contact' => $this->nullableText($validated['contact'] ?? null),
-                'address' => $this->nullableText($validated['address'] ?? null),
-                'incident_id' => $validated['incident_id'] ?? null,
-                'incident_title' => $this->incidentTitle(
-                    $validated['incident_id'] ?? null,
-                    $validated['incident_title'] ?? null
-                ),
-                'status' => $validated['status'],
-                'hearing_date' => $validated['hearing_date'] ?? null,
-                'handled_by' => $this->nullableText($validated['handled_by'] ?? null),
-                'resolution' => $this->nullableText($validated['resolution'] ?? null),
-                'notes' => $this->nullableText($validated['notes'] ?? null),
-                'created_by' => $request->user()->id,
-                'updated_by' => $request->user()->id,
-            ]);
-        });
-
-        $this->recordOperationalActivity(
-            event: 'case.created',
-            category: 'case',
-            description: 'A case record was created.',
-            metadata: [
-                'case_id' => (int) $createdCase->id,
-                'case_number' => $createdCase->case_number,
-                'case_type' => $createdCase->case_type,
-                'status' => $createdCase->status,
-                'incident_id' => $createdCase->incident_id,
-            ],
-            request: $request,
+    DB::transaction(function () use (
+        $request,
+        $validated,
+        &$createdCase
+    ): void {
+        $caseNumber = trim(
+            (string) ($validated['case_number'] ?? '')
         );
 
-        return redirect()
-            ->route('admin.cases.index')
-            ->with('success', 'Case record created successfully.');
+        if (
+            $caseNumber === ''
+            || strtoupper($caseNumber) === 'AUTO-GENERATED'
+        ) {
+            $caseNumber = $this->generateCaseNumber();
+        }
+
+        if (
+            CaseRecord::query()
+                ->where('case_number', $caseNumber)
+                ->exists()
+        ) {
+            throw ValidationException::withMessages([
+                'case_number' => 'The case number has already been taken.',
+            ]);
+        }
+
+        $createdCase = CaseRecord::create([
+            'case_number' => $caseNumber,
+            'case_type' => $validated['case_type'],
+            'subject_name' => $validated['subject_name'],
+
+            'contact' => $this->nullableText(
+                $validated['contact'] ?? null
+            ),
+
+            'address' => $this->nullableText(
+                $validated['address'] ?? null
+            ),
+
+            'incident_id' => $validated['incident_id'] ?? null,
+
+            'incident_title' => $this->incidentTitle(
+                $validated['incident_id'] ?? null,
+                $validated['incident_title'] ?? null
+            ),
+
+            'status' => $validated['status'],
+
+            'hearing_date' =>
+                $validated['hearing_date'] ?? null,
+
+            'handled_by' => $this->nullableText(
+                $validated['handled_by'] ?? null
+            ),
+
+            'resolution' => $this->nullableText(
+                $validated['resolution'] ?? null
+            ),
+
+            'notes' => $this->nullableText(
+                $validated['notes'] ?? null
+            ),
+
+            'created_by' => $request->user()->id,
+            'updated_by' => $request->user()->id,
+        ]);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Case creation integrity check
+    |--------------------------------------------------------------------------
+    |
+    | The transaction above must return a persisted CaseRecord. This guard
+    | prevents the application from continuing with an incomplete result
+    | and tells static analysis that $createdCase is no longer nullable.
+    |
+    */
+    if (
+        ! $createdCase instanceof CaseRecord
+        || ! $createdCase->exists
+    ) {
+        throw new \RuntimeException(
+            'Case creation completed without a persisted case record.'
+        );
     }
+
+    $this->recordOperationalActivity(
+        event: 'case.created',
+        category: 'case',
+        description: 'A case record was created.',
+        metadata: [
+            'case_id' => (int) $createdCase->id,
+            'case_number' => $createdCase->case_number,
+            'case_type' => $createdCase->case_type,
+            'status' => $createdCase->status,
+            'incident_id' => $createdCase->incident_id,
+        ],
+        request: $request,
+    );
+
+    return redirect()
+        ->route('admin.cases.index')
+        ->with(
+            'success',
+            'Case record created successfully.'
+        );
+}
 
     public function update(
         Request $request,

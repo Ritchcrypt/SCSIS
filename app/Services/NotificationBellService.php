@@ -10,6 +10,65 @@ use Illuminate\Support\Facades\Schema;
 
 class NotificationBellService
 {
+    public function pulseForUser(?User $user): array
+{
+    if (
+        ! $user
+        || ! Schema::hasTable('notifications')
+        || ! Schema::hasColumn('notifications', 'user_id')
+    ) {
+        return [
+            'latest_notification_id' => null,
+            'notification' => null,
+        ];
+    }
+
+    $latestNotification = UserNotification::query()
+        ->where('user_id', (int) $user->id)
+        ->orderByDesc('id')
+        ->first();
+
+    if (! $latestNotification) {
+        return [
+            'latest_notification_id' => null,
+            'notification' => null,
+        ];
+    }
+
+    return [
+        'latest_notification_id' => (int) $latestNotification->id,
+
+        'notification' => [
+            'id' => (int) $latestNotification->id,
+
+            'type' => strtolower(
+                trim(
+                    (string) (
+                        $latestNotification->type
+                        ?? 'notification'
+                    )
+                )
+            ),
+
+            'source_id' => $latestNotification->source_id !== null
+                ? (int) $latestNotification->source_id
+                : null,
+
+            'title' => $latestNotification->title
+                ?: 'New notification',
+
+            'message' => $latestNotification->message
+                ?: $latestNotification->title
+                ?: 'You have a new notification.',
+
+            'is_read' => (bool) $latestNotification->is_read,
+
+            'created_at' => $latestNotification->created_at
+                ?->toIso8601String(),
+        ],
+    ];
+}
+
     public function forUser(?User $user): array
     {
         if (! $user || ! Schema::hasTable('notifications')) {

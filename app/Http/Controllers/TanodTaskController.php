@@ -60,80 +60,100 @@ class TanodTaskController extends Controller
     }
 
     public function store(Request $request): RedirectResponse
-    {
-        $this->authorizeAdmin($request);
+{
+    $this->authorizeAdmin($request);
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:3000'],
-            'location' => ['nullable', 'string', 'max:500'],
-            'task_datetime' => ['nullable', 'date'],
-            'due_at' => ['nullable', 'date', 'after_or_equal:task_datetime'],
-            'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
+    $validated = $request->validate([
+        'title' => ['required', 'string', 'max:255'],
+        'description' => ['nullable', 'string', 'max:3000'],
+        'location' => ['nullable', 'string', 'max:500'],
+        'task_datetime' => ['nullable', 'date'],
+        'due_at' => ['nullable', 'date', 'after_or_equal:task_datetime'],
+        'priority' => [
+            'required',
+            Rule::in([
+                'low',
+                'normal',
+                'high',
+                'urgent',
+            ]),
+        ],
+    ]);
+
+    $task = null;
+    $assignedTanodCount = 0;
+
+    DB::transaction(function () use (
+        $request,
+        $validated,
+        &$task,
+        &$assignedTanodCount
+    ): void {
+        $task = TanodTask::create([
+            'created_by' => $request->user()->id,
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'location' => $validated['location'] ?? null,
+            'task_datetime' => $validated['task_datetime'] ?? null,
+            'due_at' => $validated['due_at'] ?? null,
+            'priority' => $validated['priority'],
+            'status' => 'open',
         ]);
 
-        $task = null;
-        $assignedTanodCount = 0;
+        $tanods = Employee::query()
+            ->with('user')
+            ->tanods()
+            ->active()
+            ->get();
 
-        DB::transaction(function () use (
-            $request,
-            $validated,
-            &$task,
-            &$assignedTanodCount
-        ): void {
-            $task = TanodTask::create([
-                'created_by' => $request->user()->id,
-                'title' => $validated['title'],
-                'description' => $validated['description'] ?? null,
-                'location' => $validated['location'] ?? null,
-                'task_datetime' => $validated['task_datetime'] ?? null,
-                'due_at' => $validated['due_at'] ?? null,
-                'priority' => $validated['priority'],
-                'status' => 'open',
+        $assignedTanodCount = $tanods->count();
+
+        foreach ($tanods as $tanod) {
+            TanodTaskResponse::create([
+                'tanod_task_id' => $task->id,
+                'employee_id' => $tanod->id,
+                'user_id' => $tanod->user_id,
+                'response_status' => 'pending',
+                'response_note' => null,
+                'responded_at' => null,
             ]);
 
-            $tanods = Employee::query()
-                ->with('user')
-                ->tanods()
-                ->active()
-                ->get();
-
-            $assignedTanodCount = $tanods->count();
-
-            foreach ($tanods as $tanod) {
-                TanodTaskResponse::create([
-                    'tanod_task_id' => $task->id,
-                    'employee_id' => $tanod->id,
-                    'user_id' => $tanod->user_id,
-                    'response_status' => 'pending',
-                    'response_note' => null,
-                    'responded_at' => null,
-                ]);
-
-                if ($tanod->user_id) {
-                    $this->notifyTanodAboutNewTask($task, (int) $tanod->user_id);
-                }
+            if ($tanod->user_id) {
+                $this->notifyTanodAboutNewTask(
+                    $task,
+                    (int) $tanod->user_id
+                );
             }
-        });
+        }
+    });
 
-        $this->recordOperationalActivity(
-            event: 'tanod_task.created',
-            category: 'tanod_task',
-            description: 'A tanod task was created.',
-            metadata: [
-                'tanod_task_id' => (int) $task->id,
-                'incident_id' => $task->incident_id,
-                'priority' => $task->priority,
-                'status' => $task->status,
-                'assigned_tanod_count' => $assignedTanodCount,
-            ],
-            request: $request,
+    if (! $task instanceof TanodTask || ! $task->exists) {
+        throw new \RuntimeException(
+            'Tanod task creation completed without a persisted task record.'
         );
-
-        return redirect()
-            ->route('admin.tanod-tasks.index')
-            ->with('success', 'Tanod task created and assigned to all active tanods.');
     }
+
+    $this->recordOperationalActivity(
+        event: 'tanod_task.created',
+        category: 'tanod_task',
+        description: 'A tanod task was created.',
+        metadata: [
+            'tanod_task_id' => (int) $task->id,
+            'incident_id' => $task->incident_id,
+            'priority' => $task->priority,
+            'status' => $task->status,
+            'assigned_tanod_count' => $assignedTanodCount,
+        ],
+        request: $request,
+    );
+
+    return redirect()
+        ->route('admin.tanod-tasks.index')
+        ->with(
+            'success',
+            'Tanod task created and assigned to all active tanods.'
+        );
+}
 
     public function show(Request $request, TanodTask $tanodTask): View
     {

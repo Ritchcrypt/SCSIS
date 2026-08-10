@@ -361,141 +361,167 @@ class IncidentController extends Controller
         }
 
         $incident = null;
-        $storedEvidencePaths = [];
+$storedEvidencePaths = [];
 
-        try {
-            DB::transaction(function () use (
-                $request,
-                $validated,
-                $pendingStatus,
-                &$incident,
-                &$storedEvidencePaths
-            ): void {
-            $incident = new Incident();
+try {
+    DB::transaction(function () use (
+        $request,
+        $validated,
+        $pendingStatus,
+        &$incident,
+        &$storedEvidencePaths
+    ): void {
+        $incident = new Incident();
 
-            $this->attachIncidentOwner($incident, $request);
+        $this->attachIncidentOwner($incident, $request);
 
-            if (Schema::hasColumn('incidents', 'incident_code')) {
-                $incident->incident_code = null;
-            }
-
-            if (Schema::hasColumn('incidents', 'category_id')) {
-                $incident->category_id = $validated['category_id'];
-            }
-
-            $selectedCategory = IncidentCategory::find($validated['category_id']);
-            $selectedCategoryName = $selectedCategory?->category_name
-                ?? $selectedCategory?->name
-                ?? null;
-
-            if ($selectedCategoryName) {
-                if (Schema::hasColumn('incidents', 'type')) {
-                    $incident->type = $selectedCategoryName;
-                }
-
-                if (Schema::hasColumn('incidents', 'incident_type')) {
-                    $incident->incident_type = $selectedCategoryName;
-                }
-
-                if (Schema::hasColumn('incidents', 'category_name')) {
-                    $incident->category_name = $selectedCategoryName;
-                }
-            }
-
-            if (Schema::hasColumn('incidents', 'barangay_id')) {
-                $incident->barangay_id = $validated['barangay_id'];
-            }
-
-            if (Schema::hasColumn('incidents', 'status_id')) {
-                $incident->status_id = $pendingStatus->id;
-            }
-
-            if (Schema::hasColumn('incidents', 'status')) {
-                $incident->status = $pendingStatus->status_name ?? 'pending';
-            }
-
-            if (Schema::hasColumn('incidents', 'incident_title')) {
-                $incident->incident_title = $validated['incident_title'];
-            }
-
-            if (Schema::hasColumn('incidents', 'title')) {
-                $incident->title = $validated['incident_title'];
-            }
-
-            if (Schema::hasColumn('incidents', 'incident_description')) {
-                $incident->incident_description = $validated['incident_description'];
-            }
-
-            if (Schema::hasColumn('incidents', 'description')) {
-                $incident->description = $validated['incident_description'];
-            }
-
-            if (Schema::hasColumn('incidents', 'priority')) {
-                $incident->priority = $validated['priority'];
-            }
-
-            if (Schema::hasColumn('incidents', 'incident_datetime')) {
-                $incident->incident_datetime = now();
-            }
-
-            if (Schema::hasColumn('incidents', 'reported_at')) {
-                $incident->reported_at = now();
-            }
-
-            if (Schema::hasColumn('incidents', 'assigned_to')) {
-                $incident->assigned_to = null;
-            }
-
-            $incident->save();
-
-            $this->storeIncidentLocation($incident, $validated);
-
-            $this->storeIncidentEvidence(
-                $request,
-                $incident,
-                $storedEvidencePaths
-            );
-
-            IncidentStatusHistory::create([
-                'incident_id' => $incident->id,
-                'status_id' => $pendingStatus->id,
-                'updated_by' => $request->user()->id,
-                'remarks' => 'Incident report submitted.',
-                'status_changed_at' => now(),
-            ]);
-
-                $this->notifyIncidentCreated($incident);
-                $this->createTanodTaskFromIncident(
-                    $incident,
-                    $request
-                );
-            });
-        } catch (Throwable $exception) {
-            $this->secureUploads->deleteMany(
-                $storedEvidencePaths,
-                [
-                    'incidents/evidence',
-                ]
-            );
-
-            throw $exception;
+        if (Schema::hasColumn('incidents', 'incident_code')) {
+            $incident->incident_code = null;
         }
 
-        $this->recordOperationalActivity(
-            event: 'incident.created',
-            category: 'incident',
-            description: 'An incident report was created.',
-            metadata: [
-                'incident_id' => (int) $incident->id,
-                'incident_code' => $incident->incident_code,
-                'category_id' => $incident->category_id,
-                'barangay_id' => $incident->barangay_id,
-                'priority' => $incident->priority,
-                'status_id' => $incident->status_id,
-                'evidence_attached' => $request->hasFile('evidence'),
-            ],
-            request: $request,
+        if (Schema::hasColumn('incidents', 'category_id')) {
+            $incident->category_id = $validated['category_id'];
+        }
+
+        $selectedCategory = IncidentCategory::find(
+            $validated['category_id']
         );
+
+        $selectedCategoryName = $selectedCategory?->category_name
+            ?? $selectedCategory?->name
+            ?? null;
+
+        if ($selectedCategoryName) {
+            if (Schema::hasColumn('incidents', 'type')) {
+                $incident->type = $selectedCategoryName;
+            }
+
+            if (Schema::hasColumn('incidents', 'incident_type')) {
+                $incident->incident_type = $selectedCategoryName;
+            }
+
+            if (Schema::hasColumn('incidents', 'category_name')) {
+                $incident->category_name = $selectedCategoryName;
+            }
+        }
+
+        if (Schema::hasColumn('incidents', 'barangay_id')) {
+            $incident->barangay_id = $validated['barangay_id'];
+        }
+
+        if (Schema::hasColumn('incidents', 'status_id')) {
+            $incident->status_id = $pendingStatus->id;
+        }
+
+        if (Schema::hasColumn('incidents', 'status')) {
+            $incident->status = $pendingStatus->status_name ?? 'pending';
+        }
+
+        if (Schema::hasColumn('incidents', 'incident_title')) {
+            $incident->incident_title = $validated['incident_title'];
+        }
+
+        if (Schema::hasColumn('incidents', 'title')) {
+            $incident->title = $validated['incident_title'];
+        }
+
+        if (Schema::hasColumn('incidents', 'incident_description')) {
+            $incident->incident_description =
+                $validated['incident_description'];
+        }
+
+        if (Schema::hasColumn('incidents', 'description')) {
+            $incident->description =
+                $validated['incident_description'];
+        }
+
+        if (Schema::hasColumn('incidents', 'priority')) {
+            $incident->priority = $validated['priority'];
+        }
+
+        if (Schema::hasColumn('incidents', 'incident_datetime')) {
+            $incident->incident_datetime = now();
+        }
+
+        if (Schema::hasColumn('incidents', 'reported_at')) {
+            $incident->reported_at = now();
+        }
+
+        if (Schema::hasColumn('incidents', 'assigned_to')) {
+            $incident->assigned_to = null;
+        }
+
+        $incident->save();
+
+        $this->storeIncidentLocation(
+            $incident,
+            $validated
+        );
+
+        $this->storeIncidentEvidence(
+            $request,
+            $incident,
+            $storedEvidencePaths
+        );
+
+        IncidentStatusHistory::create([
+            'incident_id' => $incident->id,
+            'status_id' => $pendingStatus->id,
+            'updated_by' => $request->user()->id,
+            'remarks' => 'Incident report submitted.',
+            'status_changed_at' => now(),
+        ]);
+
+        $this->notifyIncidentCreated($incident);
+
+        $this->createTanodTaskFromIncident(
+            $incident,
+            $request
+        );
+    });
+} catch (Throwable $exception) {
+    $this->secureUploads->deleteMany(
+        $storedEvidencePaths,
+        [
+            'incidents/evidence',
+        ]
+    );
+
+    throw $exception;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Incident creation integrity check
+|--------------------------------------------------------------------------
+|
+| The transaction above must produce a persisted Incident model. This
+| explicit guard also tells static analysis tools that $incident cannot
+| be null below this point.
+|
+*/
+if (! $incident instanceof Incident || ! $incident->exists) {
+    throw new \RuntimeException(
+        'Incident creation completed without a persisted incident record.'
+    );
+}
+
+$this->recordOperationalActivity(
+    event: 'incident.created',
+    category: 'incident',
+    description: 'An incident report was created.',
+    metadata: [
+        'incident_id' => (int) $incident->id,
+        'incident_code' => $incident->incident_code,
+        'category_id' => $incident->category_id,
+        'barangay_id' => $incident->barangay_id,
+        'priority' => $incident->priority,
+        'status_id' => $incident->status_id,
+        'evidence_attached' => $request->hasFile('evidence'),
+    ],
+    request: $request,
+);
+
 
         $showRoute = match ($user->role) {
             'resident' => Route::has('resident.incidents.show') ? 'resident.incidents.show' : null,

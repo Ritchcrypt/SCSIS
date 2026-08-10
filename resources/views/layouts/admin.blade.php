@@ -39,6 +39,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta
+    name="notification-pulse-url"
+    content="{{ route('notifications.pulse') }}"
+>
+
+<meta
+    name="notification-user-id"
+    content="{{ (int) auth()->id() }}"
+>
+    <meta
         name="theme-preference-url"
         content="{{ route('theme-preference.update') }}"
     >
@@ -999,21 +1008,19 @@
 
                 $authProfileUrl = '#';
 
-                if ($authUser) {
-                    $authProfileUrl = match ($authUser->role) {
-                        'admin' => Route::has('admin.users.edit')
-                            ? route('admin.users.edit', $authUser)
-                            : (Route::has('profile.edit') ? route('profile.edit') : '#'),
-
-                        'official', 'dao', 'tanod', 'resident' => Route::has('profile.edit')
-                            ? route('profile.edit')
-                            : '#',
-
-                        default => Route::has('profile.edit')
-                            ? route('profile.edit')
-                            : '#',
-                    };
-                }
+if ($authUser) {
+    if (
+        $authUser->isAdmin()
+        && Route::has('admin.users.edit')
+    ) {
+        $authProfileUrl = route(
+            'admin.users.edit',
+            $authUser
+        );
+    } elseif (Route::has('profile.edit')) {
+        $authProfileUrl = route('profile.edit');
+    }
+}
 
                 $navItems = match ($role) {
                     'admin' => [
@@ -1163,6 +1170,12 @@
         'active' => ['tanod.tanod-tasks.*'],
     ],
     [
+        'label' => 'Tanod Roster',
+        'icon' => '👥',
+        'route' => 'tanod.tanods.index',
+        'active' => ['tanod.tanods.*'],
+    ],
+    [
         'label' => 'Assigned Incidents',
         'icon' => '📄',
         'route' => 'tanod.incidents.index',
@@ -1222,6 +1235,8 @@
         'active' => ['resident.emergency-mode.*'],
     ],
 ],
+
+                    default => [],
                 };
             @endphp
 

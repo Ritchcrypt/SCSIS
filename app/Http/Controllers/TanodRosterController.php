@@ -24,203 +24,323 @@ class TanodRosterController extends Controller
 {
     use RecordsOperationalActivity;
 
-    public function index(Request $request): View
-    {
-        Gate::authorize('viewAny', TanodProfile::class);
+   public function index(Request $request): View
+{
+    Gate::authorize('viewAny', TanodProfile::class);
 
-        $search = SqlLikePattern::normalize(
-            $request->query('search')
-        );
+    $search = SqlLikePattern::normalize(
+        $request->query('search')
+    );
 
-        $searchPattern = SqlLikePattern::contains(
-            $search
-        );
+    $searchPattern = SqlLikePattern::contains(
+        $search
+    );
 
-        $tanods = TanodProfile::query()
-            ->with(['user', 'employee'])
-            ->when(
-                $searchPattern !== null,
-                function ($query) use ($searchPattern): void {
-                    $query->where(
-                        function ($searchQuery) use ($searchPattern): void {
-                            SqlLikePattern::whereContains(
+    $tanodTable = (new TanodProfile())->getTable();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accepted response count subquery
+    |--------------------------------------------------------------------------
+    |
+    | Only accepted Tanod Task responses count toward the ranking.
+    |
+    */
+    $acceptedResponsesSubquery = static function () use ($tanodTable) {
+        return DB::table('tanod_task_responses')
+            ->selectRaw('COUNT(*)')
+            ->whereColumn(
+                'tanod_task_responses.employee_id',
+                "{$tanodTable}.employee_id"
+            )
+            ->whereRaw(
+                "LOWER(COALESCE(tanod_task_responses.response_status, '')) = ?",
+                ['accepted']
+            );
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Main paginated roster
+    |--------------------------------------------------------------------------
+    */
+    $tanods = TanodProfile::query()
+        ->select("{$tanodTable}.*")
+        ->selectSub(
+            $acceptedResponsesSubquery(),
+            'accepted_responses_count'
+        )
+        ->with([
+            'user',
+            'employee',
+        ])
+        ->when(
+            $searchPattern !== null,
+            function ($query) use ($searchPattern): void {
+                $query->where(
+                    function ($searchQuery) use ($searchPattern): void {
+                        SqlLikePattern::whereContains(
+                            $searchQuery,
+                            'contact_number',
+                            $searchPattern
+                        );
+
+                        foreach ([
+                            'purok_assignment',
+                            'shift',
+                            'status',
+                        ] as $column) {
+                            SqlLikePattern::orWhereContains(
                                 $searchQuery,
-                                'contact_number',
+                                $column,
                                 $searchPattern
                             );
+                        }
 
-                            foreach ([
-                                'purok_assignment',
-                                'shift',
-                                'status',
-                            ] as $column) {
+                        $searchQuery->orWhereHas(
+                            'user',
+                            function ($userQuery) use ($searchPattern): void {
+                                SqlLikePattern::whereContains(
+                                    $userQuery,
+                                    'name',
+                                    $searchPattern
+                                );
+
                                 SqlLikePattern::orWhereContains(
-                                    $searchQuery,
-                                    $column,
+                                    $userQuery,
+                                    'email',
                                     $searchPattern
                                 );
                             }
+                        );
+                    }
+                );
+            }
+        )
+        ->orderByDesc('accepted_responses_count')
+        ->orderBy("{$tanodTable}.id")
+        ->paginate(10)
+        ->withQueryString();
 
-                            $searchQuery->orWhereHas(
-                                'user',
-                                function ($userQuery) use ($searchPattern): void {
-                                    SqlLikePattern::whereContains(
-                                        $userQuery,
-                                        'name',
-                                        $searchPattern
-                                    );
+    /*
+    |--------------------------------------------------------------------------
+    | Competition ranking
+    |--------------------------------------------------------------------------
+    |
+    | Example:
+    |
+    | 5 responses = #1
+    | 5 responses = #1
+    | 3 responses = #3
+    |
+    | The next rank skips the occupied position created by the tie.
+    |
+    */
+    $rankingRows = TanodProfile::query()
+        ->select("{$tanodTable}.id")
+        ->selectSub(
+            $acceptedResponsesSubquery(),
+            'accepted_responses_count'
+        )
+        ->orderByDesc('accepted_responses_count')
+        ->orderBy("{$tanodTable}.id")
+        ->get();
 
-                                    SqlLikePattern::orWhereContains(
-                                        $userQuery,
-                                        'email',
-                                        $searchPattern
-                                    );
-                                }
-                            );
-                        }
-                    );
-                }
-            )
-            ->orderBy('id')
-            ->paginate(10)
-            ->withQueryString();
+    $ranksById = [];
 
-        return view('tanods.index', [
-            'tanods' => $tanods,
-            'totalTanods' => TanodProfile::query()->count(),
-            'onDutyCount' => TanodProfile::query()
-                ->where('status', 'on_duty')
-                ->count(),
-            'shifts' => $this->shifts(),
-            'statuses' => $this->statuses(),
-        ]);
+    $previousResponseCount = null;
+    $currentRank = 0;
+
+    foreach ($rankingRows as $position => $rankingRow) {
+        $responseCount = (int) (
+            $rankingRow->accepted_responses_count ?? 0
+        );
+
+        if (
+            $previousResponseCount === null
+            || $responseCount !== $previousResponseCount
+        ) {
+            $currentRank = $position + 1;
+        }
+
+        $ranksById[(int) $rankingRow->id] = $currentRank;
+
+        $previousResponseCount = $responseCount;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Attach calculated rank to paginated records
+    |--------------------------------------------------------------------------
+    */
+    $tanods->getCollection()->transform(
+        function (TanodProfile $tanod) use ($ranksById): TanodProfile {
+            $tanod->setAttribute(
+                'response_rank',
+                $ranksById[(int) $tanod->id] ?? null
+            );
+
+            return $tanod;
+        }
+    );
+
+    return view('tanods.index', [
+        'tanods' => $tanods,
+
+        'totalTanods' => TanodProfile::query()
+            ->count(),
+
+        'onDutyCount' => TanodProfile::query()
+            ->where('status', 'on_duty')
+            ->count(),
+
+        'shifts' => $this->shifts(),
+
+        'statuses' => $this->statuses(),
+    ]);
+}
+
     public function store(Request $request): RedirectResponse
-    {
-        Gate::authorize('create', TanodProfile::class);
+{
+    Gate::authorize('create', TanodProfile::class);
 
-        $this->normalizeEmailInput(
-            $request
+    $this->normalizeEmailInput(
+        $request
+    );
+
+    $validated = $request->validate(
+        $this->validationRules()
+    );
+
+    $providedEmail = $this->nullableText(
+        $validated['email'] ?? null
+    );
+
+    $barangayId = $this->defaultBarangayId();
+
+    if (! $barangayId) {
+        return back()->with(
+            'error',
+            'Add at least one barangay before creating a tanod account.'
         );
+    }
 
-        $validated = $request->validate(
-            $this->validationRules()
+    $createdUser = null;
+    $createdTanodProfile = null;
+
+    DB::transaction(function () use (
+        $validated,
+        $providedEmail,
+        $barangayId,
+        &$createdUser,
+        &$createdTanodProfile
+    ): void {
+        $email = $providedEmail
+            ? strtolower($providedEmail)
+            : $this->generateFallbackEmail(
+                $validated['full_name']
+            );
+
+        $createdUser = User::create([
+            'name' => trim($validated['full_name']),
+            'email' => $email,
+            'password' => Hash::make(Str::random(64)),
+            'role' => 'tanod',
+            'contact_number' => $this->nullableText(
+                $validated['contact_number'] ?? null
+            ),
+            'is_active' => true,
+            'status' => true,
+        ]);
+
+        $employee = Employee::create([
+            'user_id' => $createdUser->id,
+            'barangay_id' => $barangayId,
+            'employee_type' => 'tanod',
+            'position' => 'Barangay Tanod',
+            'department' => 'Public Safety',
+            'is_active' => $validated['status'] !== 'off_duty',
+        ]);
+
+        $createdTanodProfile = TanodProfile::create([
+            'user_id' => $createdUser->id,
+            'employee_id' => $employee->id,
+            'contact_number' => $this->nullableText(
+                $validated['contact_number'] ?? null
+            ),
+            'purok_assignment' => $this->nullableText(
+                $validated['purok_assignment'] ?? null
+            ),
+            'date_appointed' => $validated['date_appointed'] ?? null,
+            'shift' => $validated['shift'],
+            'status' => $validated['status'],
+            'notes' => $this->nullableText(
+                $validated['notes'] ?? null
+            ),
+        ]);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Creation integrity check
+    |--------------------------------------------------------------------------
+    |
+    | The transaction above must create both the user account and the tanod
+    | profile. This explicit check also allows static analysis tools to know
+    | that both variables are valid model instances below this point.
+    |
+    */
+    if (! $createdUser || ! $createdTanodProfile) {
+        throw new \RuntimeException(
+            'Tanod account creation completed without the required linked records.'
         );
+    }
 
-        $providedEmail = $this->nullableText(
-            $validated['email'] ?? null
-        );
+    $message = 'Tanod member added successfully.';
 
-        $barangayId = $this->defaultBarangayId();
+    if ($providedEmail) {
+        try {
+            $resetStatus = Password::sendResetLink([
+                'email' => $createdUser->email,
+            ]);
+        } catch (\Throwable $exception) {
+            $resetStatus = null;
 
-        if (! $barangayId) {
-            return back()->with(
-                'error',
-                'Add at least one barangay before creating a tanod account.'
+            Log::warning(
+                'Tanod password setup email could not be sent.',
+                [
+                    'user_id' => $createdUser->id,
+                    'error' => $exception->getMessage(),
+                ]
             );
         }
 
-        $createdUser = null;
-        $createdTanodProfile = null;
-
-        DB::transaction(function () use (
-            $validated,
-            $providedEmail,
-            $barangayId,
-            &$createdUser,
-            &$createdTanodProfile
-        ): void {
-            $email = $providedEmail
-                ? strtolower($providedEmail)
-                : $this->generateFallbackEmail(
-                    $validated['full_name']
-                );
-
-            $createdUser = User::create([
-                'name' => trim($validated['full_name']),
-                'email' => $email,
-                'password' => Hash::make(Str::random(64)),
-                'role' => 'tanod',
-                'contact_number' => $this->nullableText(
-                    $validated['contact_number'] ?? null
-                ),
-                'is_active' => true,
-                'status' => true,
-            ]);
-
-            $employee = Employee::create([
-                'user_id' => $createdUser->id,
-                'barangay_id' => $barangayId,
-                'employee_type' => 'tanod',
-                'position' => 'Barangay Tanod',
-                'department' => 'Public Safety',
-                'is_active' => $validated['status'] !== 'off_duty',
-            ]);
-
-            $createdTanodProfile = TanodProfile::create([
-                'user_id' => $createdUser->id,
-                'employee_id' => $employee->id,
-                'contact_number' => $this->nullableText(
-                    $validated['contact_number'] ?? null
-                ),
-                'purok_assignment' => $this->nullableText(
-                    $validated['purok_assignment'] ?? null
-                ),
-                'date_appointed' => $validated['date_appointed'] ?? null,
-                'shift' => $validated['shift'],
-                'status' => $validated['status'],
-                'notes' => $this->nullableText(
-                    $validated['notes'] ?? null
-                ),
-            ]);
-        });
-
-        $message = 'Tanod member added successfully.';
-
-        if ($createdUser && $providedEmail) {
-            try {
-                $resetStatus = Password::sendResetLink([
-                    'email' => $createdUser->email,
-                ]);
-            } catch (\Throwable $exception) {
-                $resetStatus = null;
-
-                Log::warning(
-                    'Tanod password setup email could not be sent.',
-                    [
-                        'user_id' => $createdUser->id,
-                        'error' => $exception->getMessage(),
-                    ]
-                );
-            }
-
-            $message .= $resetStatus === Password::RESET_LINK_SENT
-                ? ' A secure password setup link was sent to the tanod email.'
-                : ' The account was created, but the password setup email could not be sent. Use User Management to resend it.';
-        } else {
-            $message .= ' Add a valid email in User Management before sending a password setup link.';
-        }
-
-        $this->recordOperationalActivity(
-            event: 'tanod_roster.created',
-            category: 'tanod_roster',
-            description: 'A tanod roster member was created.',
-            metadata: [
-                'tanod_profile_id' => (int) $createdTanodProfile->id,
-                'user_id' => (int) $createdUser->id,
-                'employee_id' => $createdTanodProfile->employee_id,
-                'shift' => $createdTanodProfile->shift,
-                'status' => $createdTanodProfile->status,
-                'password_setup_email_requested' => $providedEmail !== null,
-            ],
-            request: $request,
-        );
-
-        return redirect()
-            ->to($this->rosterIndexUrl($request))
-            ->with('success', $message);
+        $message .= $resetStatus === Password::RESET_LINK_SENT
+            ? ' A secure password setup link was sent to the tanod email.'
+            : ' The account was created, but the password setup email could not be sent. Use User Management to resend it.';
+    } else {
+        $message .= ' Add a valid email in User Management before sending a password setup link.';
     }
+
+    $this->recordOperationalActivity(
+        event: 'tanod_roster.created',
+        category: 'tanod_roster',
+        description: 'A tanod roster member was created.',
+        metadata: [
+            'tanod_profile_id' => (int) $createdTanodProfile->id,
+            'user_id' => (int) $createdUser->id,
+            'employee_id' => $createdTanodProfile->employee_id,
+            'shift' => $createdTanodProfile->shift,
+            'status' => $createdTanodProfile->status,
+            'password_setup_email_requested' => $providedEmail !== null,
+        ],
+        request: $request,
+    );
+
+    return redirect()
+        ->to($this->rosterIndexUrl($request))
+        ->with('success', $message);
+}
 
     public function update(
         Request $request,

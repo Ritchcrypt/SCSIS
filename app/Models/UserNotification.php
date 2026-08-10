@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,24 +45,24 @@ class UserNotification extends Model
         return $this->belongsTo(User::class, 'acknowledged_by');
     }
 
-    public function scopeUnread($query)
-    {
-        return $query->where('is_read', false);
+    public function scopeUnread(Builder $query): Builder
+{
+    return $query->where('is_read', false);
+}
+
+public function scopeRead(Builder $query): Builder
+{
+    return $query->where('is_read', true);
+}
+
+public function scopeType(Builder $query, ?string $type): Builder
+{
+    if (! $type || $type === 'all') {
+        return $query;
     }
 
-    public function scopeRead($query)
-    {
-        return $query->where('is_read', true);
-    }
-
-    public function scopeType($query, ?string $type)
-    {
-        if (! $type || $type === 'all') {
-            return $query;
-        }
-
-        return $query->where('type', $type);
-    }
+    return $query->where('type', $type);
+}
 
     public function markAsRead(): bool
     {

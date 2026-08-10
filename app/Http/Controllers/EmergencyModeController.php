@@ -36,65 +36,74 @@ class EmergencyModeController extends Controller
     }
 
     public function store(Request $request): RedirectResponse
-    {
-        Gate::authorize('create', EmergencyHotline::class);
+{
+    Gate::authorize('create', EmergencyHotline::class);
 
-        $validated = $request->validate([
-            'agency_name' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-            'hotline_number' => [
-                'required',
-                'string',
-                'max:50',
-                'regex:/^[0-9+()\-.\s\/]*$/',
-            ],
-            'color' => [
-                'required',
-                Rule::in(array_keys($this->colors())),
-            ],
+    $validated = $request->validate([
+        'agency_name' => [
+            'required',
+            'string',
+            'max:255',
+        ],
+        'hotline_number' => [
+            'required',
+            'string',
+            'max:50',
+            'regex:/^[0-9+()\-.\s\/]*$/',
+        ],
+        'color' => [
+            'required',
+            Rule::in(array_keys($this->colors())),
+        ],
+    ]);
+
+    $createdHotline = null;
+
+    DB::transaction(function () use (
+        $validated,
+        &$createdHotline
+    ): void {
+        $lastOrder = EmergencyHotline::query()
+            ->orderByDesc('sort_order')
+            ->lockForUpdate()
+            ->value('sort_order');
+
+        $createdHotline = EmergencyHotline::create([
+            'agency_name' => trim($validated['agency_name']),
+            'hotline_number' => trim($validated['hotline_number']),
+            'color' => $validated['color'],
+            'is_active' => true,
+            'sort_order' => ((int) $lastOrder) + 1,
         ]);
+    });
 
-        $createdHotline = null;
-
-        DB::transaction(function () use (
-            $validated,
-            &$createdHotline
-        ): void {
-            $lastOrder = EmergencyHotline::query()
-                ->orderByDesc('sort_order')
-                ->lockForUpdate()
-                ->value('sort_order');
-
-            $createdHotline = EmergencyHotline::create([
-                'agency_name' => trim($validated['agency_name']),
-                'hotline_number' => trim($validated['hotline_number']),
-                'color' => $validated['color'],
-                'is_active' => true,
-                'sort_order' => ((int) $lastOrder) + 1,
-            ]);
-        });
-
-        $this->recordOperationalActivity(
-            event: 'emergency_hotline.created',
-            category: 'emergency_hotline',
-            description: 'An emergency hotline was created.',
-            metadata: [
-                'emergency_hotline_id' => (int) $createdHotline->id,
-                'agency_name' => $createdHotline->agency_name,
-                'color' => $createdHotline->color,
-                'sort_order' => $createdHotline->sort_order,
-            ],
-            request: $request,
-        );
-
-        return back()->with(
-            'success',
-            'Emergency hotline added successfully.'
+    if (
+        ! $createdHotline instanceof EmergencyHotline
+        || ! $createdHotline->exists
+    ) {
+        throw new \RuntimeException(
+            'Emergency hotline creation completed without a persisted hotline record.'
         );
     }
+
+    $this->recordOperationalActivity(
+        event: 'emergency_hotline.created',
+        category: 'emergency_hotline',
+        description: 'An emergency hotline was created.',
+        metadata: [
+            'emergency_hotline_id' => (int) $createdHotline->id,
+            'agency_name' => $createdHotline->agency_name,
+            'color' => $createdHotline->color,
+            'sort_order' => $createdHotline->sort_order,
+        ],
+        request: $request,
+    );
+
+    return back()->with(
+        'success',
+        'Emergency hotline added successfully.'
+    );
+}
 
     public function destroy(
         EmergencyHotline $emergencyHotline

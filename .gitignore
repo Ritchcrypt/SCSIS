@@ -22,3 +22,9 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+
+
+
+
+# Local application backups
+/storage/backups/
