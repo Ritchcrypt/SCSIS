@@ -240,10 +240,13 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
             ->name('tanod-tasks.destroy');
 
         Route::get('/map', [BarangayMapController::class, 'index'])
-            ->name('map.index');
+    ->name('map.index');
 
-        Route::post('/tanods', [TanodRosterController::class, 'store'])
-            ->name('tanods.store');
+Route::get('/tanods', [TanodRosterController::class, 'index'])
+    ->name('tanods.index');
+
+Route::post('/tanods', [TanodRosterController::class, 'store'])
+    ->name('tanods.store');
 
         Route::patch('/tanods/{tanod}', [TanodRosterController::class, 'update'])
             ->name('tanods.update');
