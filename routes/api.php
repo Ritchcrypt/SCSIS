@@ -4,7 +4,6 @@ use App\Http\Controllers\Api\V1\AnnouncementController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\EmergencyHotlineController;
-use App\Http\Controllers\Api\V1\IncidentController;
 use App\Http\Middleware\EnsureApiUserIsActive;
 use Illuminate\Support\Facades\Route;
 
@@ -58,22 +57,6 @@ Route::prefix('v1')
             DashboardController::class,
             'index',
         ])->name('api.v1.dashboard');
-
-        /*
-        |--------------------------------------------------------------------------
-        | Incidents
-        |--------------------------------------------------------------------------
-        */
-
-        Route::get('/incidents', [
-            IncidentController::class,
-            'index',
-        ])->name('api.v1.incidents.index');
-
-        Route::get('/incidents/{incident}', [
-            IncidentController::class,
-            'show',
-        ])->name('api.v1.incidents.show');
 
         /*
         |--------------------------------------------------------------------------
