@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AnnouncementController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\EmergencyHotlineController;
+use App\Http\Controllers\Api\V1\IncidentController;
 use App\Http\Middleware\EnsureApiUserIsActive;
 use Illuminate\Support\Facades\Route;
 
@@ -57,6 +58,68 @@ Route::prefix('v1')
             DashboardController::class,
             'index',
         ])->name('api.v1.dashboard');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Incidents
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/incidents/options', [
+            IncidentController::class,
+            'createOptions',
+        ])->name('api.v1.incidents.options');
+
+        Route::get('/incidents', [
+            IncidentController::class,
+            'index',
+        ])->name('api.v1.incidents.index');
+
+        Route::post('/incidents', [
+            IncidentController::class,
+            'store',
+        ])->name('api.v1.incidents.store');
+
+        Route::post('/incidents/barangays', [
+            IncidentController::class,
+            'quickStoreBarangay',
+        ])->name('api.v1.incidents.barangays.store');
+
+        Route::delete('/incidents/barangays/{barangayId}', [
+            IncidentController::class,
+            'quickDeleteBarangay',
+        ])->whereNumber('barangayId')
+            ->name('api.v1.incidents.barangays.destroy');
+
+        Route::get('/incidents/{incident}', [
+            IncidentController::class,
+            'show',
+        ])->name('api.v1.incidents.show');
+
+        Route::get('/incidents/{incident}/evidence/{evidence}', [
+            IncidentController::class,
+            'evidenceFile',
+        ])->name('api.v1.incidents.evidence.file');
+
+        Route::patch('/incidents/{incident}/status', [
+            IncidentController::class,
+            'updateStatus',
+        ])->name('api.v1.incidents.status.update');
+
+        Route::post('/incidents/{incident}/escalate', [
+            IncidentController::class,
+            'escalate',
+        ])->name('api.v1.incidents.escalate');
+
+        Route::post('/incidents/{incident}/messages', [
+            IncidentController::class,
+            'storeMessage',
+        ])->name('api.v1.incidents.messages.store');
+
+        Route::delete('/incidents/{incident}', [
+            IncidentController::class,
+            'destroy',
+        ])->name('api.v1.incidents.destroy');
 
         /*
         |--------------------------------------------------------------------------
