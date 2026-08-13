@@ -56,6 +56,34 @@ class AuthService {
     );
   }
 
+  Future<Map<String, dynamic>> devSession() async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/auth/dev-session'),
+      headers: const <String, String>{'Accept': 'application/json'},
+    );
+
+    final data = _decodeResponse(response);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final token = data['access_token'];
+
+      if (token is! String || token.isEmpty) {
+        throw const AuthException(
+          'The local development session did not return an access token.',
+        );
+      }
+
+      await _storage.write(key: _tokenKey, value: token);
+
+      return data;
+    }
+
+    throw AuthException(
+      _extractErrorMessage(data),
+      statusCode: response.statusCode,
+    );
+  }
+
   Future<Map<String, dynamic>> me() async {
     final token = await getToken();
 

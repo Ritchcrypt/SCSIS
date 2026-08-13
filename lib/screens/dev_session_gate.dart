@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import 'home_screen.dart';
-import 'login_screen.dart';
 
 class DevSessionGate extends StatefulWidget {
   const DevSessionGate({super.key});
@@ -21,10 +20,10 @@ class _DevSessionGateState extends State<DevSessionGate> {
   @override
   void initState() {
     super.initState();
-    _restoreSession();
+    _restoreOrCreateDevelopmentSession();
   }
 
-  Future<void> _restoreSession() async {
+  Future<void> _restoreOrCreateDevelopmentSession() async {
     if (mounted) {
       setState(() {
         _loading = true;
@@ -34,32 +33,62 @@ class _DevSessionGateState extends State<DevSessionGate> {
 
     final token = await _authService.getToken();
 
-    if (token == null || token.isEmpty) {
-      if (!mounted) {
+    if (token != null && token.isNotEmpty) {
+      try {
+        final response = await _authService.dashboard();
+        final user = _userFromDashboard(response);
+
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _user = user;
+          _loading = false;
+        });
+
+        return;
+      } on AuthException catch (exception) {
+        if (exception.statusCode != 401 && exception.statusCode != 403) {
+          if (!mounted) {
+            return;
+          }
+
+          setState(() {
+            _loading = false;
+            _error = exception.message;
+          });
+
+          return;
+        }
+
+        await _authService.clearToken();
+      } catch (_) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() {
+          _loading = false;
+          _error = 'Unable to reach the TabangNow MobileAPI.';
+        });
+
         return;
       }
-
-      setState(() {
-        _loading = false;
-        _user = null;
-      });
-      return;
     }
 
+    await _createLocalDevelopmentSession();
+  }
+
+  Future<void> _createLocalDevelopmentSession() async {
     try {
-      // Dashboard is already an authenticated endpoint and
-      // returns the authenticated user in data.user.
-      final response = await _authService.dashboard();
-      final rawData = response['data'];
-      final data = rawData is Map
-          ? Map<String, dynamic>.from(rawData)
-          : <String, dynamic>{};
-      final rawUser = data['user'];
+      final response = await _authService.devSession();
+      final rawUser = response['user'];
 
       if (rawUser is! Map) {
         throw const AuthException(
-          'Authenticated user data was unavailable.',
-          statusCode: 401,
+          'Development Admin user data was unavailable.',
+          statusCode: 503,
         );
       }
 
@@ -70,23 +99,9 @@ class _DevSessionGateState extends State<DevSessionGate> {
       setState(() {
         _user = Map<String, dynamic>.from(rawUser);
         _loading = false;
+        _error = null;
       });
     } on AuthException catch (exception) {
-      if (exception.statusCode == 401 || exception.statusCode == 403) {
-        await _authService.clearToken();
-
-        if (!mounted) {
-          return;
-        }
-
-        setState(() {
-          _user = null;
-          _loading = false;
-          _error = null;
-        });
-        return;
-      }
-
       if (!mounted) {
         return;
       }
@@ -102,17 +117,47 @@ class _DevSessionGateState extends State<DevSessionGate> {
 
       setState(() {
         _loading = false;
-        _error = 'Unable to reach the TabangNow MobileAPI.';
+        _error = 'Unable to create the local development session.';
       });
     }
+  }
+
+  Map<String, dynamic> _userFromDashboard(Map<String, dynamic> response) {
+    final rawData = response['data'];
+
+    final data = rawData is Map
+        ? Map<String, dynamic>.from(rawData)
+        : <String, dynamic>{};
+
+    final rawUser = data['user'];
+
+    if (rawUser is! Map) {
+      throw const AuthException(
+        'Authenticated user data was unavailable.',
+        statusCode: 401,
+      );
+    }
+
+    return Map<String, dynamic>.from(rawUser);
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF8FAFC),
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              CircularProgressIndicator(),
+              SizedBox(height: 14),
+              Text(
+                'Opening development session...',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -120,61 +165,37 @@ class _DevSessionGateState extends State<DevSessionGate> {
       return HomeScreen(user: _user!);
     }
 
-    if (_error != null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const Icon(
-                    Icons.cloud_off_rounded,
-                    size: 50,
-                    color: Color(0xFF64748B),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF334155),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  FilledButton.icon(
-                    onPressed: _restoreSession,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Retry'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () async {
-                      await _authService.clearToken();
-
-                      if (!mounted) {
-                        return;
-                      }
-
-                      setState(() {
-                        _error = null;
-                        _user = null;
-                      });
-                    },
-                    child: const Text('Open Login'),
-                  ),
-                ],
-              ),
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.developer_mode_rounded, size: 52),
+                const SizedBox(height: 16),
+                const Text(
+                  'Development session unavailable',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _error ??
+                      'The local development session could not be created.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: _restoreOrCreateDevelopmentSession,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry Development Session'),
+                ),
+              ],
             ),
           ),
         ),
-      );
-    }
-
-    return const LoginScreen();
+      ),
+    );
   }
 }

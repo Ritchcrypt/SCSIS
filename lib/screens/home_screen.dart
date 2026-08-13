@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/tabangnow_theme.dart';
 import '../widgets/global_theme_button.dart';
 import '../widgets/global_notification_bell.dart';
+import '../widgets/global_account_footer.dart';
 import '../services/notification_center_service.dart';
 
 import '../core/app_capabilities.dart';
@@ -14,13 +15,26 @@ import '../core/app_role.dart';
 import '../core/module_registry.dart';
 
 import '../services/auth_service.dart';
+import '../services/user_management_service.dart';
 import '../services/branding_service.dart';
 import '../services/incident_service.dart';
+import '../services/resident_complaint_service.dart';
 import 'incident_detail_screen.dart';
 import 'incidents_screen.dart' as incident_ui;
 import 'tanod_alerts_screen.dart';
+import 'announcements_screen.dart';
+import 'emergency_hotlines_screen.dart';
+import 'barangay_map_screen.dart';
+import 'reports_screen.dart';
+import 'user_management_screen.dart';
+import 'user_management_detail_screen.dart';
+import 'activity_logs_screen.dart';
+import 'current_account_profile_screen.dart';
+import 'resident_complaint_detail_screen.dart';
+import 'resident_complaints_screen.dart';
 import 'tanod_roster_screen.dart';
-import 'login_screen.dart';
+import 'tanod_tasks_screen.dart';
+import 'case_management_screen.dart';
 import 'system_branding_screen.dart';
 
 const String _tabangNowWebsiteLogoBase64 =
@@ -33,8 +47,15 @@ enum _HomeModule {
   incidents,
   tanodAlerts,
   tanodRoster,
+  tanodTasks,
+  caseManagement,
   announcements,
   hotlines,
+  residentComplaints,
+  barangayMap,
+  reports,
+  userManagement,
+  activityLogs,
 }
 
 class _NavItem {
@@ -78,17 +99,11 @@ class _HomeScreenState extends State<HomeScreen> {
   _HomeModule _selectedModule = _HomeModule.dashboard;
 
   bool _dashboardLoading = true;
-  bool _announcementsLoading = true;
-  bool _hotlinesLoading = true;
   bool _loggingOut = false;
 
   String? _dashboardError;
-  String? _announcementsError;
-  String? _hotlinesError;
 
   Map<String, dynamic> _dashboard = <String, dynamic>{};
-  List<Map<String, dynamic>> _announcements = <Map<String, dynamic>>[];
-  List<Map<String, dynamic>> _hotlines = <Map<String, dynamic>>[];
 
   final Key _incidentsKey = UniqueKey();
   Key _tanodAlertsKey = UniqueKey();
@@ -109,12 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    await Future.wait(<Future<void>>[
-      _loadBranding(),
-      _loadDashboard(),
-      _loadAnnouncements(),
-      _loadHotlines(),
-    ]);
+    await Future.wait(<Future<void>>[_loadBranding(), _loadDashboard()]);
   }
 
   Future<void> _loadBranding() async {
@@ -212,86 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadAnnouncements() async {
-    if (mounted) {
-      setState(() {
-        _announcementsLoading = true;
-        _announcementsError = null;
-      });
-    }
-
-    try {
-      final response = await _authService.announcements();
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _announcements = _mapList(response['data']);
-        _announcementsLoading = false;
-      });
-    } on AuthException catch (exception) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _announcementsLoading = false;
-        _announcementsError = exception.message;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _announcementsLoading = false;
-        _announcementsError = 'Unable to load announcements.';
-      });
-    }
-  }
-
-  Future<void> _loadHotlines() async {
-    if (mounted) {
-      setState(() {
-        _hotlinesLoading = true;
-        _hotlinesError = null;
-      });
-    }
-
-    try {
-      final response = await _authService.emergencyHotlines();
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _hotlines = _mapList(response['data']);
-        _hotlinesLoading = false;
-      });
-    } on AuthException catch (exception) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _hotlinesLoading = false;
-        _hotlinesError = exception.message;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _hotlinesLoading = false;
-        _hotlinesError = 'Unable to load emergency hotlines.';
-      });
-    }
-  }
-
   Future<void> _logout() async {
     if (_loggingOut) {
       return;
@@ -303,18 +233,56 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       await _authService.logout();
+
+      final devSession = await _authService.devSession();
+      final rawUser = devSession['user'];
+
+      if (rawUser is! Map) {
+        throw const AuthException(
+          'Development Admin user data was unavailable.',
+          statusCode: 503,
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => HomeScreen(user: Map<String, dynamic>.from(rawUser)),
+        ),
+        (route) => false,
+      );
+    } on AuthException catch (exception) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _loggingOut = false;
+      });
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(exception.message)));
     } catch (_) {
-      await _authService.clearToken();
-    }
+      if (!mounted) {
+        return;
+      }
 
-    if (!mounted) {
-      return;
-    }
+      setState(() {
+        _loggingOut = false;
+      });
 
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Unable to restart the local development session.'),
+          ),
+        );
+    }
   }
 
   void _selectModule(_HomeModule module) {
@@ -385,59 +353,72 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _showAccountMenu() async {
-    final shouldLogout = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: const Color(0xFF2563EB),
-                    child: Text(
-                      _initials(_userName),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    _userName,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  subtitle: Text(_roleLabel(_role)),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(
-                    Icons.logout_rounded,
-                    color: Color(0xFFB91C1C),
-                  ),
-                  title: const Text(
-                    'Logout',
-                    style: TextStyle(
-                      color: Color(0xFFB91C1C),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  onTap: () => Navigator.of(sheetContext).pop(true),
-                ),
-              ],
-            ),
+  Future<void> _openAccountProfile() async {
+    final userId = int.tryParse(widget.user['id']?.toString() ?? '') ?? 0;
+
+    if (userId <= 0) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('The current account could not be resolved.'),
           ),
         );
-      },
-    );
 
-    if (shouldLogout == true && mounted) {
-      await _logout();
+      return;
     }
+
+    final scaffoldState = _scaffoldKey.currentState;
+
+    if (scaffoldState != null && scaffoldState.isDrawerOpen) {
+      Navigator.of(context).pop();
+    }
+
+    if (_appRole == AppRole.admin &&
+        ModuleRegistry.canAccess(_appRole, AppModuleId.userManagement)) {
+      final message = await Navigator.of(context).push<String>(
+        MaterialPageRoute<String>(
+          builder: (_) => UserManagementDetailScreen(
+            service: UserManagementService(authService: _authService),
+            userId: userId,
+          ),
+        ),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (message != null && message.trim().isNotEmpty) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(message)));
+      }
+
+      try {
+        final response = await _authService.me();
+        final rawUser = response['user'];
+
+        if (rawUser is Map && mounted) {
+          setState(() {
+            widget.user.addAll(Map<String, dynamic>.from(rawUser));
+          });
+        }
+      } catch (_) {
+        // Keep the current shell identity if refresh fails.
+      }
+
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => CurrentAccountProfileScreen(
+          authService: _authService,
+          fallbackUser: widget.user,
+        ),
+      ),
+    );
   }
 
   Future<void> _openGlobalNotification(NotificationOpenTarget target) async {
@@ -480,16 +461,39 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
 
       case 'tanodTasks':
-        _showPendingModule('Tanod Tasks');
-        return;
+        if (ModuleRegistry.canAccess(_appRole, AppModuleId.tanodTasks)) {
+          _selectModule(_HomeModule.tanodTasks);
+          return;
+        }
+
+        break;
 
       case 'residentComplaints':
-        _showPendingModule(
-          _appRole == AppRole.resident
-              ? 'Complaints Form'
-              : 'Resident Complaints',
-        );
-        return;
+        if (ModuleRegistry.canAccess(
+          _appRole,
+          AppModuleId.residentComplaints,
+        )) {
+          if (target.sourceId != null) {
+            final service = ResidentComplaintService(authService: _authService);
+
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => ResidentComplaintDetailScreen(
+                  service: service,
+                  complaintId: target.sourceId!,
+                  user: widget.user,
+                ),
+              ),
+            );
+
+            return;
+          }
+
+          _selectModule(_HomeModule.residentComplaints);
+          return;
+        }
+
+        break;
 
       case 'userManagement':
         _showPendingModule('User Management');
@@ -594,10 +598,39 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       case _HomeModule.tanodRoster:
         return TanodRosterScreen(authService: _authService, user: widget.user);
+      case _HomeModule.tanodTasks:
+        return TanodTasksScreen(authService: _authService, user: widget.user);
+      case _HomeModule.caseManagement:
+        return CaseManagementScreen(
+          authService: _authService,
+          user: widget.user,
+        );
+      case _HomeModule.residentComplaints:
+        return ResidentComplaintsScreen(
+          authService: _authService,
+          user: widget.user,
+        );
+      case _HomeModule.barangayMap:
+        return BarangayMapScreen(authService: _authService, user: widget.user);
+      case _HomeModule.activityLogs:
+        return ActivityLogsScreen(authService: _authService, user: widget.user);
+      case _HomeModule.userManagement:
+        return UserManagementScreen(
+          authService: _authService,
+          user: widget.user,
+        );
+      case _HomeModule.reports:
+        return ReportsScreen(authService: _authService, user: widget.user);
       case _HomeModule.announcements:
-        return _buildAnnouncements();
+        return AnnouncementsScreen(
+          authService: _authService,
+          user: widget.user,
+        );
       case _HomeModule.hotlines:
-        return _buildHotlines();
+        return EmergencyHotlinesScreen(
+          authService: _authService,
+          user: widget.user,
+        );
     }
   }
 
@@ -768,68 +801,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const Divider(height: 1, color: Color(0xFF1E3A8A)),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: _loggingOut ? null : _showAccountMenu,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: const Color(0xFF2563EB),
-                          child: Text(
-                            _initials(_userName),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                _userName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _roleLabel(_role),
-                                style: const TextStyle(
-                                  color: Color(0xFFBFDBFE),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.more_horiz_rounded,
-                          color: Color(0xFFBFDBFE),
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            GlobalAccountFooter(
+              user: widget.user,
+              authService: _authService,
+              roleLabel: _roleLabel(_role),
+              initials: _initials(_userName),
+              onProfile: _openAccountProfile,
+              onSessionAction: _logout,
+              sessionActionLabel: 'Restart Dev Session',
+              sessionActionBusy: _loggingOut,
             ),
           ],
         ),
@@ -842,8 +822,15 @@ class _HomeScreenState extends State<HomeScreen> {
     AppModuleId.incidents => _HomeModule.incidents,
     AppModuleId.tanodAlerts => _HomeModule.tanodAlerts,
     AppModuleId.tanodRoster => _HomeModule.tanodRoster,
+    AppModuleId.tanodTasks => _HomeModule.tanodTasks,
+    AppModuleId.caseManagement => _HomeModule.caseManagement,
     AppModuleId.announcements => _HomeModule.announcements,
     AppModuleId.emergencyHotlines => _HomeModule.hotlines,
+    AppModuleId.residentComplaints => _HomeModule.residentComplaints,
+    AppModuleId.barangayMap => _HomeModule.barangayMap,
+    AppModuleId.reports => _HomeModule.reports,
+    AppModuleId.userManagement => _HomeModule.userManagement,
+    AppModuleId.activityLogs => _HomeModule.activityLogs,
     _ => null,
   };
 
@@ -852,8 +839,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _HomeModule.incidents => AppModuleId.incidents,
     _HomeModule.tanodAlerts => AppModuleId.tanodAlerts,
     _HomeModule.tanodRoster => AppModuleId.tanodRoster,
+    _HomeModule.tanodTasks => AppModuleId.tanodTasks,
+    _HomeModule.caseManagement => AppModuleId.caseManagement,
     _HomeModule.announcements => AppModuleId.announcements,
     _HomeModule.hotlines => AppModuleId.emergencyHotlines,
+    _HomeModule.residentComplaints => AppModuleId.residentComplaints,
+    _HomeModule.barangayMap => AppModuleId.barangayMap,
+    _HomeModule.reports => AppModuleId.reports,
+    _HomeModule.userManagement => AppModuleId.userManagement,
+    _HomeModule.activityLogs => AppModuleId.activityLogs,
   };
   List<_NavItem> _navigationItemsForRole() {
     final definitions = ModuleRegistry.forRole(_appRole);
@@ -1142,76 +1136,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildAnnouncements() {
-    if (_announcementsLoading) {
-      return _loadingPage('Loading announcements...');
-    }
+  // ignore: unused_element
 
-    if (_announcementsError != null) {
-      return _errorPage(
-        message: _announcementsError!,
-        onRetry: _loadAnnouncements,
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadAnnouncements,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
-        children: <Widget>[
-          const _SectionTitle(
-            title: 'Announcements',
-            subtitle: 'Barangay notices and community advisories',
-          ),
-          const SizedBox(height: 16),
-          if (_announcements.isEmpty)
-            const _EmptyState(
-              icon: Icons.campaign_outlined,
-              title: 'No announcements',
-              message: 'There are no announcements available right now.',
-            )
-          else
-            ..._announcements.map(
-              (announcement) => _AnnouncementCard(announcement: announcement),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHotlines() {
-    if (_hotlinesLoading) {
-      return _loadingPage('Loading emergency hotlines...');
-    }
-
-    if (_hotlinesError != null) {
-      return _errorPage(message: _hotlinesError!, onRetry: _loadHotlines);
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadHotlines,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
-        children: <Widget>[
-          const _SectionTitle(
-            title: 'Emergency Hotlines',
-            subtitle: 'Official emergency and response contacts',
-          ),
-          const SizedBox(height: 16),
-          if (_hotlines.isEmpty)
-            const _EmptyState(
-              icon: Icons.phone_outlined,
-              title: 'No hotlines available',
-              message: 'No active emergency hotline records were found.',
-            )
-          else
-            ..._hotlines.map((hotline) => _HotlineCard(hotline: hotline)),
-        ],
-      ),
-    );
-  }
+  // ignore: unused_element
 
   Widget _loadingPage(String message) {
     return Center(
@@ -1324,38 +1251,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
         .toUpperCase();
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          title,
-          style: TextStyle(
-            color: TabangNowTheme.of(context).textMain,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: TextStyle(
-            color: TabangNowTheme.of(context).textMuted,
-            fontSize: 13,
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -2258,223 +2153,6 @@ class _RecentActivityPanel extends StatelessWidget {
                 ),
               );
             }),
-        ],
-      ),
-    );
-  }
-}
-
-class _AnnouncementCard extends StatelessWidget {
-  const _AnnouncementCard({required this.announcement});
-
-  final Map<String, dynamic> announcement;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = announcement['title']?.toString() ?? 'Announcement';
-    final content = announcement['content']?.toString() ?? '';
-    final category =
-        announcement['category_label']?.toString() ??
-        announcement['category']?.toString() ??
-        '';
-    final priority =
-        announcement['priority_label']?.toString() ??
-        announcement['priority']?.toString() ??
-        '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: TabangNowTheme.of(context).surface,
-        border: Border.all(color: TabangNowTheme.of(context).border),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(17),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDBEAFE),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.campaign_rounded,
-                    color: Color(0xFF1E40AF),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: TabangNowTheme.of(context).textMain,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (category.isNotEmpty || priority.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: <Widget>[
-                  if (category.isNotEmpty) _SmallBadge(text: category),
-                  if (priority.isNotEmpty) _SmallBadge(text: priority),
-                ],
-              ),
-            ],
-            if (content.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 12),
-              Text(
-                content,
-                style: TextStyle(
-                  color: TabangNowTheme.of(context).textSoft,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HotlineCard extends StatelessWidget {
-  const _HotlineCard({required this.hotline});
-
-  final Map<String, dynamic> hotline;
-
-  @override
-  Widget build(BuildContext context) {
-    final agency = hotline['agency_name']?.toString() ?? 'Emergency Hotline';
-    final number = hotline['hotline_number']?.toString() ?? 'No number';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: TabangNowTheme.of(context).surface,
-        border: Border.all(color: TabangNowTheme.of(context).border),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 10,
-        ),
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEE2E2),
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: const Icon(
-            Icons.phone_in_talk_rounded,
-            color: Color(0xFFB91C1C),
-          ),
-        ),
-        title: Text(
-          agency,
-          style: TextStyle(
-            color: TabangNowTheme.of(context).textMain,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 5),
-          child: Text(
-            number,
-            style: const TextStyle(
-              color: Color(0xFF1D4ED8),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SmallBadge extends StatelessWidget {
-  const _SmallBadge({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFBFDBFE)),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: TabangNowTheme.of(context).surface,
-        border: Border.all(color: TabangNowTheme.of(context).border),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: <Widget>[
-          Icon(icon, size: 42, color: TabangNowTheme.of(context).textMuted),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: TabangNowTheme.of(context).textMain,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: TabangNowTheme.of(context).textMuted,
-              height: 1.4,
-            ),
-          ),
         ],
       ),
     );
