@@ -1,0 +1,1476 @@
+import 'package:flutter/material.dart';
+
+import '../services/auth_service.dart';
+import 'incidents_screen.dart';
+import 'login_screen.dart';
+
+enum _HomeModule {
+  dashboard,
+  incidents,
+  announcements,
+  hotlines,
+}
+
+class _NavItem {
+  const _NavItem({
+    required this.label,
+    required this.icon,
+    this.module,
+    this.pending = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final _HomeModule? module;
+  final bool pending;
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({
+    super.key,
+    required this.user,
+  });
+
+  final Map<String, dynamic> user;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  static const Color _navy = Color(0xFF172554);
+  static const Color _activeBlue = Color(0xFF2563EB);
+  static const Color _contentBackground = Color(0xFFF8FAFC);
+
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final AuthService _authService = AuthService();
+
+  _HomeModule _selectedModule = _HomeModule.dashboard;
+
+  bool _dashboardLoading = true;
+  bool _announcementsLoading = true;
+  bool _hotlinesLoading = true;
+  bool _loggingOut = false;
+
+  String? _dashboardError;
+  String? _announcementsError;
+  String? _hotlinesError;
+
+  Map<String, dynamic> _dashboard = <String, dynamic>{};
+  List<Map<String, dynamic>> _announcements = <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _hotlines = <Map<String, dynamic>>[];
+
+  Key _incidentsKey = UniqueKey();
+
+  String get _role =>
+      (widget.user['role']?.toString() ?? '').trim().toLowerCase();
+
+  String get _userName =>
+      (widget.user['name']?.toString() ?? 'User').trim();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    await Future.wait(<Future<void>>[
+      _loadDashboard(),
+      _loadAnnouncements(),
+      _loadHotlines(),
+    ]);
+  }
+
+  Future<void> _loadDashboard() async {
+    if (mounted) {
+      setState(() {
+        _dashboardLoading = true;
+        _dashboardError = null;
+      });
+    }
+
+    try {
+      final response = await _authService.dashboard();
+      final rawData = response['data'];
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _dashboard = rawData is Map
+            ? Map<String, dynamic>.from(rawData)
+            : <String, dynamic>{};
+        _dashboardLoading = false;
+      });
+    } on AuthException catch (exception) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _dashboardLoading = false;
+        _dashboardError = exception.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _dashboardLoading = false;
+        _dashboardError = 'Unable to load dashboard.';
+      });
+    }
+  }
+
+  Future<void> _loadAnnouncements() async {
+    if (mounted) {
+      setState(() {
+        _announcementsLoading = true;
+        _announcementsError = null;
+      });
+    }
+
+    try {
+      final response = await _authService.announcements();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _announcements = _mapList(response['data']);
+        _announcementsLoading = false;
+      });
+    } on AuthException catch (exception) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _announcementsLoading = false;
+        _announcementsError = exception.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _announcementsLoading = false;
+        _announcementsError = 'Unable to load announcements.';
+      });
+    }
+  }
+
+  Future<void> _loadHotlines() async {
+    if (mounted) {
+      setState(() {
+        _hotlinesLoading = true;
+        _hotlinesError = null;
+      });
+    }
+
+    try {
+      final response = await _authService.emergencyHotlines();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _hotlines = _mapList(response['data']);
+        _hotlinesLoading = false;
+      });
+    } on AuthException catch (exception) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _hotlinesLoading = false;
+        _hotlinesError = exception.message;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _hotlinesLoading = false;
+        _hotlinesError = 'Unable to load emergency hotlines.';
+      });
+    }
+  }
+
+  Future<void> _refreshCurrentModule() async {
+    switch (_selectedModule) {
+      case _HomeModule.dashboard:
+        await _loadDashboard();
+        break;
+      case _HomeModule.incidents:
+        setState(() {
+          _incidentsKey = UniqueKey();
+        });
+        break;
+      case _HomeModule.announcements:
+        await _loadAnnouncements();
+        break;
+      case _HomeModule.hotlines:
+        await _loadHotlines();
+        break;
+    }
+  }
+
+  Future<void> _logout() async {
+    if (_loggingOut) {
+      return;
+    }
+
+    setState(() {
+      _loggingOut = true;
+    });
+
+    try {
+      await _authService.logout();
+    } catch (_) {
+      await _authService.clearToken();
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
+  void _selectModule(_HomeModule module) {
+    setState(() {
+      _selectedModule = module;
+    });
+
+    Navigator.of(context).pop();
+  }
+
+  void _showPendingModule(String label) {
+    Navigator.of(context).pop();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$label is part of the website-parity work and is not connected yet.',
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationsPending() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'The mobile notification center is not connected yet.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: _contentBackground,
+      drawer: _buildDrawer(),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        shadowColor: Colors.black12,
+        leading: IconButton(
+          tooltip: 'Open menu',
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          icon: const Icon(Icons.menu_rounded),
+        ),
+        titleSpacing: 4,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'TabangNow',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+              ),
+            ),
+            Text(
+              'Dao, Capiz',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: _showNotificationsPending,
+            icon: const Icon(Icons.notifications_none_rounded),
+          ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _refreshCurrentModule,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: _buildSelectedModule(),
+      ),
+    );
+  }
+
+  Widget _buildSelectedModule() {
+    switch (_selectedModule) {
+      case _HomeModule.dashboard:
+        return _buildDashboard();
+      case _HomeModule.incidents:
+        return IncidentsScreen(
+          key: _incidentsKey,
+          authService: _authService,
+          user: widget.user,
+        );
+      case _HomeModule.announcements:
+        return _buildAnnouncements();
+      case _HomeModule.hotlines:
+        return _buildHotlines();
+    }
+  }
+
+  Widget _buildDrawer() {
+    final items = _navigationItemsForRole();
+
+    return Drawer(
+      width: 310,
+      backgroundColor: _navy,
+      shape: const RoundedRectangleBorder(),
+      child: SafeArea(
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.health_and_safety_rounded,
+                      color: Colors.white,
+                      size: 27,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'TabangNow',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 21,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Dao, Capiz',
+                          style: TextStyle(
+                            color: Color(0xFFBFDBFE),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.10),
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 3),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isActive =
+                      item.module != null && item.module == _selectedModule;
+
+                  return Material(
+                    color: isActive ? _activeBlue : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: item.module != null
+                          ? () => _selectModule(item.module!)
+                          : () => _showPendingModule(item.label),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 13,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              item.icon,
+                              size: 21,
+                              color: isActive
+                                  ? Colors.white
+                                  : const Color(0xFFDBEAFE),
+                            ),
+                            const SizedBox(width: 13),
+                            Expanded(
+                              child: Text(
+                                item.label,
+                                style: TextStyle(
+                                  color: isActive
+                                      ? Colors.white
+                                      : const Color(0xFFDBEAFE),
+                                  fontSize: 14,
+                                  fontWeight: isActive
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (item.pending)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  'Pending',
+                                  style: TextStyle(
+                                    color: Color(0xFFBFDBFE),
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Divider(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.10),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 21,
+                        backgroundColor: const Color(0xFF1D4ED8),
+                        child: Text(
+                          _initials(_userName),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              _userName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _roleLabel(_role),
+                              style: const TextStyle(
+                                color: Color(0xFFBFDBFE),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _loggingOut ? null : _logout,
+                      icon: _loggingOut
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.logout_rounded),
+                      label: Text(
+                        _loggingOut ? 'Signing out...' : 'Logout',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.22),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<_NavItem> _navigationItemsForRole() {
+    switch (_role) {
+      case 'admin':
+        return const <_NavItem>[
+          _NavItem(
+            label: 'Dashboard',
+            icon: Icons.dashboard_rounded,
+            module: _HomeModule.dashboard,
+          ),
+          _NavItem(
+            label: 'Incidents',
+            icon: Icons.description_rounded,
+            module: _HomeModule.incidents,
+          ),
+          _NavItem(
+            label: 'Tanod Alerts',
+            icon: Icons.notifications_active_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Tanod Roster',
+            icon: Icons.groups_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Tanod Tasks',
+            icon: Icons.assignment_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Case Management',
+            icon: Icons.folder_open_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Announcements',
+            icon: Icons.campaign_rounded,
+            module: _HomeModule.announcements,
+          ),
+          _NavItem(
+            label: 'Emergency Hotlines',
+            icon: Icons.emergency_rounded,
+            module: _HomeModule.hotlines,
+          ),
+          _NavItem(
+            label: 'Resident Complaints',
+            icon: Icons.chat_bubble_outline_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Map',
+            icon: Icons.map_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Reports',
+            icon: Icons.bar_chart_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'User Management',
+            icon: Icons.manage_accounts_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Activity Logs',
+            icon: Icons.receipt_long_rounded,
+            pending: true,
+          ),
+        ];
+
+      case 'official':
+      case 'dao':
+        return const <_NavItem>[
+          _NavItem(
+            label: 'Dashboard',
+            icon: Icons.dashboard_rounded,
+            module: _HomeModule.dashboard,
+          ),
+          _NavItem(
+            label: 'Incidents',
+            icon: Icons.description_rounded,
+            module: _HomeModule.incidents,
+          ),
+          _NavItem(
+            label: 'Tanod Roster',
+            icon: Icons.groups_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Announcements',
+            icon: Icons.campaign_rounded,
+            module: _HomeModule.announcements,
+          ),
+          _NavItem(
+            label: 'Emergency Hotlines',
+            icon: Icons.emergency_rounded,
+            module: _HomeModule.hotlines,
+          ),
+          _NavItem(
+            label: 'Resident Complaints',
+            icon: Icons.chat_bubble_outline_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Map',
+            icon: Icons.map_rounded,
+            pending: true,
+          ),
+        ];
+
+      case 'tanod':
+        return const <_NavItem>[
+          _NavItem(
+            label: 'Dashboard',
+            icon: Icons.dashboard_rounded,
+            module: _HomeModule.dashboard,
+          ),
+          _NavItem(
+            label: 'Tanod Alerts',
+            icon: Icons.notifications_active_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Tanod Tasks',
+            icon: Icons.assignment_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Assigned Incidents',
+            icon: Icons.description_rounded,
+            module: _HomeModule.incidents,
+          ),
+          _NavItem(
+            label: 'Announcements',
+            icon: Icons.campaign_rounded,
+            module: _HomeModule.announcements,
+          ),
+          _NavItem(
+            label: 'Emergency Hotlines',
+            icon: Icons.emergency_rounded,
+            module: _HomeModule.hotlines,
+          ),
+        ];
+
+      case 'resident':
+      default:
+        return const <_NavItem>[
+          _NavItem(
+            label: 'Dashboard',
+            icon: Icons.dashboard_rounded,
+            module: _HomeModule.dashboard,
+          ),
+          _NavItem(
+            label: 'Report Incident',
+            icon: Icons.description_rounded,
+            module: _HomeModule.incidents,
+          ),
+          _NavItem(
+            label: 'Complaints Form',
+            icon: Icons.edit_note_rounded,
+            pending: true,
+          ),
+          _NavItem(
+            label: 'Announcements',
+            icon: Icons.campaign_rounded,
+            module: _HomeModule.announcements,
+          ),
+          _NavItem(
+            label: 'Emergency Hotlines',
+            icon: Icons.emergency_rounded,
+            module: _HomeModule.hotlines,
+          ),
+        ];
+    }
+  }
+
+  Widget _buildDashboard() {
+    if (_dashboardLoading) {
+      return _loadingPage('Loading dashboard...');
+    }
+
+    if (_dashboardError != null) {
+      return _errorPage(
+        message: _dashboardError!,
+        onRetry: _loadDashboard,
+      );
+    }
+
+    final summaryRaw = _dashboard['summary'];
+    final summary = summaryRaw is Map
+        ? Map<String, dynamic>.from(summaryRaw)
+        : <String, dynamic>{};
+
+    final recent = _mapList(
+      _dashboard['recent_incidents'] ?? _dashboard['recent_reports'],
+    );
+
+    final cards = _dashboardSummaryCards(summary);
+
+    return RefreshIndicator(
+      onRefresh: _loadDashboard,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
+        children: <Widget>[
+          Text(
+            'Welcome, $_userName',
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _roleLabel(_role),
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 26),
+          const _SectionTitle(
+            title: 'Overview',
+            subtitle: 'Current TabangNow operational summary',
+          ),
+          const SizedBox(height: 14),
+          ...cards.map(
+            (card) => Padding(
+              padding: const EdgeInsets.only(bottom: 11),
+              child: _SummaryCard(
+                label: card.$1,
+                value: card.$2,
+                icon: card.$3,
+              ),
+            ),
+          ),
+          if (recent.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 14),
+            const _SectionTitle(
+              title: 'Recent Incidents',
+              subtitle: 'Latest incident activity in the system',
+            ),
+            const SizedBox(height: 14),
+            ...recent.take(5).map(_buildRecentIncidentCard),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<(String, String, IconData)> _dashboardSummaryCards(
+    Map<String, dynamic> summary,
+  ) {
+    String value(String key) => summary[key]?.toString() ?? '0';
+
+    switch (_role) {
+      case 'admin':
+        return <(String, String, IconData)>[
+          ('Total Incidents', value('total_incidents'), Icons.description_rounded),
+          ('Active Cases', value('active_cases'), Icons.pending_actions_rounded),
+          ('Resolved Cases', value('resolved_cases'), Icons.task_alt_rounded),
+          ('Critical Incidents', value('critical_incidents'), Icons.warning_rounded),
+          ('Tanod On Duty', value('tanod_on_duty'), Icons.shield_rounded),
+        ];
+
+      case 'official':
+      case 'dao':
+        return <(String, String, IconData)>[
+          ('Total Incidents', value('total_incidents'), Icons.description_rounded),
+          ('Pending Incidents', value('pending_incidents'), Icons.schedule_rounded),
+          ('Active Incidents', value('active_incidents'), Icons.pending_actions_rounded),
+          ('Resolved Incidents', value('resolved_incidents'), Icons.task_alt_rounded),
+        ];
+
+      case 'tanod':
+        return <(String, String, IconData)>[
+          ('Assigned Incidents', value('assigned_incidents'), Icons.description_rounded),
+          ('Open Tasks', value('open_tasks'), Icons.assignment_rounded),
+          ('Accepted Tasks', value('accepted_tasks'), Icons.check_circle_rounded),
+          ('Declined Tasks', value('declined_tasks'), Icons.cancel_rounded),
+        ];
+
+      case 'resident':
+      default:
+        return <(String, String, IconData)>[
+          ('My Reports', value('my_reports'), Icons.description_rounded),
+          ('Pending Reports', value('pending_reports'), Icons.schedule_rounded),
+          ('Active Reports', value('active_reports'), Icons.pending_actions_rounded),
+          ('Resolved Reports', value('resolved_reports'), Icons.task_alt_rounded),
+          ('Announcements', value('announcements'), Icons.campaign_rounded),
+        ];
+    }
+  }
+
+  Widget _buildRecentIncidentCard(Map<String, dynamic> incident) {
+    final title = incident['title']?.toString() ??
+        incident['incident_title']?.toString() ??
+        'Incident';
+
+    final code = incident['incident_code']?.toString() ??
+        incident['code']?.toString() ??
+        '';
+
+    final status = incident['status']?.toString() ?? 'Unknown';
+
+    final priority = incident['priority']?.toString() ??
+        incident['severity']?.toString() ??
+        'Unknown';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: const Color(0xFFDBEAFE),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.description_rounded,
+            color: Color(0xFF1E40AF),
+          ),
+        ),
+        title: Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF0F172A),
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Text(
+            [
+              if (code.isNotEmpty) code,
+              status,
+              priority,
+            ].join(' • '),
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnnouncements() {
+    if (_announcementsLoading) {
+      return _loadingPage('Loading announcements...');
+    }
+
+    if (_announcementsError != null) {
+      return _errorPage(
+        message: _announcementsError!,
+        onRetry: _loadAnnouncements,
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadAnnouncements,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
+        children: <Widget>[
+          const _SectionTitle(
+            title: 'Announcements',
+            subtitle: 'Barangay notices and community advisories',
+          ),
+          const SizedBox(height: 16),
+          if (_announcements.isEmpty)
+            const _EmptyState(
+              icon: Icons.campaign_outlined,
+              title: 'No announcements',
+              message: 'There are no announcements available right now.',
+            )
+          else
+            ..._announcements.map(
+              (announcement) => _AnnouncementCard(
+                announcement: announcement,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHotlines() {
+    if (_hotlinesLoading) {
+      return _loadingPage('Loading emergency hotlines...');
+    }
+
+    if (_hotlinesError != null) {
+      return _errorPage(
+        message: _hotlinesError!,
+        onRetry: _loadHotlines,
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadHotlines,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
+        children: <Widget>[
+          const _SectionTitle(
+            title: 'Emergency Hotlines',
+            subtitle: 'Official emergency and response contacts',
+          ),
+          const SizedBox(height: 16),
+          if (_hotlines.isEmpty)
+            const _EmptyState(
+              icon: Icons.phone_outlined,
+              title: 'No hotlines available',
+              message: 'No active emergency hotline records were found.',
+            )
+          else
+            ..._hotlines.map(
+              (hotline) => _HotlineCard(
+                hotline: hotline,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _loadingPage(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const CircularProgressIndicator(),
+            const SizedBox(height: 14),
+            Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _errorPage({
+    required String message,
+    required Future<void> Function() onRetry,
+  }) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(24),
+      children: <Widget>[
+        const SizedBox(height: 100),
+        const Icon(
+          Icons.error_outline_rounded,
+          size: 50,
+          color: Color(0xFFDC2626),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFF334155),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 18),
+        Center(
+          child: FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try Again'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static List<Map<String, dynamic>> _mapList(dynamic raw) {
+    if (raw is! List) {
+      return <Map<String, dynamic>>[];
+    }
+
+    return raw
+        .whereType<Map>()
+        .map(Map<String, dynamic>.from)
+        .toList();
+  }
+
+  static String _roleLabel(String role) {
+    switch (role) {
+      case 'admin':
+        return 'Admin';
+      case 'official':
+      case 'dao':
+        return 'Official';
+      case 'tanod':
+        return 'Tanod';
+      case 'resident':
+        return 'Resident';
+      default:
+        return role.isEmpty ? 'User' : role;
+    }
+  }
+
+  static String _initials(String name) {
+    final parts = name
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) {
+      return 'U';
+    }
+
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+        .toUpperCase();
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF0F172A),
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: Color(0xFF64748B),
+            fontSize: 13,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 45,
+              height: 45,
+              decoration: BoxDecoration(
+                color: const Color(0xFFDBEAFE),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(
+                icon,
+                color: const Color(0xFF1E40AF),
+                size: 23,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF334155),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF0F172A),
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard({
+    required this.announcement,
+  });
+
+  final Map<String, dynamic> announcement;
+
+  @override
+  Widget build(BuildContext context) {
+    final title =
+        announcement['title']?.toString() ?? 'Announcement';
+    final content =
+        announcement['content']?.toString() ?? '';
+    final category =
+        announcement['category_label']?.toString() ??
+            announcement['category']?.toString() ??
+            '';
+    final priority =
+        announcement['priority_label']?.toString() ??
+            announcement['priority']?.toString() ??
+            '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(17),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDBEAFE),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.campaign_rounded,
+                    color: Color(0xFF1E40AF),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (category.isNotEmpty || priority.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 7,
+                runSpacing: 7,
+                children: <Widget>[
+                  if (category.isNotEmpty)
+                    _SmallBadge(text: category),
+                  if (priority.isNotEmpty)
+                    _SmallBadge(text: priority),
+                ],
+              ),
+            ],
+            if (content.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                content,
+                style: const TextStyle(
+                  color: Color(0xFF475569),
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HotlineCard extends StatelessWidget {
+  const _HotlineCard({
+    required this.hotline,
+  });
+
+  final Map<String, dynamic> hotline;
+
+  @override
+  Widget build(BuildContext context) {
+    final agency =
+        hotline['agency_name']?.toString() ?? 'Emergency Hotline';
+    final number =
+        hotline['hotline_number']?.toString() ?? 'No number';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEE2E2),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: const Icon(
+            Icons.phone_in_talk_rounded,
+            color: Color(0xFFB91C1C),
+          ),
+        ),
+        title: Text(
+          agency,
+          style: const TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Text(
+            number,
+            style: const TextStyle(
+              color: Color(0xFF1D4ED8),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallBadge extends StatelessWidget {
+  const _SmallBadge({
+    required this.text,
+  });
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFFBFDBFE),
+        ),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF1D4ED8),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: <Widget>[
+          Icon(
+            icon,
+            size: 42,
+            color: const Color(0xFF64748B),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
