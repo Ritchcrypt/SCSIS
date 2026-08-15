@@ -67,9 +67,42 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
       _latestId = _asInt(data['latest_notification_id']);
       _latestEmergencyId = _asInt(data['latest_emergency_notification_id']);
       _pulseInitialized = true;
+
+      if (_notifications.isNotEmpty) {
+        await _surfaceInitialUnread();
+      }
     } catch (_) {
       // A temporary pulse failure must not break the bell. The next successful
       // poll establishes the cursors without replaying old notifications.
+    }
+  }
+
+  Future<void> _surfaceInitialUnread() async {
+    if (!mounted || _notifications.isEmpty) {
+      return;
+    }
+
+    final latest = _notifications.first;
+    final type = latest['type']?.toString().trim().toLowerCase() ?? '';
+
+    if (type == 'mobile_emergency') {
+      await _playUrgentEmergencyFeedback();
+
+      if (mounted) {
+        _showEmergencyBanner(latest);
+      }
+
+      return;
+    }
+
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.lightImpact();
+
+    if (mounted) {
+      _showNotificationBanner(
+        latest,
+        initialUnreadCount: _unreadCount,
+      );
     }
   }
 
@@ -124,6 +157,10 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
         await SystemSound.play(SystemSoundType.alert);
         await HapticFeedback.lightImpact();
         await _loadBell();
+
+        if (mounted) {
+          _showNotificationBanner(data['notification']);
+        }
       }
     } catch (_) {
       // Keep polling resilient to temporary network failure.
@@ -155,6 +192,7 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
         (notification['message']?.toString().trim().isNotEmpty ?? false)
         ? notification['message'].toString().trim()
         : 'A new Distress Signal requires responder attention.';
+    final id = _asInt(notification['id']);
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -177,6 +215,67 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
               ),
             ],
           ),
+          action: id > 0
+              ? SnackBarAction(
+                  label: 'OPEN',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    unawaited(_openNotification(notification));
+                  },
+                )
+              : null,
+        ),
+      );
+  }
+
+  void _showNotificationBanner(
+    Object? rawNotification, {
+    int? initialUnreadCount,
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    final notification = rawNotification is Map
+        ? Map<String, dynamic>.from(rawNotification)
+        : <String, dynamic>{};
+    final title =
+        notification['title']?.toString().trim().isNotEmpty == true
+        ? notification['title'].toString().trim()
+        : notification['type_label']?.toString().trim().isNotEmpty == true
+        ? notification['type_label'].toString().trim()
+        : 'TabangNow notification';
+    final message =
+        notification['message']?.toString().trim().isNotEmpty == true
+        ? notification['message'].toString().trim()
+        : 'A new update requires your attention.';
+    final id = _asInt(notification['id']);
+    final countPrefix = initialUnreadCount != null && initialUnreadCount > 1
+        ? 'You have $initialUnreadCount unread notifications.\n'
+        : '';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 7),
+          backgroundColor: const Color(0xFF1D4ED8),
+          content: Text(
+            '$countPrefix$title\n$message',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          action: id > 0
+              ? SnackBarAction(
+                  label: 'OPEN',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    unawaited(_openNotification(notification));
+                  },
+                )
+              : null,
         ),
       );
   }
