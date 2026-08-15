@@ -31,6 +31,12 @@ class NotificationOpenController extends Controller
             );
         }
 
+        if ($type === 'mobile_emergency') {
+            return redirect()->to(
+                $this->mobileEmergencyUrl($role, $notification)
+            );
+        }
+
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return redirect()->to($this->announcementUrl($role));
         }
@@ -99,16 +105,6 @@ class NotificationOpenController extends Controller
         $query = UserNotification::query()
             ->where('user_id', $notification->user_id);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Group-read rule
-        |--------------------------------------------------------------------------
-        | If notification has source_id, mark same user + same type + same source.
-        | If source_id is empty, mark only this notification ID.
-        |
-        | This prevents old generic/system notifications from being accidentally
-        | marked read together just because they share the same type.
-        */
         if (
             Schema::hasColumn('notifications', 'source_id')
             && ! empty($notification->source_id)
@@ -126,16 +122,6 @@ class NotificationOpenController extends Controller
         string $role,
         UserNotification $notification
     ): string {
-        /*
-        |--------------------------------------------------------------------------
-        | Administrator-only registration approval
-        |--------------------------------------------------------------------------
-        |
-        | The source_id contains the newly registered resident's user ID.
-        | Only an administrator may open the account approval page.
-        |
-        */
-
         if ($role !== 'admin') {
             return $this->dashboardUrl($role);
         }
@@ -152,6 +138,27 @@ class NotificationOpenController extends Controller
 
         if (Route::has('admin.users.index')) {
             return route('admin.users.index');
+        }
+
+        return $this->dashboardUrl($role);
+    }
+
+    private function mobileEmergencyUrl(
+        string $role,
+        UserNotification $notification
+    ): string {
+        if (! in_array($role, ['admin', 'official', 'dao'], true)) {
+            return $this->dashboardUrl($role);
+        }
+
+        $sourceId = $this->sourceId($notification);
+
+        if (
+            $sourceId
+            && $this->recordExists('mobile_emergency_alerts', $sourceId)
+            && Route::has('emergency-alerts.show')
+        ) {
+            return route('emergency-alerts.show', $sourceId);
         }
 
         return $this->dashboardUrl($role);
