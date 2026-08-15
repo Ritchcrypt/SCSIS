@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../core/global_branding_logo_controller.dart';
 import 'global_sos_overlay.dart';
 
 class SosFlipCoinButton extends StatefulWidget {
@@ -22,6 +24,9 @@ class SosFlipCoinButton extends StatefulWidget {
 class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  final GlobalBrandingLogoController _branding =
+      GlobalBrandingLogoController.instance;
+
   Timer? _timer;
 
   bool _showSos = false;
@@ -30,6 +35,9 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
   @override
   void initState() {
     super.initState();
+
+    _branding.addListener(_onBrandingChanged);
+    unawaited(_branding.ensureStarted());
 
     _controller = AnimationController(
       vsync: this,
@@ -51,8 +59,15 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
   @override
   void dispose() {
     _timer?.cancel();
+    _branding.removeListener(_onBrandingChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onBrandingChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _flip() {
@@ -88,6 +103,7 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
           size: size,
           sos: visibleSos,
           enabled: visibleSos && !_controller.isAnimating,
+          logoBytes: _branding.logoBytes,
           onTap: _openSos,
         );
 
@@ -114,12 +130,14 @@ class _CoinFace extends StatelessWidget {
     required this.size,
     required this.sos,
     required this.enabled,
+    required this.logoBytes,
     required this.onTap,
   });
 
   final double size;
   final bool sos;
   final bool enabled;
+  final Uint8List? logoBytes;
   final VoidCallback onTap;
 
   @override
@@ -128,11 +146,12 @@ class _CoinFace extends StatelessWidget {
     final background = sos
         ? const Color(0xFFDC2626)
         : const Color(0xFF254C99);
+    final customLogo = logoBytes;
 
     return Semantics(
       button: sos,
       enabled: enabled,
-      label: sos ? 'Emergency SOS' : 'TabangNow safety shield',
+      label: sos ? 'Emergency SOS' : 'TabangNow system logo',
       hint: sos
           ? 'Tap to open the emergency confirmation'
           : 'The SOS face will rotate into view automatically',
@@ -170,11 +189,32 @@ class _CoinFace extends StatelessWidget {
                         letterSpacing: compact ? 0 : 1.2,
                       ),
                     )
-                  : Icon(
-                      Icons.health_and_safety_rounded,
-                      color: Colors.white,
-                      size: compact ? size * 0.58 : size * 0.52,
-                    ),
+                  : customLogo != null && customLogo.isNotEmpty
+                      ? Padding(
+                          padding: EdgeInsets.all(compact ? 5 : 10),
+                          child: ClipOval(
+                            child: Image.memory(
+                              customLogo,
+                              width: size,
+                              height: size,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
+                              gaplessPlayback: true,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.health_and_safety_rounded,
+                                  color: Colors.white,
+                                  size: compact ? size * 0.58 : size * 0.52,
+                                );
+                              },
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          Icons.health_and_safety_rounded,
+                          color: Colors.white,
+                          size: compact ? size * 0.58 : size * 0.52,
+                        ),
             ),
           ),
         ),
