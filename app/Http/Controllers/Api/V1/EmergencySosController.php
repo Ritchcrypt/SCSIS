@@ -85,7 +85,7 @@ class EmergencySosController extends Controller
             $device
         ): MobileEmergencyAlert {
             $alert = MobileEmergencyAlert::query()->create([
-                'alert_code' => 'PENDING-'.Str::uuid(),
+                'alert_code' => 'TMP-'.Str::random(20),
                 'device_id' => $device?->id,
                 'user_id' => $device?->user_id,
                 'installation_id' => $installationId,
