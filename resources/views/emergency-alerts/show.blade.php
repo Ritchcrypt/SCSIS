@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', 'Mobile SOS Alert | TabangNow')
+@section('title', 'Distress Signal Alert | TabangNow')
 
 @section('content')
 @php
@@ -19,7 +19,7 @@
     <div>
         <a href="{{ route($mobileSosIndexRoute) }}"
            class="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900">
-            ← Back to Mobile SOS
+            ← Back to Distress Signal
         </a>
     </div>
 
@@ -27,7 +27,7 @@
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <p class="text-sm font-bold uppercase tracking-[0.18em] text-red-700">
-                    Mobile SOS Alert
+                    Distress Signal Alert
                 </p>
                 <h1 class="mt-2 text-2xl font-black text-slate-950">
                     {{ $alert->alert_code }}
@@ -120,7 +120,7 @@
                 </a>
             @else
                 <p class="mt-4 text-sm text-slate-600">
-                    Location was not stored for this earlier alert. New Mobile SOS submissions require current GPS or a last-known device location.
+                    Location was not stored for this earlier alert. New distress signal submissions require current GPS or a last-known device location.
                 </p>
             @endif
         </section>
@@ -135,7 +135,7 @@
                     @csrf
                     @method('PATCH')
                     <button type="submit" class="rounded-xl bg-amber-500 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-amber-600">
-                        Acknowledge SOS
+                        Acknowledge Distress Signal
                     </button>
                 </form>
             @endif
