@@ -5,11 +5,10 @@ declare(strict_types=1);
 /**
  * Surgical Flutter auth patch.
  *
- * - Makes AuthGate and RegisterScreen input boxes white with dark text/icons.
- * - Keeps the post-logout LoginScreen white-field behavior consistent.
- * - Improves AuthService login transport errors so local Android connectivity
- *   problems identify the configured API address instead of becoming a generic
- *   "Unable to connect" message.
+ * - Makes AuthGate/RegisterScreen input boxes white with dark text/icons.
+ * - Makes the post-logout LoginScreen white-field behavior explicit.
+ * - Makes login transport failures identify the configured API endpoint and
+ *   explain the ADB-reverse requirement for local physical-device testing.
  *
  * Run from the Flutter project root:
  *   php tool/apply_auth_connectivity_ui_fix.php
@@ -17,28 +16,32 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 
-function readSource(string $path): string
+function source(string $path): string
 {
-    $source = file_get_contents($path);
-    if ($source === false) {
+    $value = file_get_contents($path);
+    if ($value === false) {
         fwrite(STDERR, "Unable to read {$path}.\n");
         exit(1);
     }
 
-    return str_replace(["\r\n", "\r"], "\n", $source);
+    return str_replace(["\r\n", "\r"], "\n", $value);
 }
 
-function replaceRequired(string $source, string $search, string $replace, string $label): string
-{
-    if (! str_contains($source, $search)) {
+function requiredReplace(
+    string $value,
+    string $search,
+    string $replacement,
+    string $label
+): string {
+    if (! str_contains($value, $search)) {
         fwrite(STDERR, "Patch stopped: expected {$label} was not found. No guess was made.\n");
         exit(2);
     }
 
-    return str_replace($search, $replace, $source);
+    return str_replace($search, $replacement, $value);
 }
 
-function writeIfChanged(string $path, string $before, string $after): void
+function saveChanged(string $path, string $before, string $after): void
 {
     if ($before === $after) {
         return;
@@ -62,111 +65,110 @@ foreach ([$authGatePath, $registerPath, $loginPath, $authServicePath] as $path) 
     }
 }
 
-// -------------------------------------------------------------------------
-// AuthGate: remove explicit dark input styling.
-// -------------------------------------------------------------------------
-$before = readSource($authGatePath);
+// AuthGate: white fields, dark typed text, readable neutral icons/hints.
+$before = source($authGatePath);
 $after = $before;
-$after = replaceRequired(
+$after = requiredReplace(
     $after,
     "hintStyle: const TextStyle(color: Color(0xFFCBD5E1)),\n      prefixIcon: Icon(icon, color: const Color(0xFFCBD5E1)),",
     "hintStyle: const TextStyle(color: Color(0xFF64748B)),\n      prefixIcon: Icon(icon, color: const Color(0xFF64748B)),",
     'AuthGate hint/icon colors'
 );
-$after = replaceRequired(
+$after = requiredReplace(
     $after,
-    "fillColor: const Color(0xFF101827),",
-    "fillColor: Colors.white,",
-    'AuthGate dark fill color'
+    'fillColor: const Color(0xFF101827),',
+    'fillColor: Colors.white,',
+    'AuthGate dark fill'
 );
-$after = replaceRequired(
+$after = requiredReplace(
     $after,
-    "borderSide: const BorderSide(color: Color(0xFF273449)),",
-    "borderSide: const BorderSide(color: Color(0xFFCBD5E1)),",
-    'AuthGate enabled border color'
+    'borderSide: const BorderSide(color: Color(0xFF273449)),',
+    'borderSide: const BorderSide(color: Color(0xFFCBD5E1)),',
+    'AuthGate enabled border'
 );
-$after = replaceRequired(
+$after = requiredReplace(
     $after,
     "color: Colors.white,\n                              fontSize: 17,",
     "color: Color(0xFF0F172A),\n                              fontSize: 17,",
-    'AuthGate typed text color'
+    'AuthGate typed text'
 );
 $after = str_replace(
-    "color: const Color(0xFFCBD5E1),\n                                ),\n                              ),\n                            ),\n                            validator: (value) =>",
-    "color: const Color(0xFF64748B),\n                                ),\n                              ),\n                            ),\n                            validator: (value) =>",
+    'color: const Color(0xFFCBD5E1),',
+    'color: const Color(0xFF64748B),',
     $after
 );
-writeIfChanged($authGatePath, $before, $after);
+saveChanged($authGatePath, $before, $after);
 
-// -------------------------------------------------------------------------
-// RegisterScreen: same white fields for every registration input.
-// -------------------------------------------------------------------------
-$before = readSource($registerPath);
+// RegisterScreen: same visual treatment for all six fields.
+$before = source($registerPath);
 $after = $before;
-$after = replaceRequired(
+$after = requiredReplace(
     $after,
     "hintStyle: const TextStyle(color: Color(0xFFCBD5E1)),\n      prefixIcon: Icon(icon, color: const Color(0xFFCBD5E1)),",
     "hintStyle: const TextStyle(color: Color(0xFF64748B)),\n      prefixIcon: Icon(icon, color: const Color(0xFF64748B)),",
     'RegisterScreen hint/icon colors'
 );
-$after = replaceRequired(
+$after = requiredReplace(
     $after,
-    "fillColor: const Color(0xFF101827),",
-    "fillColor: Colors.white,",
-    'RegisterScreen dark fill color'
+    'fillColor: const Color(0xFF101827),',
+    'fillColor: Colors.white,',
+    'RegisterScreen dark fill'
 );
-$after = replaceRequired(
+$after = requiredReplace(
     $after,
-    "borderSide: const BorderSide(color: Color(0xFF273449)),",
-    "borderSide: const BorderSide(color: Color(0xFFCBD5E1)),",
-    'RegisterScreen enabled border color'
+    'borderSide: const BorderSide(color: Color(0xFF273449)),',
+    'borderSide: const BorderSide(color: Color(0xFFCBD5E1)),',
+    'RegisterScreen enabled border'
 );
-$whiteTextCount = substr_count($after, "style: const TextStyle(color: Colors.white),");
-if ($whiteTextCount < 6) {
-    fwrite(STDERR, "Patch stopped: expected six RegisterScreen dark text styles, found {$whiteTextCount}.\n");
+
+$darkFieldTextCount = substr_count(
+    $after,
+    'style: const TextStyle(color: Colors.white),'
+);
+if ($darkFieldTextCount !== 6) {
+    fwrite(
+        STDERR,
+        "Patch stopped: expected exactly six RegisterScreen dark field text styles, found {$darkFieldTextCount}.\n"
+    );
     exit(2);
 }
-$after = str_replace(
-    "style: const TextStyle(color: Colors.white),",
-    "style: const TextStyle(color: Color(0xFF0F172A)),",
-    $after
-);
-$after = str_replace(
-    "color: const Color(0xFFCBD5E1),",
-    "color: const Color(0xFF64748B),",
-    $after
-);
-writeIfChanged($registerPath, $before, $after);
 
-// -------------------------------------------------------------------------
-// Legacy/post-logout LoginScreen: make white field appearance explicit so it
-// cannot depend on an inherited theme changing later.
-// -------------------------------------------------------------------------
-$before = readSource($loginPath);
+$after = str_replace(
+    'style: const TextStyle(color: Colors.white),',
+    'style: const TextStyle(color: Color(0xFF0F172A)),',
+    $after
+);
+$after = str_replace(
+    'color: const Color(0xFFCBD5E1),',
+    'color: const Color(0xFF64748B),',
+    $after
+);
+saveChanged($registerPath, $before, $after);
+
+// Post-logout LoginScreen: keep white fields explicit even if global theme changes.
+$before = source($loginPath);
 $after = $before;
-if (! str_contains($after, "fillColor: Colors.white")) {
-    $after = replaceRequired(
+if (! str_contains($after, 'fillColor: Colors.white')) {
+    $after = requiredReplace(
         $after,
         "decoration: const InputDecoration(\n                                labelText: 'Email address',",
         "style: const TextStyle(color: Color(0xFF0F172A)),\n                              decoration: const InputDecoration(\n                                filled: true,\n                                fillColor: Colors.white,\n                                labelText: 'Email address',",
-        'LoginScreen email decoration'
+        'LoginScreen email field'
     );
-    $after = replaceRequired(
+    $after = requiredReplace(
         $after,
         "decoration: InputDecoration(\n                                labelText: 'Password',",
         "style: const TextStyle(color: Color(0xFF0F172A)),\n                              decoration: InputDecoration(\n                                filled: true,\n                                fillColor: Colors.white,\n                                labelText: 'Password',",
-        'LoginScreen password decoration'
+        'LoginScreen password field'
     );
 }
-writeIfChanged($loginPath, $before, $after);
+saveChanged($loginPath, $before, $after);
 
-// -------------------------------------------------------------------------
-// AuthService: make the actual transport failure actionable.
-// -------------------------------------------------------------------------
-$before = readSource($authServicePath);
+// AuthService: surface the real transport failure instead of a generic catch.
+$before = source($authServicePath);
 $after = $before;
 if (! str_contains($after, "import 'dart:async';")) {
-    $after = replaceRequired(
+    $after = requiredReplace(
         $after,
         "import 'dart:convert';\n",
         "import 'dart:async';\nimport 'dart:convert';\nimport 'dart:io';\n",
@@ -175,15 +177,15 @@ if (! str_contains($after, "import 'dart:async';")) {
 }
 
 if (! str_contains($after, '_requestTimeout')) {
-    $after = replaceRequired(
+    $after = requiredReplace(
         $after,
         "  static const String _tokenKey = 'tabangnow_access_token';\n\n",
         "  static const String _tokenKey = 'tabangnow_access_token';\n  static const Duration _requestTimeout = Duration(seconds: 15);\n\n",
-        'AuthService timeout constant location'
+        'AuthService timeout location'
     );
 }
 
-$oldLoginRequest = <<<'DART'
+$oldRequest = <<<'DART'
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v1/auth/login'),
       headers: {
@@ -198,7 +200,7 @@ $oldLoginRequest = <<<'DART'
     );
 DART;
 
-$newLoginRequest = <<<'DART'
+$newRequest = <<<'DART'
     late final http.Response response;
 
     try {
@@ -232,31 +234,44 @@ $newLoginRequest = <<<'DART'
 DART;
 
 if (! str_contains($after, 'For local physical-device testing')) {
-    $after = replaceRequired(
+    $after = requiredReplace(
         $after,
-        $oldLoginRequest,
-        $newLoginRequest,
-        'AuthService login request block'
+        $oldRequest,
+        $newRequest,
+        'AuthService login request'
     );
 }
-writeIfChanged($authServicePath, $before, $after);
+saveChanged($authServicePath, $before, $after);
 
-// Final safety assertions.
-$authGate = readSource($authGatePath);
-$register = readSource($registerPath);
-$login = readSource($loginPath);
-$authService = readSource($authServicePath);
-
+// Independent final assertions. Do not use booleans as associative-array keys.
 $checks = [
-    ! str_contains($authGate, 'fillColor: const Color(0xFF101827)') => 'AuthGate no longer uses dark field fill',
-    str_contains($authGate, 'fillColor: Colors.white') => 'AuthGate uses white field fill',
-    ! str_contains($register, 'fillColor: const Color(0xFF101827)') => 'RegisterScreen no longer uses dark field fill',
-    str_contains($register, 'fillColor: Colors.white') => 'RegisterScreen uses white field fill',
-    str_contains($login, 'fillColor: Colors.white') => 'LoginScreen explicitly uses white field fill',
-    str_contains($authService, 'adb reverse tcp:8000 tcp:8000') => 'AuthService has actionable local-device network error',
+    [
+        ! str_contains(source($authGatePath), 'fillColor: const Color(0xFF101827)'),
+        'AuthGate dark field fill removed',
+    ],
+    [
+        str_contains(source($authGatePath), 'fillColor: Colors.white'),
+        'AuthGate white field fill present',
+    ],
+    [
+        ! str_contains(source($registerPath), 'fillColor: const Color(0xFF101827)'),
+        'RegisterScreen dark field fill removed',
+    ],
+    [
+        str_contains(source($registerPath), 'fillColor: Colors.white'),
+        'RegisterScreen white field fill present',
+    ],
+    [
+        str_contains(source($loginPath), 'fillColor: Colors.white'),
+        'LoginScreen explicit white field fill present',
+    ],
+    [
+        str_contains(source($authServicePath), 'adb reverse tcp:8000 tcp:8000'),
+        'AuthService actionable local-device network error present',
+    ],
 ];
 
-foreach ($checks as $passed => $label) {
+foreach ($checks as [$passed, $label]) {
     if (! $passed) {
         fwrite(STDERR, "Final validation failed: {$label}.\n");
         exit(3);
@@ -264,5 +279,5 @@ foreach ($checks as $passed => $label) {
 }
 
 echo "Auth connectivity/UI patch applied successfully.\n";
-echo "Login and registration input boxes are now white with dark text/icons.\n";
-echo "Login transport failures now report the configured API address and ADB-reverse hint.\n";
+echo "Login and registration input boxes are white with dark text/icons.\n";
+echo "Login network failures now identify the API address and local ADB-reverse requirement.\n";
