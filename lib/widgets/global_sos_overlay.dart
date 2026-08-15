@@ -9,6 +9,37 @@ class GlobalSosOverlay extends StatefulWidget {
 
   final Widget child;
 
+  static _GlobalSosOverlayState? _hostState;
+
+  static Future<void> open(BuildContext context) async {
+    final host = _hostState;
+
+    if (host != null && host.mounted) {
+      await host._beginSosFlow(context);
+      return;
+    }
+
+    final ancestor =
+        context.findAncestorStateOfType<_GlobalSosOverlayState>();
+
+    if (ancestor != null && ancestor.mounted) {
+      await ancestor._beginSosFlow(context);
+      return;
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Emergency SOS is still initializing. Please try again.',
+            ),
+          ),
+        );
+    }
+  }
+
   @override
   State<GlobalSosOverlay> createState() => _GlobalSosOverlayState();
 }
@@ -17,54 +48,26 @@ class _GlobalSosOverlayState extends State<GlobalSosOverlay> {
   bool _flowOpen = false;
 
   @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        Positioned.fill(child: widget.child),
-        SafeArea(
-          minimum: const EdgeInsets.all(16),
-          child: Align(
-            alignment: Alignment.bottomRight,
-            child: Semantics(
-              button: true,
-              label: 'Emergency SOS',
-              hint: 'Opens a confirmation before any distress signal can be sent',
-              child: Material(
-                elevation: 8,
-                color: const Color(0xFFDC2626),
-                shape: const StadiumBorder(),
-                child: InkWell(
-                  customBorder: const StadiumBorder(),
-                  onTap: _flowOpen ? null : _beginSosFlow,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Icon(Icons.sos_rounded, color: Colors.white, size: 24),
-                        SizedBox(width: 8),
-                        Text(
-                          'SOS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
+  void initState() {
+    super.initState();
+    GlobalSosOverlay._hostState = this;
   }
 
-  Future<void> _beginSosFlow() async {
+  @override
+  void dispose() {
+    if (identical(GlobalSosOverlay._hostState, this)) {
+      GlobalSosOverlay._hostState = null;
+    }
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
+
+  Future<void> _beginSosFlow(BuildContext launchContext) async {
     if (_flowOpen) {
       return;
     }
@@ -73,11 +76,15 @@ class _GlobalSosOverlayState extends State<GlobalSosOverlay> {
       _flowOpen = true;
     });
 
-    await HapticFeedback.mediumImpact();
+    HapticFeedback.mediumImpact();
 
     try {
+      if (!launchContext.mounted) {
+        return;
+      }
+
       final confirmed = await showDialog<bool>(
-        context: context,
+        context: launchContext,
         barrierDismissible: true,
         builder: (dialogContext) {
           return AlertDialog(
@@ -109,26 +116,26 @@ class _GlobalSosOverlayState extends State<GlobalSosOverlay> {
         },
       );
 
-      if (confirmed != true || !mounted) {
+      if (confirmed != true || !mounted || !launchContext.mounted) {
         return;
       }
 
       final result = await showModalBottomSheet<MobileSosSendResult>(
-        context: context,
+        context: launchContext,
         isScrollControlled: true,
         useSafeArea: true,
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: Theme.of(launchContext).colorScheme.surface,
         builder: (_) => _MobileSosForm(
           authService: AuthService(),
         ),
       );
 
-      if (result == null || !mounted) {
+      if (result == null || !mounted || !launchContext.mounted) {
         return;
       }
 
       await showDialog<void>(
-        context: context,
+        context: launchContext,
         barrierDismissible: false,
         builder: (dialogContext) {
           return AlertDialog(
