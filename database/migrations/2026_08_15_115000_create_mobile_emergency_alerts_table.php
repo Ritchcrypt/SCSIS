@@ -13,6 +13,7 @@ return new class extends Migration
             $table->string('alert_code', 40)->unique();
             $table->foreignId('device_id')->nullable()->constrained('mobile_emergency_devices')->nullOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('installation_id', 120)->index();
             $table->string('request_id', 120)->unique();
             $table->string('status', 30)->default('active')->index();
             $table->decimal('latitude', 10, 7)->nullable();
@@ -30,6 +31,7 @@ return new class extends Migration
 
             $table->index(['user_id', 'triggered_at']);
             $table->index(['device_id', 'triggered_at']);
+            $table->index(['installation_id', 'status', 'triggered_at'], 'mobile_sos_installation_status_time_idx');
         });
     }
 
