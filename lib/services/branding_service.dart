@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
+import '../core/global_branding_logo_controller.dart';
 import 'auth_service.dart';
 
 class BrandingService {
@@ -106,8 +107,15 @@ class BrandingService {
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
+    final data = await _decodeAuthorizedResponse(response);
 
-    return _decodeAuthorizedResponse(response);
+    // One Admin branding update must immediately fan out to every mobile widget
+    // that represents the system logo. The public logo fetch is cache-busted by
+    // GlobalBrandingLogoController, so replacing/removing the logo is reflected
+    // without restarting the app.
+    await GlobalBrandingLogoController.instance.refresh();
+
+    return data;
   }
 
   Future<Map<String, String>> _headers() async {

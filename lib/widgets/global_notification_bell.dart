@@ -31,7 +31,9 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
   Timer? _timer;
   bool _loading = true;
   bool _requestRunning = false;
+  bool _pulseInitialized = false;
   int _latestId = 0;
+  int _latestEmergencyId = 0;
   int _unreadCount = 0;
   List<Map<String, dynamic>> _notifications = <Map<String, dynamic>>[];
 
@@ -63,8 +65,41 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
           : <String, dynamic>{};
 
       _latestId = _asInt(data['latest_notification_id']);
+      _latestEmergencyId = _asInt(data['latest_emergency_notification_id']);
+      _pulseInitialized = true;
+
+      if (_notifications.isNotEmpty) {
+        await _surfaceInitialUnread();
+      }
     } catch (_) {
-      // A temporary pulse failure must not break the bell.
+      // A temporary pulse failure must not break the bell. The next successful
+      // poll establishes the cursors without replaying old notifications.
+    }
+  }
+
+  Future<void> _surfaceInitialUnread() async {
+    if (!mounted || _notifications.isEmpty) {
+      return;
+    }
+
+    final latest = _notifications.first;
+    final type = latest['type']?.toString().trim().toLowerCase() ?? '';
+
+    if (type == 'mobile_emergency') {
+      await _playUrgentEmergencyFeedback();
+
+      if (mounted) {
+        _showEmergencyBanner(latest);
+      }
+
+      return;
+    }
+
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.lightImpact();
+
+    if (mounted) {
+      _showNotificationBanner(latest, initialUnreadCount: _unreadCount);
     }
   }
 
@@ -83,29 +118,162 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
           : <String, dynamic>{};
 
       final latest = _asInt(data['latest_notification_id']);
+      final latestEmergency = _asInt(data['latest_emergency_notification_id']);
 
-      if (latest <= 0) {
-        return;
-      }
-
-      if (_latestId == 0) {
+      if (!_pulseInitialized) {
         _latestId = latest;
+        _latestEmergencyId = latestEmergency;
+        _pulseInitialized = true;
         return;
       }
 
-      if (latest > _latestId) {
+      final hasNewEmergency =
+          latestEmergency > 0 && latestEmergency > _latestEmergencyId;
+      final hasNewNotification = latest > 0 && latest > _latestId;
+
+      if (hasNewEmergency) {
+        _latestEmergencyId = latestEmergency;
+
+        if (latest > _latestId) {
+          _latestId = latest;
+        }
+
+        await _playUrgentEmergencyFeedback();
+        await _loadBell();
+
+        if (mounted) {
+          _showEmergencyBanner(data['emergency_notification']);
+        }
+
+        return;
+      }
+
+      if (hasNewNotification) {
         _latestId = latest;
 
         await SystemSound.play(SystemSoundType.alert);
-
         await HapticFeedback.lightImpact();
         await _loadBell();
+
+        if (mounted) {
+          _showNotificationBanner(data['notification']);
+        }
       }
     } catch (_) {
       // Keep polling resilient to temporary network failure.
     } finally {
       _requestRunning = false;
     }
+  }
+
+  Future<void> _playUrgentEmergencyFeedback() async {
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.heavyImpact();
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.heavyImpact();
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.mediumImpact();
+  }
+
+  void _showEmergencyBanner(Object? rawNotification) {
+    if (!mounted) {
+      return;
+    }
+
+    final notification = rawNotification is Map
+        ? Map<String, dynamic>.from(rawNotification)
+        : <String, dynamic>{};
+    final message =
+        (notification['message']?.toString().trim().isNotEmpty ?? false)
+        ? notification['message'].toString().trim()
+        : 'A new Distress Signal requires responder attention.';
+    final id = _asInt(notification['id']);
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          backgroundColor: const Color(0xFFB91C1C),
+          content: Row(
+            children: <Widget>[
+              const Icon(Icons.warning_amber_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'URGENT DISTRESS SIGNAL\n$message',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          action: id > 0
+              ? SnackBarAction(
+                  label: 'OPEN',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    unawaited(_openNotification(notification));
+                  },
+                )
+              : null,
+        ),
+      );
+  }
+
+  void _showNotificationBanner(
+    Object? rawNotification, {
+    int? initialUnreadCount,
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    final notification = rawNotification is Map
+        ? Map<String, dynamic>.from(rawNotification)
+        : <String, dynamic>{};
+    final title = notification['title']?.toString().trim().isNotEmpty == true
+        ? notification['title'].toString().trim()
+        : notification['type_label']?.toString().trim().isNotEmpty == true
+        ? notification['type_label'].toString().trim()
+        : 'TabangNow notification';
+    final message =
+        notification['message']?.toString().trim().isNotEmpty == true
+        ? notification['message'].toString().trim()
+        : 'A new update requires your attention.';
+    final id = _asInt(notification['id']);
+    final countPrefix = initialUnreadCount != null && initialUnreadCount > 1
+        ? 'You have $initialUnreadCount unread notifications.\n'
+        : '';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 7),
+          backgroundColor: const Color(0xFF1D4ED8),
+          content: Text(
+            '$countPrefix$title\n$message',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          action: id > 0
+              ? SnackBarAction(
+                  label: 'OPEN',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    unawaited(_openNotification(notification));
+                  },
+                )
+              : null,
+        ),
+      );
   }
 
   Future<void> _loadBell() async {

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/tabangnow_theme.dart';
 import '../widgets/global_theme_button.dart';
 import '../widgets/global_notification_bell.dart';
+import '../widgets/sos_flip_coin_button.dart';
 import '../widgets/global_account_footer.dart';
 import '../services/notification_center_service.dart';
 
@@ -254,9 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => const LoginScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
       (route) => false,
     );
   }
@@ -560,6 +559,8 @@ class _HomeScreenState extends State<HomeScreen> {
         title: null,
         titleSpacing: 0,
         actions: <Widget>[
+          const SosFlipCoinButton(size: 42),
+          const SizedBox(width: 8),
           GlobalThemeButton(user: widget.user, authService: _authService),
           const SizedBox(width: 8),
           GlobalNotificationBell(
@@ -905,7 +906,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: _role == 'admin'
                   ? 'Admin Dashboard'
                   : 'Official Dashboard',
-              subtitle: 'Dao, Capiz ΓÇö Community Safety Overview',
+              subtitle: 'Dao, Capiz \u2014 Community Safety Overview',
             )
           else if (_role == 'tanod')
             const _DashboardHeroCard(
@@ -1601,11 +1602,11 @@ class _WeatherDisasterCard extends StatelessWidget {
                   label: 'Temperature',
                   value: _number(
                     weather['temperature'],
-                    suffix: '┬░C',
+                    suffix: '\u00B0C',
                     decimals: 1,
                   ),
                   note:
-                      'Feels like ${_number(weather['feels_like'], suffix: '┬░C', decimals: 1)}',
+                      'Feels like ${_number(weather['feels_like'], suffix: '\u00B0C', decimals: 1)}',
                 ),
                 _WeatherMetricTile(
                   label: 'Condition',

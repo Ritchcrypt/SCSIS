@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'core/global_theme_controller.dart';
 
+import 'widgets/global_sos_overlay.dart';
+
 import 'screens/auth_gate.dart';
 
 void main() {
@@ -16,8 +18,9 @@ class TabangNowApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      builder: (context, child) =>
-          TabangNowGlobalTheme(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => TabangNowGlobalTheme(
+        child: GlobalSosOverlay(child: child ?? const SizedBox.shrink()),
+      ),
       title: 'TabangNow',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
