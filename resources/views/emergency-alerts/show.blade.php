@@ -1,8 +1,14 @@
 @extends('layouts.admin')
 
-@section('title', 'Mobile Emergency Alert | TabangNow')
+@section('title', 'Mobile SOS Alert | TabangNow')
 
 @section('content')
+@php
+    $mobileSosIndexRoute = auth()->user()?->isAdmin()
+        ? 'admin.mobile-sos.index'
+        : 'official.mobile-sos.index';
+@endphp
+
 <div class="space-y-6">
     @if (session('success'))
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
@@ -10,11 +16,18 @@
         </div>
     @endif
 
+    <div>
+        <a href="{{ route($mobileSosIndexRoute) }}"
+           class="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900">
+            ← Back to Mobile SOS
+        </a>
+    </div>
+
     <div class="rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <p class="text-sm font-bold uppercase tracking-[0.18em] text-red-700">
-                    Mobile Emergency Alert
+                    Mobile SOS Alert
                 </p>
                 <h1 class="mt-2 text-2xl font-black text-slate-950">
                     {{ $alert->alert_code }}
@@ -31,13 +44,27 @@
         </div>
     </div>
 
+    <section class="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+        <h2 class="text-lg font-black text-slate-900">Emergency</h2>
+        <p class="mt-4 whitespace-pre-wrap text-base leading-7 text-slate-900">
+            {{ $alert->emergency_details ?: 'No emergency description was stored for this earlier alert.' }}
+        </p>
+    </section>
+
     <div class="grid gap-6 lg:grid-cols-2">
         <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 class="text-lg font-black text-slate-900">Source</h2>
+            <h2 class="text-lg font-black text-slate-900">Caller</h2>
 
             <dl class="mt-5 space-y-4 text-sm">
                 <div>
-                    <dt class="font-semibold text-slate-500">Person</dt>
+                    <dt class="font-semibold text-slate-500">Submitted mobile number</dt>
+                    <dd class="mt-1 text-lg font-black text-slate-900">
+                        {{ $alert->contact_number ?: 'Not provided for this earlier alert' }}
+                    </dd>
+                </div>
+
+                <div>
+                    <dt class="font-semibold text-slate-500">Linked TabangNow user</dt>
                     <dd class="mt-1 font-bold text-slate-900">{{ $alert->display_name }}</dd>
                 </div>
 
@@ -47,16 +74,12 @@
                         <dd class="mt-1 capitalize text-slate-900">{{ $alert->user->role }}</dd>
                     </div>
                     <div>
-                        <dt class="font-semibold text-slate-500">Contact number</dt>
-                        <dd class="mt-1 text-slate-900">{{ $alert->user->contact_number ?: 'Not available' }}</dd>
-                    </div>
-                    <div>
-                        <dt class="font-semibold text-slate-500">Address</dt>
+                        <dt class="font-semibold text-slate-500">Registered address</dt>
                         <dd class="mt-1 text-slate-900">{{ $alert->user->address ?: 'Not available' }}</dd>
                     </div>
                 @else
-                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-                        This SOS came from a mobile installation that was not linked to a TabangNow account. Treat it as a valid emergency alert; identity is simply unavailable.
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
+                        No TabangNow account was linked to this device. Use the submitted mobile number and location when responding.
                     </div>
                 @endif
             </dl>
@@ -67,6 +90,12 @@
 
             @if ($alert->latitude !== null && $alert->longitude !== null)
                 <dl class="mt-5 space-y-4 text-sm">
+                    <div>
+                        <dt class="font-semibold text-slate-500">Location source</dt>
+                        <dd class="mt-1 font-bold text-slate-900">
+                            {{ $alert->location_source === 'last_known' ? 'Last known device location' : 'Current device GPS' }}
+                        </dd>
+                    </div>
                     <div>
                         <dt class="font-semibold text-slate-500">Latitude</dt>
                         <dd class="mt-1 font-mono text-slate-900">{{ $alert->latitude }}</dd>
@@ -82,9 +111,16 @@
                         </dd>
                     </div>
                 </dl>
+
+                <a href="https://www.google.com/maps/search/?api=1&query={{ urlencode($alert->latitude.','.$alert->longitude) }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="mt-5 inline-flex rounded-xl bg-blue-700 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-800">
+                    Open Location in Maps
+                </a>
             @else
                 <p class="mt-4 text-sm text-slate-600">
-                    Location was not available when the emergency alert was triggered. The SOS remains valid and should still be handled immediately.
+                    Location was not stored for this earlier alert. New Mobile SOS submissions require current GPS or a last-known device location.
                 </p>
             @endif
         </section>
@@ -99,7 +135,7 @@
                     @csrf
                     @method('PATCH')
                     <button type="submit" class="rounded-xl bg-amber-500 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-amber-600">
-                        Acknowledge Alert
+                        Acknowledge SOS
                     </button>
                 </form>
             @endif
