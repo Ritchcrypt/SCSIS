@@ -1473,7 +1473,7 @@ class _WeatherDisasterCard extends StatelessWidget {
   static String _number(dynamic raw, {String suffix = '', int decimals = 0}) {
     final value = double.tryParse(raw?.toString() ?? '');
     if (value == null) {
-      return 'ΓÇö';
+      return '\u2014';
     }
     return '${value.toStringAsFixed(decimals)}$suffix';
   }
@@ -1544,7 +1544,7 @@ class _WeatherDisasterCard extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  weather['icon']?.toString() ?? '≡ƒîñ∩╕Å',
+                  weather['icon']?.toString() ?? '\u{1F324}\uFE0F',
                   style: const TextStyle(fontSize: 24),
                 ),
               ),
@@ -2131,7 +2131,7 @@ class _RecentActivityPanel extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  'ΓÇó ${_relative(reportedRaw)}',
+                                  '\u2022 ${_relative(reportedRaw)}',
                                   style: TextStyle(
                                     color: TabangNowTheme.of(context).textMuted,
                                     fontSize: 10.5,
@@ -2145,7 +2145,7 @@ class _RecentActivityPanel extends StatelessWidget {
                                 'Reporter: $reporter',
                                 if (assigned != null && assigned.isNotEmpty)
                                   'Assigned: $assigned',
-                              ].join(' ΓÇó '),
+                              ].join(' \u2022 '),
                               style: TextStyle(
                                 color: TabangNowTheme.of(context).textFaint,
                                 fontSize: 9.5,
