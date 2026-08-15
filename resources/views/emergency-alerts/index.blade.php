@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', 'Mobile SOS | TabangNow')
+@section('title', 'Distress Signal | TabangNow')
 
 @section('content')
 <div class="space-y-6">
@@ -8,9 +8,9 @@
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
                 <p class="text-sm font-bold uppercase tracking-[0.18em] text-red-700">Emergency Response</p>
-                <h1 class="mt-1 text-2xl font-black text-slate-950">Mobile SOS</h1>
+                <h1 class="mt-1 text-2xl font-black text-slate-950">Distress Signal</h1>
                 <p class="mt-2 text-sm text-slate-600">
-                    Emergency requests submitted from the TabangNow mobile application.
+                    Emergency distress signals submitted from the TabangNow mobile application.
                 </p>
             </div>
 
@@ -84,7 +84,7 @@
                     @empty
                         <tr>
                             <td colspan="7" class="px-6 py-12 text-center text-slate-500">
-                                No Mobile SOS alerts have been received yet.
+                                No distress signals have been received yet.
                             </td>
                         </tr>
                     @endforelse
