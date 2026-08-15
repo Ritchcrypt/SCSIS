@@ -30,45 +30,53 @@ if (-not (Test-Path $homeBackup)) {
 }
 
 # -----------------------------------------------------------------------------
-# Global SOS flow: remove the floating bottom-right launcher but keep the
-# established confirmation/form/GPS/send flow. Expose a static opener so any
-# deliberate launcher (login coin or authenticated app-bar coin) can reuse it.
+# Global SOS flow: remove the old bottom-right floating launcher while keeping
+# the established confirmation/form/GPS/send flow. Expose one reusable static
+# opener for the flipping coin launchers.
 # -----------------------------------------------------------------------------
 $overlay = Normalize-Lf (Get-Content $overlayPath -Raw)
 
-if ($overlay -notmatch 'static Future<void> open\(BuildContext context\)') {
-    $needle = @"
-  final Widget child;
+if ($overlay -notmatch 'static\s+Future<void>\s+open\s*\(\s*BuildContext\s+context\s*\)') {
+    $childPattern = '(?m)^(\s*)final\s+Widget\s+child;\s*$'
+    $childMatches = [regex]::Matches($overlay, $childPattern)
 
-  @override
-"@
-
-    $replacement = @"
-  final Widget child;
-
-  static Future<void> open(BuildContext context) async {
-    final state = context.findAncestorStateOfType<_GlobalSosOverlayState>();
-
-    if (state == null) {
-      return;
+    if ($childMatches.Count -ne 1) {
+        throw "Expected exactly one GlobalSosOverlay child field, found $($childMatches.Count). No Dart files were written."
     }
 
-    await state._beginSosFlow();
-  }
+    $indent = $childMatches[0].Groups[1].Value
+    $staticOpen = @"
+$indent`final Widget child;
 
-  @override
+$indent`static Future<void> open(BuildContext context) async {
+$indent  final state = context.findAncestorStateOfType<_GlobalSosOverlayState>();
+
+$indent  if (state == null) {
+$indent    return;
+$indent  }
+
+$indent  await state._beginSosFlow();
+$indent}
 "@
 
-    $count = ([regex]::Matches($overlay, [regex]::Escape($needle))).Count
-    if ($count -ne 1) {
-        throw "Expected one GlobalSosOverlay child marker, found $count. No files were finalized."
-    }
-
-    $overlay = $overlay.Replace($needle, $replacement)
+    $overlay = [regex]::Replace(
+        $overlay,
+        $childPattern,
+        [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $staticOpen },
+        1
+    )
 }
 
-$buildPattern = '(?s)  @override\n  Widget build\(BuildContext context\) \{.*?\n  \}\n\n  Future<void> _beginSosFlow\(\) async \{'
-$buildReplacement = @"
+if ($overlay -notmatch 'return\s+widget\.child\s*;') {
+    $buildPattern = '(?s)(\s*@override\s*\n\s*Widget\s+build\s*\(\s*BuildContext\s+context\s*\)\s*\{).*?(\n\s*Future<void>\s+_beginSosFlow\s*\(\s*\)\s+async\s*\{)'
+    $buildMatches = [regex]::Matches($overlay, $buildPattern)
+
+    if ($buildMatches.Count -ne 1) {
+        throw "Unable to identify the GlobalSosOverlay launcher build method safely. Found $($buildMatches.Count) matches. No Dart files were written."
+    }
+
+    $buildReplacement = @"
+
   @override
   Widget build(BuildContext context) {
     return widget.child;
@@ -77,62 +85,90 @@ $buildReplacement = @"
   Future<void> _beginSosFlow() async {
 "@
 
-$matches = [regex]::Matches($overlay, $buildPattern)
-if ($matches.Count -eq 1) {
-    $overlay = [regex]::Replace($overlay, $buildPattern, $buildReplacement, 1)
-} elseif ($overlay -notmatch 'Widget build\(BuildContext context\) \{\n    return widget\.child;') {
-    throw "Unable to identify the old floating SOS launcher safely. Found $($matches.Count) matches."
-}
-
-# Avoid analyzer's use_build_context_synchronously lint before the first dialog.
-$overlay = $overlay.Replace(
-    '    await HapticFeedback.mediumImpact();',
-    '    HapticFeedback.mediumImpact();'
-)
-
-Write-Utf8NoBom $overlayPath $overlay
-
-# -----------------------------------------------------------------------------
-# Authenticated shell: the same flipping SOS coin stays available to every role
-# from the common app bar. This keeps the global SOS behavior after login.
-# -----------------------------------------------------------------------------
-$home = Normalize-Lf (Get-Content $homePath -Raw)
-
-if ($home -notmatch "import '../widgets/sos_flip_coin_button.dart';") {
-    $importNeedle = "import '../widgets/global_notification_bell.dart';"
-    if ($home -notmatch [regex]::Escape($importNeedle)) {
-        throw 'Could not find the GlobalNotificationBell import in HomeScreen.'
-    }
-
-    $home = $home.Replace(
-        $importNeedle,
-        "$importNeedle`nimport '../widgets/sos_flip_coin_button.dart';"
+    $overlay = [regex]::Replace(
+        $overlay,
+        $buildPattern,
+        [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $buildReplacement },
+        1
     )
 }
 
-if ($home -notmatch 'SosFlipCoinButton\(size: 42\)') {
-    $actionsNeedle = @"
-        actions: <Widget>[
-          GlobalThemeButton(user: widget.user, authService: _authService),
-"@
+# Haptic feedback is fire-and-forget. Awaiting it creates an unnecessary async
+# gap before showDialog and triggers use_build_context_synchronously.
+$overlay = [regex]::Replace(
+    $overlay,
+    '(?m)^(\s*)await\s+HapticFeedback\.mediumImpact\(\);\s*$',
+    '$1HapticFeedback.mediumImpact();'
+)
 
-    $actionsReplacement = @"
-        actions: <Widget>[
-          const SosFlipCoinButton(size: 42),
-          const SizedBox(width: 8),
-          GlobalThemeButton(user: widget.user, authService: _authService),
-"@
-
-    $count = ([regex]::Matches($home, [regex]::Escape($actionsNeedle))).Count
-    if ($count -ne 1) {
-        throw "Expected one HomeScreen app-bar actions marker, found $count."
-    }
-
-    $home = $home.Replace($actionsNeedle, $actionsReplacement)
+# Validate the resulting overlay before writing it.
+if ($overlay -notmatch 'static\s+Future<void>\s+open\s*\(\s*BuildContext\s+context\s*\)') {
+    throw 'SOS static opener validation failed. No Dart files were written.'
+}
+if ($overlay -notmatch 'return\s+widget\.child\s*;') {
+    throw 'Floating-launcher removal validation failed. No Dart files were written.'
+}
+if ($overlay -notmatch 'Future<void>\s+_beginSosFlow\s*\(') {
+    throw 'Existing SOS confirmation flow was not found after patching. No Dart files were written.'
 }
 
+# -----------------------------------------------------------------------------
+# Authenticated shell: add the same flipping SOS coin to the common app bar so
+# Admin, Official, Tanod and Resident all retain access after login.
+# -----------------------------------------------------------------------------
+$home = Normalize-Lf (Get-Content $homePath -Raw)
+
+if ($home -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
+    $importPattern = "(?m)^(\s*import\s+'\.\./widgets/global_notification_bell\.dart';\s*)$"
+    $importMatches = [regex]::Matches($home, $importPattern)
+
+    if ($importMatches.Count -ne 1) {
+        throw "Could not identify the GlobalNotificationBell import safely. Found $($importMatches.Count). No Dart files were written."
+    }
+
+    $home = [regex]::Replace(
+        $home,
+        $importPattern,
+        '$1' + "`nimport '../widgets/sos_flip_coin_button.dart';",
+        1
+    )
+}
+
+if ($home -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
+    $actionsPattern = '(?s)(actions\s*:\s*<Widget>\s*\[\s*\n)(\s*)(GlobalThemeButton\s*\(\s*user:\s*widget\.user\s*,\s*authService:\s*_authService\s*\)\s*,)'
+    $actionsMatches = [regex]::Matches($home, $actionsPattern)
+
+    if ($actionsMatches.Count -ne 1) {
+        throw "Could not identify the common HomeScreen app-bar actions safely. Found $($actionsMatches.Count). No Dart files were written."
+    }
+
+    $home = [regex]::Replace(
+        $home,
+        $actionsPattern,
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($m)
+            $prefix = $m.Groups[1].Value
+            $indent = $m.Groups[2].Value
+            $themeButton = $m.Groups[3].Value
+            return $prefix + $indent + 'const SosFlipCoinButton(size: 42),' + "`n" + $indent + 'const SizedBox(width: 8),' + "`n" + $indent + $themeButton
+        },
+        1
+    )
+}
+
+if ($home -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
+    throw 'HomeScreen SOS coin import validation failed. No Dart files were written.'
+}
+if ($home -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
+    throw 'HomeScreen SOS coin placement validation failed. No Dart files were written.'
+}
+
+# Only now write both Dart files, after all matching and validations succeeded.
+Write-Utf8NoBom $overlayPath $overlay
 Write-Utf8NoBom $homePath $home
 
 Write-Host 'SOS coin UI integration applied successfully.' -ForegroundColor Green
+Write-Host 'The old floating SOS pill was removed; the confirmation/GPS/send flow was preserved.'
+Write-Host 'A flipping SOS coin was added to the authenticated common app bar.'
 Write-Host "Overlay backup: $overlayBackup"
 Write-Host "HomeScreen backup: $homeBackup"
