@@ -135,8 +135,6 @@ class _DistressSignalDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(title: const Text('Distress Signal')),
       body: _loading
@@ -206,16 +204,16 @@ class _DistressSignalDetailScreenState
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _locationCard(theme),
+                  _locationCard(),
                   const SizedBox(height: 14),
-                  _responseCard(theme),
+                  _responseCard(),
                 ],
               ),
             ),
     );
   }
 
-  Widget _locationCard(ThemeData theme) {
+  Widget _locationCard() {
     final latitude = _doubleOrNull(_alert['latitude']);
     final longitude = _doubleOrNull(_alert['longitude']);
 
@@ -286,7 +284,7 @@ class _DistressSignalDetailScreenState
     );
   }
 
-  Widget _responseCard(ThemeData theme) {
+  Widget _responseCard() {
     final status = _text(_alert['status'], 'active').toLowerCase();
 
     return _SectionCard(
@@ -317,16 +315,31 @@ class _DistressSignalDetailScreenState
           const SizedBox(height: 18),
           _Field(
             label: 'Acknowledged',
-            value: _text(_alert['acknowledged_at'], 'Not yet'),
+            value: _responseValue('acknowledged_at', 'acknowledged_by'),
           ),
           const SizedBox(height: 12),
           _Field(
             label: 'Resolved',
-            value: _text(_alert['resolved_at'], 'Not yet'),
+            value: _responseValue('resolved_at', 'resolved_by'),
           ),
         ],
       ),
     );
+  }
+
+  String _responseValue(String timeKey, String userKey) {
+    final time = _text(_alert[timeKey]);
+
+    if (time.isEmpty) {
+      return 'Not yet';
+    }
+
+    final rawUser = _alert[userKey];
+    final responder = rawUser is Map
+        ? _text(Map<String, dynamic>.from(rawUser)['name'])
+        : '';
+
+    return responder.isEmpty ? time : '$time by $responder';
   }
 }
 
