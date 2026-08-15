@@ -57,6 +57,20 @@ class ReportController extends Controller
     }
 
 
+    /**
+     * Mobile API bridge.
+     *
+     * The website reportData() implementation remains the single source of
+     * truth for calculations. This wrapper only exposes that existing data to
+     * the authenticated /api/v1 Reports controller.
+     */
+    public function apiReportData(Request $request): array
+    {
+        Gate::authorize('viewReports');
+
+        return $this->reportData($request);
+    }
+
     public function downloadPdf(Request $request)
     {
         Gate::authorize('viewReports');

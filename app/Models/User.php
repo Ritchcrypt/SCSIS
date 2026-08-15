@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
@@ -40,15 +41,24 @@ class User extends Authenticatable
                 $user->role = 'resident';
             }
 
-            if (Schema::hasColumn('users', 'is_active') && $user->is_active === null) {
+            if (
+                Schema::hasColumn('users', 'is_active')
+                && $user->is_active === null
+            ) {
                 $user->is_active = true;
             }
 
-            if (Schema::hasColumn('users', 'status') && $user->status === null) {
+            if (
+                Schema::hasColumn('users', 'status')
+                && $user->status === null
+            ) {
                 $user->status = true;
             }
 
-            if (Schema::hasColumn('users', 'theme_mode') && empty($user->theme_mode)) {
+            if (
+                Schema::hasColumn('users', 'theme_mode')
+                && empty($user->theme_mode)
+            ) {
                 $user->theme_mode = 'system';
             }
         });
@@ -82,7 +92,9 @@ class User extends Authenticatable
 
         foreach ($words as $word) {
             if ($word !== '') {
-                $initials .= strtoupper(mb_substr($word, 0, 1));
+                $initials .= strtoupper(
+                    mb_substr($word, 0, 1)
+                );
             }
 
             if (strlen($initials) >= 2) {
@@ -105,34 +117,55 @@ class User extends Authenticatable
 
     public function reportedIncidents(): HasMany
     {
-        return $this->hasMany(Incident::class, 'reporter_id');
+        return $this->hasMany(
+            Incident::class,
+            'reporter_id'
+        );
     }
 
     public function createdAnnouncements(): HasMany
     {
-        return $this->hasMany(Announcement::class, 'created_by');
+        return $this->hasMany(
+            Announcement::class,
+            'created_by'
+        );
     }
 
     public function systemNotifications(): HasMany
     {
-        return $this->hasMany(UserNotification::class, 'user_id');
+        return $this->hasMany(
+            UserNotification::class,
+            'user_id'
+        );
     }
 
     public function uploadedEvidence(): HasMany
     {
-        return $this->hasMany(Evidence::class, 'uploaded_by');
+        return $this->hasMany(
+            Evidence::class,
+            'uploaded_by'
+        );
     }
 
     public function statusUpdates(): HasMany
     {
-        return $this->hasMany(IncidentStatusHistory::class, 'updated_by');
+        return $this->hasMany(
+            IncidentStatusHistory::class,
+            'updated_by'
+        );
     }
 
     public function hasRole(string|array $roles): bool
     {
-        $roles = is_array($roles) ? $roles : [$roles];
+        $roles = is_array($roles)
+            ? $roles
+            : [$roles];
 
-        return in_array($this->role, $roles, true);
+        return in_array(
+            $this->role,
+            $roles,
+            true
+        );
     }
 
     public function isAdmin(): bool
@@ -152,7 +185,10 @@ class User extends Authenticatable
 
     public function isOfficial(): bool
     {
-        return $this->hasRole(['official', 'dao']);
+        return $this->hasRole([
+            'official',
+            'dao',
+        ]);
     }
 
     public function isActive(): bool
