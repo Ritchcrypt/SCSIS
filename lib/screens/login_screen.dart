@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
-
+import '../widgets/sos_flip_coin_button.dart';
 import 'home_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,10 +14,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
   final AuthService _authService = AuthService();
 
   bool _isLoading = false;
@@ -26,7 +25,6 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-
     super.dispose();
   }
 
@@ -86,6 +84,24 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _openRegistration() async {
+    if (_isLoading) {
+      return;
+    }
+
+    final message = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(builder: (_) => const RegisterScreen()),
+    );
+
+    if (!mounted || message == null || message.trim().isEmpty) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _showError(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -104,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
               constraints: const BoxConstraints(maxWidth: 440),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+                children: <Widget>[
                   const _TabangNowHeader(),
                   const SizedBox(height: 32),
                   Card(
@@ -120,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         key: _formKey,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
+                          children: <Widget>[
                             const Text(
                               'Secure Access',
                               style: TextStyle(
@@ -149,13 +165,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             const SizedBox(height: 28),
-
                             TextFormField(
                               controller: _emailController,
                               enabled: !_isLoading,
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.next,
-                              autofillHints: const [AutofillHints.email],
+                              autofillHints: const <String>[AutofillHints.email],
                               decoration: const InputDecoration(
                                 labelText: 'Email address',
                                 hintText: 'email@example.com',
@@ -176,9 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 return null;
                               },
                             ),
-
                             const SizedBox(height: 18),
-
                             TextFormField(
                               controller: _passwordController,
                               enabled: !_isLoading,
@@ -186,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               enableSuggestions: false,
                               autocorrect: false,
                               textInputAction: TextInputAction.done,
-                              autofillHints: const [AutofillHints.password],
+                              autofillHints: const <String>[AutofillHints.password],
                               onFieldSubmitted: (_) {
                                 if (!_isLoading) {
                                   _login();
@@ -222,9 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 return null;
                               },
                             ),
-
                             const SizedBox(height: 24),
-
                             SizedBox(
                               height: 52,
                               child: FilledButton(
@@ -246,6 +257,29 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                               ),
                             ),
+                            const SizedBox(height: 14),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                const Flexible(
+                                  child: Text(
+                                    "Don't have an account?",
+                                    style: TextStyle(
+                                      color: Color(0xFF64748B),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                TextButton(
+                                  onPressed: _isLoading ? null : _openRegistration,
+                                  child: const Text(
+                                    'Sign up',
+                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -253,7 +287,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'TabangNow • Dao, Capiz',
+                    'TabangNow \u2022 Dao, Capiz',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                   ),
@@ -273,17 +307,9 @@ class _TabangNowHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Column(
-      children: [
-        CircleAvatar(
-          radius: 34,
-          backgroundColor: Color(0xFF1E3A8A),
-          child: Icon(
-            Icons.health_and_safety_outlined,
-            size: 36,
-            color: Colors.white,
-          ),
-        ),
-        SizedBox(height: 14),
+      children: <Widget>[
+        SosFlipCoinButton(size: 104),
+        SizedBox(height: 18),
         Text(
           'TabangNow',
           textAlign: TextAlign.center,
@@ -362,9 +388,7 @@ class _AuthenticatedScreenState extends State<AuthenticatedScreen> {
   @override
   Widget build(BuildContext context) {
     final name = widget.user['name']?.toString() ?? 'TabangNow User';
-
     final email = widget.user['email']?.toString() ?? '';
-
     final role = widget.user['role']?.toString() ?? 'user';
 
     return Scaffold(
@@ -377,7 +401,7 @@ class _AuthenticatedScreenState extends State<AuthenticatedScreen> {
               constraints: const BoxConstraints(maxWidth: 440),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+                children: <Widget>[
                   const Icon(
                     Icons.check_circle_outline,
                     size: 72,
@@ -394,7 +418,7 @@ class _AuthenticatedScreenState extends State<AuthenticatedScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
-                        children: [
+                        children: <Widget>[
                           _UserDetail(label: 'Name', value: name),
                           const Divider(),
                           _UserDetail(label: 'Email', value: email),
@@ -439,7 +463,7 @@ class _UserDetail extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+      children: <Widget>[
         SizedBox(
           width: 70,
           child: Text(
