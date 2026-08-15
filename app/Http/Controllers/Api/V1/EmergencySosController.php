@@ -50,7 +50,7 @@ class EmergencySosController extends Controller
             'accuracy_meters' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'location_source' => ['required', 'string', 'in:current,last_known'],
         ], [
-            'emergency_details.required' => 'Describe the emergency before sending the SOS.',
+            'emergency_details.required' => 'Describe the emergency before sending the distress signal.',
             'emergency_details.min' => 'Emergency details must contain at least 3 characters.',
             'contact_number.required' => 'Mobile number is required.',
             'contact_number.regex' => 'Enter a valid Philippine mobile number, such as 09123456789.',
@@ -69,7 +69,7 @@ class EmergencySosController extends Controller
 
         if ($existing) {
             return response()->json([
-                'message' => 'Emergency alert already received.',
+                'message' => 'Distress signal already received.',
                 'data' => $this->alertPayload($existing),
             ]);
         }
@@ -106,7 +106,7 @@ class EmergencySosController extends Controller
 
         if ($recentDuplicate) {
             return response()->json([
-                'message' => 'An active emergency alert from this device was already received moments ago.',
+                'message' => 'An active distress signal from this device was already received moments ago.',
                 'data' => $this->alertPayload($recentDuplicate),
             ]);
         }
@@ -160,7 +160,7 @@ class EmergencySosController extends Controller
                     'user_id' => $recipientId,
                     'type' => 'mobile_emergency',
                     'source_id' => $alert->id,
-                    'title' => 'URGENT: Mobile SOS',
+                    'title' => 'URGENT: Distress Signal',
                     'message' => "{$alert->alert_code} from {$identity}: {$summary} Mobile: {$alert->contact_number}.",
                     'is_read' => false,
                 ]);
@@ -174,7 +174,7 @@ class EmergencySosController extends Controller
         }
 
         return response()->json([
-            'message' => 'Emergency alert sent successfully.',
+            'message' => 'Distress signal sent successfully.',
             'data' => $this->alertPayload($alert),
         ], 201);
     }
