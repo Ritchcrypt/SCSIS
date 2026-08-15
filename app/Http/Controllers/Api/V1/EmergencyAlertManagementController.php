@@ -16,7 +16,11 @@ class EmergencyAlertManagementController extends Controller
         $this->authorizeResponder($request);
 
         $alerts = MobileEmergencyAlert::query()
-            ->with('user:id,name,email,role,contact_number')
+            ->with([
+                'user:id,name,email,role,contact_number',
+                'acknowledgedBy:id,name',
+                'resolvedBy:id,name',
+            ])
             ->latest('triggered_at')
             ->limit(100)
             ->get()
@@ -30,7 +34,11 @@ class EmergencyAlertManagementController extends Controller
     {
         $this->authorizeResponder($request);
 
-        $emergencyAlert->load('user:id,name,email,role,contact_number,address');
+        $emergencyAlert->load([
+            'user:id,name,email,role,contact_number,address',
+            'acknowledgedBy:id,name',
+            'resolvedBy:id,name',
+        ]);
 
         return response()->json(['data' => $this->payload($emergencyAlert)]);
     }
@@ -56,8 +64,8 @@ class EmergencyAlertManagementController extends Controller
         });
 
         return response()->json([
-            'message' => 'Emergency alert acknowledged.',
-            'data' => $this->payload($emergencyAlert->fresh(['user'])),
+            'message' => 'Distress signal acknowledged.',
+            'data' => $this->payload($this->freshAlert($emergencyAlert)),
         ]);
     }
 
@@ -80,8 +88,8 @@ class EmergencyAlertManagementController extends Controller
         });
 
         return response()->json([
-            'message' => 'Emergency alert resolved.',
-            'data' => $this->payload($emergencyAlert->fresh(['user'])),
+            'message' => 'Distress signal resolved.',
+            'data' => $this->payload($this->freshAlert($emergencyAlert)),
         ]);
     }
 
@@ -93,10 +101,19 @@ class EmergencyAlertManagementController extends Controller
         abort_unless(
             $user->isActive() && ($user->isAdmin() || $user->isOfficial()),
             403,
-            'Only active administrators and officials may manage emergency alerts.'
+            'Only active administrators and officials may manage distress signals.'
         );
 
         return $user;
+    }
+
+    private function freshAlert(MobileEmergencyAlert $alert): MobileEmergencyAlert
+    {
+        return $alert->fresh([
+            'user:id,name,email,role,contact_number,address',
+            'acknowledgedBy:id,name',
+            'resolvedBy:id,name',
+        ]);
     }
 
     private function payload(MobileEmergencyAlert $alert): array
@@ -123,7 +140,15 @@ class EmergencyAlertManagementController extends Controller
             'location_source' => $alert->location_source,
             'triggered_at' => $alert->triggered_at?->toIso8601String(),
             'acknowledged_at' => $alert->acknowledged_at?->toIso8601String(),
+            'acknowledged_by' => $alert->acknowledgedBy ? [
+                'id' => $alert->acknowledgedBy->id,
+                'name' => $alert->acknowledgedBy->name,
+            ] : null,
             'resolved_at' => $alert->resolved_at?->toIso8601String(),
+            'resolved_by' => $alert->resolvedBy ? [
+                'id' => $alert->resolvedBy->id,
+                'name' => $alert->resolvedBy->name,
+            ] : null,
         ];
     }
 }
