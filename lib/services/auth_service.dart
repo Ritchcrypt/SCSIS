@@ -12,7 +12,7 @@ class AuthService {
 
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8001',
+    defaultValue: 'http://127.0.0.1:8000',
   );
 
   final http.Client _client;
