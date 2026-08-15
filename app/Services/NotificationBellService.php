@@ -11,63 +11,47 @@ use Illuminate\Support\Facades\Schema;
 class NotificationBellService
 {
     public function pulseForUser(?User $user): array
-{
-    if (
-        ! $user
-        || ! Schema::hasTable('notifications')
-        || ! Schema::hasColumn('notifications', 'user_id')
-    ) {
+    {
+        if (
+            ! $user
+            || ! Schema::hasTable('notifications')
+            || ! Schema::hasColumn('notifications', 'user_id')
+        ) {
+            return [
+                'latest_notification_id' => null,
+                'notification' => null,
+            ];
+        }
+
+        $latestNotification = UserNotification::query()
+            ->where('user_id', (int) $user->id)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $latestNotification) {
+            return [
+                'latest_notification_id' => null,
+                'notification' => null,
+            ];
+        }
+
         return [
-            'latest_notification_id' => null,
-            'notification' => null,
+            'latest_notification_id' => (int) $latestNotification->id,
+            'notification' => [
+                'id' => (int) $latestNotification->id,
+                'type' => strtolower(trim((string) ($latestNotification->type ?? 'notification'))),
+                'source_id' => $latestNotification->source_id !== null
+                    ? (int) $latestNotification->source_id
+                    : null,
+                'title' => $latestNotification->title ?: 'New notification',
+                'message' => $latestNotification->message
+                    ?: $latestNotification->title
+                    ?: 'You have a new notification.',
+                'is_read' => (bool) $latestNotification->is_read,
+                'created_at' => $latestNotification->created_at?->toIso8601String(),
+            ],
         ];
     }
-
-    $latestNotification = UserNotification::query()
-        ->where('user_id', (int) $user->id)
-        ->orderByDesc('id')
-        ->first();
-
-    if (! $latestNotification) {
-        return [
-            'latest_notification_id' => null,
-            'notification' => null,
-        ];
-    }
-
-    return [
-        'latest_notification_id' => (int) $latestNotification->id,
-
-        'notification' => [
-            'id' => (int) $latestNotification->id,
-
-            'type' => strtolower(
-                trim(
-                    (string) (
-                        $latestNotification->type
-                        ?? 'notification'
-                    )
-                )
-            ),
-
-            'source_id' => $latestNotification->source_id !== null
-                ? (int) $latestNotification->source_id
-                : null,
-
-            'title' => $latestNotification->title
-                ?: 'New notification',
-
-            'message' => $latestNotification->message
-                ?: $latestNotification->title
-                ?: 'You have a new notification.',
-
-            'is_read' => (bool) $latestNotification->is_read,
-
-            'created_at' => $latestNotification->created_at
-                ?->toIso8601String(),
-        ],
-    ];
-}
 
     public function forUser(?User $user): array
     {
@@ -123,8 +107,8 @@ class NotificationBellService
                 $sourceId = $notification->source_id ?? null;
 
                 return $sourceId
-                    ? $type . ':source:' . $sourceId
-                    : $type . ':notification:' . $notification->id;
+                    ? $type.':source:'.$sourceId
+                    : $type.':notification:'.$notification->id;
             })
             ->values();
     }
@@ -132,6 +116,7 @@ class NotificationBellService
     private function formatNotification(UserNotification $notification, User $user): array
     {
         $type = strtolower((string) ($notification->type ?? 'notification'));
+        $isMobileEmergency = $type === 'mobile_emergency';
 
         return [
             'id' => $notification->id,
@@ -142,8 +127,10 @@ class NotificationBellService
                 ?: $notification->title
                 ?: 'No notification message provided.',
             'age' => $this->notificationAge($notification),
-            'fallback_url' => $this->fallbackUrlForType($user, $type),
-            'openable' => Route::has('notifications.open') && ! empty($notification->id),
+            'fallback_url' => $this->fallbackUrlForNotification($user, $notification),
+            'openable' => ! $isMobileEmergency
+                && Route::has('notifications.open')
+                && ! empty($notification->id),
         ];
     }
 
@@ -163,43 +150,49 @@ class NotificationBellService
         return [
             'resident_complaint' => 'Resident Complaint',
             'resident_complaint_update' => 'Complaint Update',
-
             'incident' => 'Incident',
             'incident_reported' => 'Incident Report',
             'incident_update' => 'Incident Update',
             'incident_updated' => 'Incident Update',
             'incident_status_update' => 'Incident Status Update',
             'status_update' => 'Status Update',
-
             'assigned_incident' => 'Assigned Incident',
             'incident_assigned' => 'Assigned Incident',
             'new_assigned_incident' => 'Assigned Incident',
-
             'dispatch' => 'Dispatch',
             'escalation' => 'Escalation',
             'emergency' => 'Emergency',
+            'mobile_emergency' => 'Mobile Emergency',
             'resolved' => 'Resolved',
-
             'announcement' => 'Announcement',
             'calamity' => 'Calamity',
-
             'tanod_alert' => 'Tanod Alert',
             'tanod_task' => 'Tanod Task',
             'tanod_task_assigned' => 'Tanod Task',
             'tanod_task_update' => 'Tanod Task Update',
             'task_assigned' => 'Tanod Task',
             'task_update' => 'Tanod Task Update',
-
             'community_problem' => 'Community Problem',
             'community' => 'Community',
-
             'system' => 'System',
         ][$type] ?? ucwords(str_replace('_', ' ', $type));
     }
 
-    private function fallbackUrlForType(User $user, string $type): string
-    {
+    private function fallbackUrlForNotification(
+        User $user,
+        UserNotification $notification
+    ): string {
+        $type = strtolower((string) ($notification->type ?? 'notification'));
         $role = strtolower((string) $user->role);
+
+        if (
+            $type === 'mobile_emergency'
+            && in_array($role, ['admin', 'official', 'dao'], true)
+            && ! empty($notification->source_id)
+            && Route::has('emergency-alerts.show')
+        ) {
+            return route('emergency-alerts.show', (int) $notification->source_id);
+        }
 
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return $this->roleRouteUrl($role, 'announcements.index');
@@ -262,7 +255,7 @@ class NotificationBellService
             return Route::has('dashboard') ? route('dashboard') : url('/');
         }
 
-        $routeName = $prefix . '.' . $suffix;
+        $routeName = $prefix.'.'.$suffix;
 
         if (Route::has($routeName)) {
             return route($routeName);
