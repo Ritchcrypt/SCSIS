@@ -121,3 +121,5 @@
         </div>
     </div>
 </details>
+
+@include('components.distress-signal-nav')
