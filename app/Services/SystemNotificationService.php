@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\IncidentMessage;
+use App\Models\ResidentComplaint;
+use App\Models\TanodTask;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Support\Collection;
@@ -168,5 +170,56 @@ class SystemNotificationService
                 replaceExisting: false
             );
         }
+    }
+
+    public function notifyTanodTaskStatus(TanodTask $task): void
+    {
+        $status = strtolower(trim((string) $task->status));
+
+        if (! in_array($status, ['closed', 'cancelled'], true)) {
+            return;
+        }
+
+        $task->loadMissing('responses');
+
+        $recipientIds = $task->responses
+            ->pluck('user_id')
+            ->filter(fn ($id): bool => (int) $id > 0)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        $statusLabel = $status === 'closed' ? 'closed' : 'cancelled';
+
+        foreach ($recipientIds as $userId) {
+            $this->send(
+                userId: $userId,
+                type: 'tanod_task_update',
+                sourceId: (int) $task->id,
+                title: 'Tanod task ' . $statusLabel,
+                message: 'Tanod task "'
+                    . $task->title
+                    . '" has been '
+                    . $statusLabel
+                    . ' by the administrator.',
+                replaceExisting: false
+            );
+        }
+    }
+
+    public function notifyComplaintDeleted(ResidentComplaint $complaint): void
+    {
+        if ((int) $complaint->resident_id <= 0) {
+            return;
+        }
+
+        $this->send(
+            userId: (int) $complaint->resident_id,
+            type: 'resident_complaint_deleted',
+            sourceId: (int) $complaint->id,
+            title: 'Complaint removed',
+            message: 'Your complaint record has been removed by an authorized administrator or official.',
+            replaceExisting: false
+        );
     }
 }
