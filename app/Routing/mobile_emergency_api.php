@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\EmergencyAlertManagementController;
 use App\Http\Controllers\Api\V1\EmergencyDeviceController;
 use App\Http\Controllers\Api\V1\EmergencySosController;
@@ -8,14 +7,14 @@ use App\Http\Middleware\EnsureApiUserIsActive;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
-    Route::post('/auth/register', [AuthController::class, 'register'])
-        ->middleware('throttle:10,1')
-        ->name('api.v1.auth.register');
-
     /*
     | Public emergency endpoint.
     | Deliberately does not require account authentication.
     | Device enrollment is optional and is used only for trusted identity linkage.
+    |
+    | Resident registration is defined canonically in routes/api.php. Do not
+    | duplicate that route here because both API route files are loaded by
+    | bootstrap/app.php.
     */
     Route::post('/emergency/sos', [EmergencySosController::class, 'store'])
         ->middleware('throttle:30,1')
