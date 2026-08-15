@@ -31,7 +31,9 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
   Timer? _timer;
   bool _loading = true;
   bool _requestRunning = false;
+  bool _pulseInitialized = false;
   int _latestId = 0;
+  int _latestEmergencyId = 0;
   int _unreadCount = 0;
   List<Map<String, dynamic>> _notifications = <Map<String, dynamic>>[];
 
@@ -63,8 +65,11 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
           : <String, dynamic>{};
 
       _latestId = _asInt(data['latest_notification_id']);
+      _latestEmergencyId = _asInt(data['latest_emergency_notification_id']);
+      _pulseInitialized = true;
     } catch (_) {
-      // A temporary pulse failure must not break the bell.
+      // A temporary pulse failure must not break the bell. The next successful
+      // poll establishes the cursors without replaying old notifications.
     }
   }
 
@@ -83,21 +88,40 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
           : <String, dynamic>{};
 
       final latest = _asInt(data['latest_notification_id']);
+      final latestEmergency = _asInt(data['latest_emergency_notification_id']);
 
-      if (latest <= 0) {
-        return;
-      }
-
-      if (_latestId == 0) {
+      if (!_pulseInitialized) {
         _latestId = latest;
+        _latestEmergencyId = latestEmergency;
+        _pulseInitialized = true;
         return;
       }
 
-      if (latest > _latestId) {
+      final hasNewEmergency =
+          latestEmergency > 0 && latestEmergency > _latestEmergencyId;
+      final hasNewNotification = latest > 0 && latest > _latestId;
+
+      if (hasNewEmergency) {
+        _latestEmergencyId = latestEmergency;
+
+        if (latest > _latestId) {
+          _latestId = latest;
+        }
+
+        await _playUrgentEmergencyFeedback();
+        await _loadBell();
+
+        if (mounted) {
+          _showEmergencyBanner(data['emergency_notification']);
+        }
+
+        return;
+      }
+
+      if (hasNewNotification) {
         _latestId = latest;
 
         await SystemSound.play(SystemSoundType.alert);
-
         await HapticFeedback.lightImpact();
         await _loadBell();
       }
@@ -106,6 +130,55 @@ class _GlobalNotificationBellState extends State<GlobalNotificationBell> {
     } finally {
       _requestRunning = false;
     }
+  }
+
+  Future<void> _playUrgentEmergencyFeedback() async {
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.heavyImpact();
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.heavyImpact();
+    await Future<void>.delayed(const Duration(milliseconds: 320));
+    await SystemSound.play(SystemSoundType.alert);
+    await HapticFeedback.mediumImpact();
+  }
+
+  void _showEmergencyBanner(Object? rawNotification) {
+    if (!mounted) {
+      return;
+    }
+
+    final notification = rawNotification is Map
+        ? Map<String, dynamic>.from(rawNotification)
+        : <String, dynamic>{};
+    final message =
+        (notification['message']?.toString().trim().isNotEmpty ?? false)
+        ? notification['message'].toString().trim()
+        : 'A new Distress Signal requires responder attention.';
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          backgroundColor: const Color(0xFFB91C1C),
+          content: Row(
+            children: <Widget>[
+              const Icon(Icons.warning_amber_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'URGENT DISTRESS SIGNAL\n$message',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   Future<void> _loadBell() async {
