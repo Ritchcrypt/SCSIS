@@ -2,7 +2,8 @@ $ErrorActionPreference = 'Stop'
 
 function Write-Utf8NoBom([string]$Path, [string]$Content) {
     $utf8 = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText((Resolve-Path $Path), $Content, $utf8)
+    $resolved = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
+    [System.IO.File]::WriteAllText($resolved, $Content, $utf8)
 }
 
 function Normalize-Lf([string]$Text) {
@@ -10,7 +11,9 @@ function Normalize-Lf([string]$Text) {
 }
 
 $overlayPath = 'lib\widgets\global_sos_overlay.dart'
+$overlayBackup = 'lib\widgets\global_sos_overlay.dart.before-sos-coin'
 $homePath = 'lib\screens\home_screen.dart'
+$homeBackup = 'lib\screens\home_screen.dart.before-sos-coin'
 
 if (-not (Test-Path $overlayPath)) {
     throw "Missing $overlayPath"
@@ -19,63 +22,76 @@ if (-not (Test-Path $homePath)) {
     throw "Missing $homePath"
 }
 
-$overlayBackup = "$overlayPath.before-sos-coin"
-$homeBackup = "$homePath.before-sos-coin"
+# The earlier PowerShell patch could corrupt the Dart field declaration because
+# PowerShell interpreted an escape sequence while constructing Dart source.
+# Prefer the untouched pre-coin backup whenever it exists. We only read it here;
+# nothing is written until both Dart files pass validation below.
+if (Test-Path $overlayBackup) {
+    $overlayContent = Normalize-Lf (Get-Content $overlayBackup -Raw)
+    Write-Host "Repair source: $overlayBackup" -ForegroundColor Yellow
+} else {
+    $overlayContent = Normalize-Lf (Get-Content $overlayPath -Raw)
 
-if (-not (Test-Path $overlayBackup)) {
-    Copy-Item $overlayPath $overlayBackup
+    if ($overlayContent -match "[char]12" -or $overlayContent -match '(?m)^\s*inal\s+Widget') {
+        throw "The SOS overlay is corrupted and $overlayBackup is missing. Stop here so the file can be restored safely."
+    }
 }
+
+$homeContent = Normalize-Lf (Get-Content $homePath -Raw)
+
+# Preserve a clean HomeScreen backup if one does not already exist.
 if (-not (Test-Path $homeBackup)) {
     Copy-Item $homePath $homeBackup
 }
 
 # -----------------------------------------------------------------------------
-# Global SOS flow: remove the old bottom-right floating launcher while keeping
-# the established confirmation/form/GPS/send flow. Expose one reusable static
-# opener for the flipping coin launchers.
+# 1) Repair/convert GlobalSosOverlay into a flow host (no floating bottom-right
+#    button). The confirmation, emergency form, GPS and send behavior stay in
+#    the same state object.
 # -----------------------------------------------------------------------------
-$overlay = Normalize-Lf (Get-Content $overlayPath -Raw)
 
-if ($overlay -notmatch 'static\s+Future<void>\s+open\s*\(\s*BuildContext\s+context\s*\)') {
-    $childPattern = '(?m)^(\s*)final\s+Widget\s+child;\s*$'
-    $childMatches = [regex]::Matches($overlay, $childPattern)
+if ($overlayContent -notmatch 'static\s+Future<void>\s+open\s*\(\s*BuildContext\s+context\s*\)') {
+    $childPattern = '(?m)^\s*final\s+Widget\s+child;\s*$'
+    $childMatches = [regex]::Matches($overlayContent, $childPattern)
 
     if ($childMatches.Count -ne 1) {
-        throw "Expected exactly one GlobalSosOverlay child field, found $($childMatches.Count). No Dart files were written."
+        throw "Expected one clean 'final Widget child;' field in GlobalSosOverlay, found $($childMatches.Count). Nothing was written."
     }
 
-    $indent = $childMatches[0].Groups[1].Value
-    $staticOpen = @"
-$indent`final Widget child;
+    $staticOpen = @'
+  final Widget child;
 
-$indent`static Future<void> open(BuildContext context) async {
-$indent  final state = context.findAncestorStateOfType<_GlobalSosOverlayState>();
+  static Future<void> open(BuildContext context) async {
+    final state = context.findAncestorStateOfType<_GlobalSosOverlayState>();
 
-$indent  if (state == null) {
-$indent    return;
-$indent  }
+    if (state == null) {
+      return;
+    }
 
-$indent  await state._beginSosFlow();
-$indent}
-"@
+    await state._beginSosFlow();
+  }
+'@
 
-    $overlay = [regex]::Replace(
-        $overlay,
+    $overlayContent = [regex]::Replace(
+        $overlayContent,
         $childPattern,
-        [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $staticOpen },
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($match)
+            return $staticOpen
+        },
         1
     )
 }
 
-if ($overlay -notmatch 'return\s+widget\.child\s*;') {
-    $buildPattern = '(?s)(\s*@override\s*\n\s*Widget\s+build\s*\(\s*BuildContext\s+context\s*\)\s*\{).*?(\n\s*Future<void>\s+_beginSosFlow\s*\(\s*\)\s+async\s*\{)'
-    $buildMatches = [regex]::Matches($overlay, $buildPattern)
+if ($overlayContent -notmatch 'return\s+widget\.child\s*;') {
+    $buildPattern = '(?s)\s*@override\s*\n\s*Widget\s+build\s*\(\s*BuildContext\s+context\s*\)\s*\{.*?\n\s*\}\s*\n\s*\n\s*Future<void>\s+_beginSosFlow\s*\(\s*\)\s+async\s*\{'
+    $buildMatches = [regex]::Matches($overlayContent, $buildPattern)
 
     if ($buildMatches.Count -ne 1) {
-        throw "Unable to identify the GlobalSosOverlay launcher build method safely. Found $($buildMatches.Count) matches. No Dart files were written."
+        throw "Expected one floating-launcher build method before _beginSosFlow, found $($buildMatches.Count). Nothing was written."
     }
 
-    $buildReplacement = @"
+    $flowHostBuild = @'
 
   @override
   Widget build(BuildContext context) {
@@ -83,53 +99,46 @@ if ($overlay -notmatch 'return\s+widget\.child\s*;') {
   }
 
   Future<void> _beginSosFlow() async {
-"@
+'@
 
-    $overlay = [regex]::Replace(
-        $overlay,
+    $overlayContent = [regex]::Replace(
+        $overlayContent,
         $buildPattern,
-        [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $buildReplacement },
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($match)
+            return $flowHostBuild
+        },
         1
     )
 }
 
-# Haptic feedback is fire-and-forget. Awaiting it creates an unnecessary async
-# gap before showDialog and triggers use_build_context_synchronously.
-$overlay = [regex]::Replace(
-    $overlay,
+# Haptics do not need to be awaited. Removing the await also avoids the analyzer
+# warning about using BuildContext across the artificial async gap.
+$overlayContent = [regex]::Replace(
+    $overlayContent,
     '(?m)^(\s*)await\s+HapticFeedback\.mediumImpact\(\);\s*$',
     '$1HapticFeedback.mediumImpact();'
 )
 
-# Validate the resulting overlay before writing it.
-if ($overlay -notmatch 'static\s+Future<void>\s+open\s*\(\s*BuildContext\s+context\s*\)') {
-    throw 'SOS static opener validation failed. No Dart files were written.'
-}
-if ($overlay -notmatch 'return\s+widget\.child\s*;') {
-    throw 'Floating-launcher removal validation failed. No Dart files were written.'
-}
-if ($overlay -notmatch 'Future<void>\s+_beginSosFlow\s*\(') {
-    throw 'Existing SOS confirmation flow was not found after patching. No Dart files were written.'
-}
-
 # -----------------------------------------------------------------------------
-# Authenticated shell: add the same flipping SOS coin to the common app bar so
-# Admin, Official, Tanod and Resident all retain access after login.
+# 2) Add the same flipping coin to the authenticated common app bar.
 # -----------------------------------------------------------------------------
-$homeContent = Normalize-Lf (Get-Content $homePath -Raw)
 
 if ($homeContent -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
     $importPattern = "(?m)^(\s*import\s+'\.\./widgets/global_notification_bell\.dart';\s*)$"
     $importMatches = [regex]::Matches($homeContent, $importPattern)
 
     if ($importMatches.Count -ne 1) {
-        throw "Could not identify the GlobalNotificationBell import safely. Found $($importMatches.Count). No Dart files were written."
+        throw "Expected one GlobalNotificationBell import in HomeScreen, found $($importMatches.Count). Nothing was written."
     }
 
     $homeContent = [regex]::Replace(
         $homeContent,
         $importPattern,
-        '$1' + "`nimport '../widgets/sos_flip_coin_button.dart';",
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($match)
+            return $match.Groups[1].Value + "`nimport '../widgets/sos_flip_coin_button.dart';"
+        },
         1
     )
 }
@@ -139,36 +148,62 @@ if ($homeContent -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
     $actionsMatches = [regex]::Matches($homeContent, $actionsPattern)
 
     if ($actionsMatches.Count -ne 1) {
-        throw "Could not identify the common HomeScreen app-bar actions safely. Found $($actionsMatches.Count). No Dart files were written."
+        throw "Expected one common HomeScreen app-bar action list, found $($actionsMatches.Count). Nothing was written."
     }
 
     $homeContent = [regex]::Replace(
         $homeContent,
         $actionsPattern,
         [System.Text.RegularExpressions.MatchEvaluator]{
-            param($m)
-            $prefix = $m.Groups[1].Value
-            $indent = $m.Groups[2].Value
-            $themeButton = $m.Groups[3].Value
+            param($match)
+            $prefix = $match.Groups[1].Value
+            $indent = $match.Groups[2].Value
+            $themeButton = $match.Groups[3].Value
             return $prefix + $indent + 'const SosFlipCoinButton(size: 42),' + "`n" + $indent + 'const SizedBox(width: 8),' + "`n" + $indent + $themeButton
         },
         1
     )
 }
 
-if ($homeContent -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
-    throw 'HomeScreen SOS coin import validation failed. No Dart files were written.'
-}
-if ($homeContent -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
-    throw 'HomeScreen SOS coin placement validation failed. No Dart files were written.'
+# -----------------------------------------------------------------------------
+# 3) Validate everything BEFORE writing either Dart file.
+# -----------------------------------------------------------------------------
+
+$overlayChecks = @(
+    @{ Name = 'final child field'; Pattern = '(?m)^\s*final\s+Widget\s+child;\s*$' },
+    @{ Name = 'static SOS opener'; Pattern = 'static\s+Future<void>\s+open\s*\(' },
+    @{ Name = 'flow-host build'; Pattern = 'return\s+widget\.child\s*;' },
+    @{ Name = 'SOS confirmation flow'; Pattern = 'Future<void>\s+_beginSosFlow\s*\(' }
+)
+
+foreach ($check in $overlayChecks) {
+    if ($overlayContent -notmatch $check.Pattern) {
+        throw "GlobalSosOverlay validation failed: $($check.Name). Nothing was written."
+    }
 }
 
-# Only now write both Dart files, after all matching and validations succeeded.
-Write-Utf8NoBom $overlayPath $overlay
+if ($overlayContent.Contains([char]12)) {
+    throw 'GlobalSosOverlay still contains an illegal form-feed/control character. Nothing was written.'
+}
+
+if ($overlayContent -match '(?m)^\s*inal\s+Widget') {
+    throw "GlobalSosOverlay still contains the corrupted 'inal Widget' token. Nothing was written."
+}
+
+if ($homeContent -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
+    throw 'HomeScreen validation failed: SOS coin import missing. Nothing was written.'
+}
+
+if ($homeContent -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
+    throw 'HomeScreen validation failed: SOS coin action missing. Nothing was written.'
+}
+
+Write-Utf8NoBom $overlayPath $overlayContent
 Write-Utf8NoBom $homePath $homeContent
 
-Write-Host 'SOS coin UI integration applied successfully.' -ForegroundColor Green
-Write-Host 'The old floating SOS pill was removed; the confirmation/GPS/send flow was preserved.'
-Write-Host 'A flipping SOS coin was added to the authenticated common app bar.'
-Write-Host "Overlay backup: $overlayBackup"
+Write-Host 'SOS overlay repaired and SOS coin integration applied successfully.' -ForegroundColor Green
+Write-Host 'Removed: bottom-right floating SOS pill.'
+Write-Host 'Preserved: confirmation, emergency form, GPS/current-or-last-known location, and send flow.'
+Write-Host 'Added: flipping SOS coin to the authenticated common app bar.'
+Write-Host "Clean overlay source: $overlayBackup"
 Write-Host "HomeScreen backup: $homeBackup"
