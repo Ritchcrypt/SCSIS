@@ -30,6 +30,7 @@ import 'user_management_screen.dart';
 import 'user_management_detail_screen.dart';
 import 'activity_logs_screen.dart';
 import 'current_account_profile_screen.dart';
+import 'login_screen.dart';
 import 'resident_complaint_detail_screen.dart';
 import 'resident_complaints_screen.dart';
 import 'tanod_roster_screen.dart';
@@ -227,62 +228,34 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    final scaffoldState = _scaffoldKey.currentState;
+
+    if (scaffoldState != null && scaffoldState.isDrawerOpen) {
+      Navigator.of(context).pop();
+    }
+
     setState(() {
       _loggingOut = true;
     });
 
     try {
       await _authService.logout();
-
-      final devSession = await _authService.devSession();
-      final rawUser = devSession['user'];
-
-      if (rawUser is! Map) {
-        throw const AuthException(
-          'Development Admin user data was unavailable.',
-          statusCode: 503,
-        );
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => HomeScreen(user: Map<String, dynamic>.from(rawUser)),
-        ),
-        (route) => false,
-      );
-    } on AuthException catch (exception) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _loggingOut = false;
-      });
-
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(exception.message)));
     } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _loggingOut = false;
-      });
-
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Unable to restart the local development session.'),
-          ),
-        );
+      // AuthService.logout clears the local secure token in a finally block.
+      // If remote revocation cannot be confirmed, this device still signs out.
+      await _authService.clearToken();
     }
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
   }
 
   void _selectModule(_HomeModule module) {
@@ -808,7 +781,7 @@ class _HomeScreenState extends State<HomeScreen> {
               initials: _initials(_userName),
               onProfile: _openAccountProfile,
               onSessionAction: _logout,
-              sessionActionLabel: 'Restart Dev Session',
+              sessionActionLabel: 'Log out',
               sessionActionBusy: _loggingOut,
             ),
           ],
@@ -900,7 +873,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: _role == 'admin'
                   ? 'Admin Dashboard'
                   : 'Official Dashboard',
-              subtitle: 'Dao, Capiz — Community Safety Overview',
+              subtitle: 'Dao, Capiz ΓÇö Community Safety Overview',
             )
           else if (_role == 'tanod')
             const _DashboardHeroCard(
@@ -1467,7 +1440,7 @@ class _WeatherDisasterCard extends StatelessWidget {
   static String _number(dynamic raw, {String suffix = '', int decimals = 0}) {
     final value = double.tryParse(raw?.toString() ?? '');
     if (value == null) {
-      return '—';
+      return 'ΓÇö';
     }
     return '${value.toStringAsFixed(decimals)}$suffix';
   }
@@ -1538,7 +1511,7 @@ class _WeatherDisasterCard extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  weather['icon']?.toString() ?? '🌤️',
+                  weather['icon']?.toString() ?? '≡ƒîñ∩╕Å',
                   style: const TextStyle(fontSize: 24),
                 ),
               ),
@@ -1596,11 +1569,11 @@ class _WeatherDisasterCard extends StatelessWidget {
                   label: 'Temperature',
                   value: _number(
                     weather['temperature'],
-                    suffix: '°C',
+                    suffix: '┬░C',
                     decimals: 1,
                   ),
                   note:
-                      'Feels like ${_number(weather['feels_like'], suffix: '°C', decimals: 1)}',
+                      'Feels like ${_number(weather['feels_like'], suffix: '┬░C', decimals: 1)}',
                 ),
                 _WeatherMetricTile(
                   label: 'Condition',
@@ -2125,7 +2098,7 @@ class _RecentActivityPanel extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  '• ${_relative(reportedRaw)}',
+                                  'ΓÇó ${_relative(reportedRaw)}',
                                   style: TextStyle(
                                     color: TabangNowTheme.of(context).textMuted,
                                     fontSize: 10.5,
@@ -2139,7 +2112,7 @@ class _RecentActivityPanel extends StatelessWidget {
                                 'Reporter: $reporter',
                                 if (assigned != null && assigned.isNotEmpty)
                                   'Assigned: $assigned',
-                              ].join(' • '),
+                              ].join(' ΓÇó '),
                               style: TextStyle(
                                 color: TabangNowTheme.of(context).textFaint,
                                 fontSize: 9.5,

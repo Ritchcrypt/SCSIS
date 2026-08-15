@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/global_theme_controller.dart';
 
-import 'screens/dev_session_gate.dart';
+import 'screens/auth_gate.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +47,7 @@ class TabangNowApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const DevSessionGate(),
+      home: const AuthGate(),
     );
   }
 }
