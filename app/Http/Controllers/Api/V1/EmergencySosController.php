@@ -17,17 +17,51 @@ class EmergencySosController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
+        $contactNumber = (string) preg_replace(
+            '/[\s\-\(\)]+/',
+            '',
+            trim((string) $request->input('contact_number'))
+        );
+
+        if (Str::startsWith($contactNumber, '+63')) {
+            $contactNumber = '0'.substr($contactNumber, 3);
+        }
+
+        $request->merge([
+            'request_id' => trim((string) $request->input('request_id')),
+            'installation_id' => trim((string) $request->input('installation_id')),
+            'emergency_details' => trim((string) $request->input('emergency_details')),
+            'contact_number' => $contactNumber,
+            'location_source' => strtolower(trim((string) $request->input('location_source'))),
+        ]);
+
         $validated = $request->validate([
             'request_id' => ['required', 'string', 'max:120'],
             'installation_id' => ['required', 'string', 'max:120'],
             'emergency_token' => ['nullable', 'string', 'max:255'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'emergency_details' => ['required', 'string', 'min:3', 'max:1000'],
+            'contact_number' => [
+                'required',
+                'string',
+                'regex:/^09\d{9}$/',
+            ],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
             'accuracy_meters' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
+            'location_source' => ['required', 'string', 'in:current,last_known'],
+        ], [
+            'emergency_details.required' => 'Describe the emergency before sending the SOS.',
+            'emergency_details.min' => 'Emergency details must contain at least 3 characters.',
+            'contact_number.required' => 'Mobile number is required.',
+            'contact_number.regex' => 'Enter a valid Philippine mobile number, such as 09123456789.',
+            'latitude.required' => 'A current or last-known device location is required.',
+            'longitude.required' => 'A current or last-known device location is required.',
+            'location_source.required' => 'Location source is required.',
+            'location_source.in' => 'Location source must be current or last_known.',
         ]);
 
-        $requestId = trim($validated['request_id']);
-        $installationId = trim($validated['installation_id']);
+        $requestId = $validated['request_id'];
+        $installationId = $validated['installation_id'];
 
         $existing = MobileEmergencyAlert::query()
             ->where('request_id', $requestId)
@@ -91,9 +125,12 @@ class EmergencySosController extends Controller
                 'installation_id' => $installationId,
                 'request_id' => $requestId,
                 'status' => 'active',
-                'latitude' => $validated['latitude'] ?? null,
-                'longitude' => $validated['longitude'] ?? null,
+                'emergency_details' => $validated['emergency_details'],
+                'contact_number' => $validated['contact_number'],
+                'latitude' => $validated['latitude'],
+                'longitude' => $validated['longitude'],
                 'accuracy_meters' => $validated['accuracy_meters'] ?? null,
+                'location_source' => $validated['location_source'],
                 'source' => 'mobile',
                 'ip_hash' => $request->ip()
                     ? hash('sha256', (string) $request->ip())
@@ -115,15 +152,16 @@ class EmergencySosController extends Controller
                 ->whereIn('role', ['admin', 'official', 'dao'])
                 ->pluck('id');
 
-            $identity = $alert->user?->name ?: 'an unidentified mobile device';
+            $identity = $alert->user?->name ?: 'a mobile user';
+            $summary = Str::limit($alert->emergency_details, 120);
 
             foreach ($recipientIds as $recipientId) {
                 UserNotification::query()->create([
                     'user_id' => $recipientId,
                     'type' => 'mobile_emergency',
                     'source_id' => $alert->id,
-                    'title' => 'URGENT: Mobile emergency alert',
-                    'message' => "{$alert->alert_code} was triggered by {$identity}. Immediate review is required.",
+                    'title' => 'URGENT: Mobile SOS',
+                    'message' => "{$alert->alert_code} from {$identity}: {$summary} Mobile: {$alert->contact_number}.",
                     'is_read' => false,
                 ]);
             }
@@ -166,6 +204,12 @@ class EmergencySosController extends Controller
             'status' => $alert->status,
             'identified' => $alert->user_id !== null,
             'display_name' => $alert->display_name,
+            'emergency_details' => $alert->emergency_details,
+            'contact_number' => $alert->contact_number,
+            'latitude' => $alert->latitude,
+            'longitude' => $alert->longitude,
+            'accuracy_meters' => $alert->accuracy_meters,
+            'location_source' => $alert->location_source,
             'triggered_at' => $alert->triggered_at?->toIso8601String(),
         ];
     }
