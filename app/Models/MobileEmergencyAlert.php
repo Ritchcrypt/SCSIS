@@ -14,6 +14,7 @@ class MobileEmergencyAlert extends Model
         'alert_code',
         'device_id',
         'user_id',
+        'installation_id',
         'request_id',
         'status',
         'latitude',
