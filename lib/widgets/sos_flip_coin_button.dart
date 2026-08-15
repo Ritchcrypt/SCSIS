@@ -174,14 +174,15 @@ class _CoinFace extends StatelessWidget {
                       ),
                     )
                   : customLogo != null && customLogo.isNotEmpty
-                  ? Padding(
-                      padding: EdgeInsets.all(compact ? 5 : 10),
-                      child: ClipOval(
+                  ? ClipOval(
+                      child: SizedBox.square(
+                        dimension: size,
                         child: Image.memory(
                           customLogo,
                           width: size,
                           height: size,
-                          fit: BoxFit.contain,
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
                           filterQuality: FilterQuality.high,
                           gaplessPlayback: true,
                           errorBuilder: (context, error, stackTrace) {
