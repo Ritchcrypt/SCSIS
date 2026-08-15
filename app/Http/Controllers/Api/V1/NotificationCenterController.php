@@ -136,6 +136,10 @@ class NotificationCenterController extends Controller
                 : $this->target('dashboard');
         }
 
+        if (in_array($type, ['account_activated', 'account_deactivated'], true)) {
+            return $this->target('dashboard');
+        }
+
         if ($type === 'mobile_emergency') {
             return in_array($role, ['admin', 'official', 'dao'], true)
                 ? $this->target('distressSignal', $sourceId)
@@ -149,7 +153,12 @@ class NotificationCenterController extends Controller
         if (
             in_array(
                 $type,
-                ['resident_complaint', 'resident_complaint_update'],
+                [
+                    'resident_complaint',
+                    'resident_complaint_update',
+                    'resident_complaint_status_update',
+                    'resident_complaint_proof',
+                ],
                 true
             )
         ) {
@@ -189,6 +198,7 @@ class NotificationCenterController extends Controller
                     'incident',
                     'incident_reported',
                     'incident_update',
+                    'incident_message',
                     'incident_updated',
                     'incident_status_update',
                     'status_update',
