@@ -11,6 +11,8 @@ enum AppCapability {
   addIncidentMessage,
   deleteIncident,
 
+  manageDistressSignal,
+
   viewTanodAlerts,
   manageOwnTanodAlerts,
 
@@ -88,6 +90,8 @@ class AppCapabilities {
           AppCapability.addIncidentMessage,
           AppCapability.deleteIncident,
 
+          AppCapability.manageDistressSignal,
+
           AppCapability.viewTanodAlerts,
           AppCapability.manageOwnTanodAlerts,
 
@@ -127,6 +131,8 @@ class AppCapabilities {
           AppCapability.updateIncident,
           AppCapability.escalateIncident,
           AppCapability.addIncidentMessage,
+
+          AppCapability.manageDistressSignal,
 
           AppCapability.viewTanodRoster,
           AppCapability.manageTanodRoster,
