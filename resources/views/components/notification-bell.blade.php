@@ -123,3 +123,4 @@
 </details>
 
 @include('components.distress-signal-nav')
+@include('components.system-branding-browser-sync')
