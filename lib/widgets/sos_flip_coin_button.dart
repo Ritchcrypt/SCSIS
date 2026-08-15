@@ -24,13 +24,10 @@ class SosFlipCoinButton extends StatefulWidget {
 class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  late final Animation<double> _rotation;
+
   final GlobalBrandingLogoController _branding =
       GlobalBrandingLogoController.instance;
-
-  Timer? _timer;
-
-  bool _showSos = false;
-  bool _targetSos = true;
 
   @override
   void initState() {
@@ -39,26 +36,44 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     _branding.addListener(_onBrandingChanged);
     unawaited(_branding.ensureStarted());
 
+    final cycleMilliseconds = math.max(
+      1600,
+      widget.flipInterval.inMilliseconds * 2,
+    );
+
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 620),
-    )..addStatusListener((status) {
-        if (status != AnimationStatus.completed || !mounted) {
-          return;
-        }
+      duration: Duration(milliseconds: cycleMilliseconds),
+    );
 
-        setState(() {
-          _showSos = _targetSos;
-          _controller.value = 0;
-        });
-      });
+    _rotation = TweenSequence<double>(<TweenSequenceItem<double>>[
+      TweenSequenceItem<double>(
+        tween: ConstantTween<double>(0),
+        weight: 35,
+      ),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: 0, end: math.pi).chain(
+          CurveTween(curve: Curves.easeInOutCubic),
+        ),
+        weight: 15,
+      ),
+      TweenSequenceItem<double>(
+        tween: ConstantTween<double>(math.pi),
+        weight: 35,
+      ),
+      TweenSequenceItem<double>(
+        tween: Tween<double>(begin: math.pi, end: math.pi * 2).chain(
+          CurveTween(curve: Curves.easeInOutCubic),
+        ),
+        weight: 15,
+      ),
+    ]).animate(_controller);
 
-    _timer = Timer.periodic(widget.flipInterval, (_) => _flip());
+    _controller.repeat();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _branding.removeListener(_onBrandingChanged);
     _controller.dispose();
     super.dispose();
@@ -70,17 +85,13 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     }
   }
 
-  void _flip() {
-    if (!mounted || _controller.isAnimating) {
-      return;
-    }
-
-    _targetSos = !_showSos;
-    _controller.forward(from: 0);
+  bool _sosFaceVisible(double angle) {
+    final normalized = angle % (math.pi * 2);
+    return normalized > math.pi / 2 && normalized < math.pi * 1.5;
   }
 
   Future<void> _openSos() async {
-    if (!_showSos || _controller.isAnimating) {
+    if (!_sosFaceVisible(_rotation.value)) {
       return;
     }
 
@@ -92,33 +103,33 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     final size = widget.size;
 
     return AnimatedBuilder(
-      animation: _controller,
+      animation: _rotation,
       builder: (context, _) {
-        final progress = Curves.easeInOut.transform(_controller.value);
-        final angle = progress * math.pi;
-        final secondHalf = progress >= 0.5;
-        final visibleSos = secondHalf ? _targetSos : _showSos;
+        final angle = _rotation.value;
+        final visibleSos = _sosFaceVisible(angle);
 
         final face = _CoinFace(
           size: size,
           sos: visibleSos,
-          enabled: visibleSos && !_controller.isAnimating,
+          enabled: visibleSos,
           logoBytes: _branding.logoBytes,
           onTap: _openSos,
         );
+
+        final frontFacing = math.cos(angle) >= 0;
 
         return Transform(
           alignment: Alignment.center,
           transform: Matrix4.identity()
             ..setEntry(3, 2, 0.0015)
             ..rotateY(angle),
-          child: secondHalf
-              ? Transform(
+          child: frontFacing
+              ? face
+              : Transform(
                   alignment: Alignment.center,
                   transform: Matrix4.identity()..rotateY(math.pi),
                   child: face,
-                )
-              : face,
+                ),
         );
       },
     );
