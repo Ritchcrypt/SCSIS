@@ -20,6 +20,8 @@
     const POLL_INTERVAL_MS = 15000;
     const sessionCursorKey = `tabangnow.notification.cursor.${userId}`;
     const lastSoundedKey = `tabangnow.notification.last-sounded.${userId}`;
+    const emergencySessionCursorKey = `tabangnow.notification.emergency-cursor.${userId}`;
+    const emergencyLastSoundedKey = `tabangnow.notification.emergency-last-sounded.${userId}`;
 
     let audioContext = null;
     let audioReady = false;
@@ -239,8 +241,14 @@
             const latestId = Number(
                 payload?.data?.latest_notification_id ?? 0
             );
+            const emergencyId = Number(
+                payload?.data?.latest_emergency_notification_id ?? 0
+            );
 
-            if (!Number.isSafeInteger(latestId) || latestId <= 0) {
+            const validLatestId = Number.isSafeInteger(latestId) && latestId > 0;
+            const validEmergencyId = Number.isSafeInteger(emergencyId) && emergencyId > 0;
+
+            if (!validLatestId && !validEmergencyId) {
                 return;
             }
 
@@ -248,12 +256,17 @@
                 window.sessionStorage,
                 sessionCursorKey
             );
+            const emergencySessionCursor = readInteger(
+                window.sessionStorage,
+                emergencySessionCursorKey
+            );
 
             /*
-             * Establish a baseline silently so an old unread notification does
-             * not trigger audio merely because the user refreshed the page.
+             * Establish independent silent baselines. The emergency cursor is
+             * deliberately separate so a newer ordinary notification can never
+             * hide an SOS that arrived during the same polling interval.
              */
-            if (sessionCursor === 0) {
+            if (sessionCursor === 0 && validLatestId) {
                 writeInteger(
                     window.sessionStorage,
                     sessionCursorKey,
@@ -272,11 +285,71 @@
                         latestId
                     );
                 }
-
-                return;
             }
 
-            if (latestId <= sessionCursor) {
+            if (emergencySessionCursor === 0 && validEmergencyId) {
+                writeInteger(
+                    window.sessionStorage,
+                    emergencySessionCursorKey,
+                    emergencyId
+                );
+
+                const existingEmergencyGlobalCursor = readInteger(
+                    window.localStorage,
+                    emergencyLastSoundedKey
+                );
+
+                if (emergencyId > existingEmergencyGlobalCursor) {
+                    writeInteger(
+                        window.localStorage,
+                        emergencyLastSoundedKey,
+                        emergencyId
+                    );
+                }
+            }
+
+            let newEmergencyObserved = false;
+            let emergencyNotificationId = 0;
+
+            if (
+                validEmergencyId
+                && emergencySessionCursor > 0
+                && emergencyId > emergencySessionCursor
+            ) {
+                newEmergencyObserved = true;
+
+                writeInteger(
+                    window.sessionStorage,
+                    emergencySessionCursorKey,
+                    emergencyId
+                );
+
+                const emergencyNotification = payload?.data?.emergency_notification ?? null;
+                emergencyNotificationId = Number(emergencyNotification?.id ?? emergencyId);
+
+                dispatchNotificationEvent(emergencyNotification);
+
+                const lastEmergencySoundedId = readInteger(
+                    window.localStorage,
+                    emergencyLastSoundedKey
+                );
+
+                if (emergencyId > lastEmergencySoundedId) {
+                    writeInteger(
+                        window.localStorage,
+                        emergencyLastSoundedKey,
+                        emergencyId
+                    );
+
+                    playEmergencyAlarm();
+                }
+            }
+
+            if (
+                !validLatestId
+                || sessionCursor === 0
+                || latestId <= sessionCursor
+            ) {
                 return;
             }
 
@@ -286,27 +359,43 @@
                 latestId
             );
 
+            const notification = payload?.data?.notification ?? null;
+            const notificationId = Number(notification?.id ?? latestId);
+
+            if (
+                !newEmergencyObserved
+                || notificationId !== emergencyNotificationId
+            ) {
+                dispatchNotificationEvent(notification);
+            }
+
             const lastSoundedId = readInteger(
                 window.localStorage,
                 lastSoundedKey
             );
 
-            const notification = payload?.data?.notification ?? null;
+            if (latestId <= lastSoundedId) {
+                return;
+            }
 
-            dispatchNotificationEvent(notification);
+            writeInteger(
+                window.localStorage,
+                lastSoundedKey,
+                latestId
+            );
 
-            if (latestId > lastSoundedId) {
-                writeInteger(
-                    window.localStorage,
-                    lastSoundedKey,
-                    latestId
-                );
+            /*
+             * If a fresh mobile SOS was observed during this same poll, its
+             * emergency alarm takes priority over any newer ordinary chime.
+             */
+            if (newEmergencyObserved) {
+                return;
+            }
 
-                if (isEmergencyNotification(notification)) {
-                    playEmergencyAlarm();
-                } else {
-                    playNotificationSound();
-                }
+            if (isEmergencyNotification(notification)) {
+                playEmergencyAlarm();
+            } else {
+                playNotificationSound();
             }
         } catch (error) {
             console.debug(
