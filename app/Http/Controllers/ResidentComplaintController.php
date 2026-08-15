@@ -531,6 +531,9 @@ class ResidentComplaintController extends Controller
 
         User::query()
             ->whereIn('role', ['admin', 'official', 'dao'])
+            ->when(Schema::hasColumn('users', 'is_active'), function ($query): void {
+                $query->where('is_active', true);
+            })
             ->select(['id', 'role'])
             ->chunkById(100, function ($users) use ($complaint): void {
                 foreach ($users as $user) {
@@ -563,12 +566,12 @@ class ResidentComplaintController extends Controller
         UserNotification::updateOrCreate(
             [
                 'user_id' => $complaint->resident_id,
-                'type' => 'resident_complaint_update',
+                'type' => 'resident_complaint_status_update',
                 'source_id' => $complaint->id,
             ],
             [
                 'user_id' => $complaint->resident_id,
-                'type' => 'resident_complaint_update',
+                'type' => 'resident_complaint_status_update',
                 'source_id' => $complaint->id,
                 'title' => 'Complaint status updated',
                 'message' => 'Your complaint status is now ' . $complaint->statusLabel() . '.',
@@ -587,12 +590,12 @@ class ResidentComplaintController extends Controller
         UserNotification::updateOrCreate(
             [
                 'user_id' => $complaint->resident_id,
-                'type' => 'resident_complaint_update',
+                'type' => 'resident_complaint_proof',
                 'source_id' => $complaint->id,
             ],
             [
                 'user_id' => $complaint->resident_id,
-                'type' => 'resident_complaint_update',
+                'type' => 'resident_complaint_proof',
                 'source_id' => $complaint->id,
                 'title' => 'Complaint proof picture uploaded',
                 'message' => 'An admin or official uploaded a proof picture for your complaint.',
@@ -613,6 +616,8 @@ class ResidentComplaintController extends Controller
             ->whereIn('type', [
                 'resident_complaint',
                 'resident_complaint_update',
+                'resident_complaint_status_update',
+                'resident_complaint_proof',
             ])
             ->delete();
     }

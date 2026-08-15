@@ -744,6 +744,9 @@ class ResidentComplaintController extends Controller
                 'role',
                 ['admin', 'official', 'dao']
             )
+            ->when(Schema::hasColumn('users', 'is_active'), function ($query): void {
+                $query->where('is_active', true);
+            })
             ->select(['id', 'role'])
             ->chunkById(
                 100,
@@ -806,7 +809,7 @@ class ResidentComplaintController extends Controller
                 'user_id' =>
                     $complaint->resident_id,
                 'type' =>
-                    'resident_complaint_update',
+                    'resident_complaint_status_update',
                 'source_id' =>
                     $complaint->id,
             ],
@@ -814,7 +817,7 @@ class ResidentComplaintController extends Controller
                 'user_id' =>
                     $complaint->resident_id,
                 'type' =>
-                    'resident_complaint_update',
+                    'resident_complaint_status_update',
                 'source_id' =>
                     $complaint->id,
                 'title' =>
@@ -845,7 +848,7 @@ class ResidentComplaintController extends Controller
                 'user_id' =>
                     $complaint->resident_id,
                 'type' =>
-                    'resident_complaint_update',
+                    'resident_complaint_proof',
                 'source_id' =>
                     $complaint->id,
             ],
@@ -853,7 +856,7 @@ class ResidentComplaintController extends Controller
                 'user_id' =>
                     $complaint->resident_id,
                 'type' =>
-                    'resident_complaint_update',
+                    'resident_complaint_proof',
                 'source_id' =>
                     $complaint->id,
                 'title' =>
@@ -887,6 +890,8 @@ class ResidentComplaintController extends Controller
                 [
                     'resident_complaint',
                     'resident_complaint_update',
+                    'resident_complaint_status_update',
+                    'resident_complaint_proof',
                 ]
             )
             ->delete();

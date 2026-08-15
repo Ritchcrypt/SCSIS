@@ -41,7 +41,12 @@ class NotificationOpenController extends Controller
             return redirect()->to($this->announcementUrl($role));
         }
 
-        if (in_array($type, ['resident_complaint', 'resident_complaint_update'], true)) {
+        if (in_array($type, [
+            'resident_complaint',
+            'resident_complaint_update',
+            'resident_complaint_status_update',
+            'resident_complaint_proof',
+        ], true)) {
             return redirect()->to($this->residentComplaintUrl($role, $notification));
         }
 
@@ -63,6 +68,7 @@ class NotificationOpenController extends Controller
             'incident',
             'incident_reported',
             'incident_update',
+            'incident_message',
             'incident_updated',
             'incident_status_update',
             'status_update',

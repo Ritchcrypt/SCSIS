@@ -164,11 +164,17 @@ class NotificationBellService
     private function typeLabel(string $type): string
     {
         return [
+            'user_registration' => 'New Registration',
+            'account_activated' => 'Account Activated',
+            'account_deactivated' => 'Account Deactivated',
             'resident_complaint' => 'Resident Complaint',
             'resident_complaint_update' => 'Complaint Update',
+            'resident_complaint_status_update' => 'Complaint Status Update',
+            'resident_complaint_proof' => 'Complaint Proof',
             'incident' => 'Incident',
             'incident_reported' => 'Incident Report',
             'incident_update' => 'Incident Update',
+            'incident_message' => 'Incident Message',
             'incident_updated' => 'Incident Update',
             'incident_status_update' => 'Incident Status Update',
             'status_update' => 'Status Update',
@@ -214,7 +220,12 @@ class NotificationBellService
             return $this->roleRouteUrl($role, 'announcements.index');
         }
 
-        if (in_array($type, ['resident_complaint', 'resident_complaint_update'], true)) {
+        if (in_array($type, [
+            'resident_complaint',
+            'resident_complaint_update',
+            'resident_complaint_status_update',
+            'resident_complaint_proof',
+        ], true)) {
             return $this->roleRouteUrl($role, 'resident-complaints.index');
         }
 
@@ -240,6 +251,7 @@ class NotificationBellService
             'incident',
             'incident_reported',
             'incident_update',
+            'incident_message',
             'incident_updated',
             'incident_status_update',
             'status_update',

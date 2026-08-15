@@ -2,16 +2,23 @@
 
 namespace App\Providers;
 
+use App\Listeners\NotifyPendingResidentRegistration;
 use App\Listeners\RecordAuthenticationActivity;
 use App\Models\ActivityLog;
 use App\Models\Announcement;
 use App\Models\CaseRecord;
 use App\Models\EmergencyHotline;
 use App\Models\Incident;
+use App\Models\IncidentMessage;
 use App\Models\ResidentComplaint;
 use App\Models\TanodProfile;
+use App\Models\TanodTask;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Observers\IncidentMessageNotificationObserver;
+use App\Observers\ResidentComplaintNotificationObserver;
+use App\Observers\TanodTaskNotificationObserver;
+use App\Observers\UserAccountNotificationObserver;
 use App\Policies\ActivityLogPolicy;
 use App\Policies\AnnouncementPolicy;
 use App\Policies\CaseRecordPolicy;
@@ -56,6 +63,11 @@ class AppServiceProvider extends ServiceProvider
                 RecordAuthenticationActivity::class
             );
         }
+
+        Event::listen(
+            Registered::class,
+            NotifyPendingResidentRegistration::class
+        );
 
         Gate::policy(ActivityLog::class, ActivityLogPolicy::class);
         Gate::policy(Announcement::class, AnnouncementPolicy::class);
@@ -104,6 +116,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Routes are registered centrally in bootstrap/app.php.
+        User::observe(UserAccountNotificationObserver::class);
+        IncidentMessage::observe(IncidentMessageNotificationObserver::class);
+        TanodTask::observe(TanodTaskNotificationObserver::class);
+        ResidentComplaint::observe(ResidentComplaintNotificationObserver::class);
     }
 }
