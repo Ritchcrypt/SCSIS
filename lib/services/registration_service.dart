@@ -19,7 +19,7 @@ class RegistrationService {
 
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8001',
+    defaultValue: 'http://127.0.0.1:8000',
   );
 
   static const Duration _requestTimeout = Duration(seconds: 15);
@@ -36,10 +36,12 @@ class RegistrationService {
   }) async {
     late final http.Response response;
 
+    final endpoint = Uri.parse('$_baseUrl/api/v1/auth/register');
+
     try {
       response = await _client
           .post(
-            Uri.parse('$_baseUrl/api/v1/auth/register'),
+            endpoint,
             headers: const <String, String>{
               'Accept': 'application/json',
               'Content-Type': 'application/json',
@@ -55,16 +57,16 @@ class RegistrationService {
           )
           .timeout(_requestTimeout);
     } on TimeoutException {
-      throw const RegistrationException(
-        'The TabangNow server did not respond in time. Check your connection and try again.',
+      throw RegistrationException(
+        'The TabangNow server did not respond at $_baseUrl. Make sure Laravel is running on port 8000.',
       );
-    } on SocketException {
-      throw const RegistrationException(
-        'Unable to reach the TabangNow server. Check your network/API connection and try again.',
+    } on SocketException catch (exception) {
+      throw RegistrationException(
+        'Unable to reach $_baseUrl (${exception.message}).',
       );
-    } on http.ClientException {
-      throw const RegistrationException(
-        'Unable to reach the TabangNow server. Check your network/API connection and try again.',
+    } on http.ClientException catch (exception) {
+      throw RegistrationException(
+        'Unable to reach $_baseUrl (${exception.message}).',
       );
     }
 
@@ -94,7 +96,7 @@ class RegistrationService {
       throw RegistrationException(
         response.statusCode == 404
             ? 'Mobile registration is not available on this server yet.'
-            : 'The TabangNow server returned an invalid registration response.',
+            : 'The TabangNow server returned an invalid registration response (HTTP ${response.statusCode}).',
         statusCode: response.statusCode,
       );
     }
