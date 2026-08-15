@@ -5,6 +5,7 @@ import 'app_role.dart';
 enum AppModuleId {
   dashboard,
   incidents,
+  distressSignal,
   tanodAlerts,
   tanodRoster,
   tanodTasks,
