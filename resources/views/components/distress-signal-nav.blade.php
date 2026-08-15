@@ -43,10 +43,32 @@
                 }
             }
 
+            function isDistressSignalActive() {
+                const currentPath = normalizePath(window.location.href);
+                const distressPath = normalizePath(distressUrl);
+
+                return currentPath === distressPath
+                    || currentPath.startsWith(`${distressPath}/`)
+                    || currentPath.startsWith('/emergency-alerts/');
+            }
+
+            function styleDistressSignalLink(link) {
+                link.className = isDistressSignalActive()
+                    ? 'flex items-center gap-3 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white'
+                    : 'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white';
+            }
+
             function installDistressSignalLink() {
                 const nav = document.querySelector('#adminSidebar nav');
 
-                if (!nav || nav.querySelector('[data-distress-signal-nav]')) {
+                if (!nav) {
+                    return;
+                }
+
+                const existingLink = nav.querySelector('[data-distress-signal-nav]');
+
+                if (existingLink) {
+                    styleDistressSignalLink(existingLink);
                     return;
                 }
 
@@ -58,18 +80,10 @@
                     return;
                 }
 
-                const currentPath = normalizePath(window.location.href);
-                const distressPath = normalizePath(distressUrl);
-                const isActive = currentPath === distressPath
-                    || currentPath.startsWith(`${distressPath}/`)
-                    || currentPath.startsWith('/emergency-alerts/');
-
                 const link = document.createElement('a');
                 link.href = distressUrl;
                 link.setAttribute('data-distress-signal-nav', '');
-                link.className = isActive
-                    ? 'flex items-center gap-3 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white'
-                    : 'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-blue-100 hover:bg-blue-900 hover:text-white';
+                styleDistressSignalLink(link);
 
                 const icon = document.createElement('span');
                 icon.textContent = '🆘';
