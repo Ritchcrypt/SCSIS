@@ -175,6 +175,57 @@ class MobileRegistrationAndEmergencyTest extends TestCase
             ->assertJsonPath('data.status', 'resolved');
     }
 
+    public function test_notification_pulse_keeps_mobile_sos_visible_when_a_newer_ordinary_notification_exists(): void
+    {
+        $admin = $this->activeUser('admin');
+
+        $emergencyNotification = UserNotification::query()->create([
+            'user_id' => $admin->id,
+            'type' => 'mobile_emergency',
+            'source_id' => 7001,
+            'title' => 'Emergency SOS',
+            'message' => 'A mobile SOS was triggered.',
+            'is_read' => false,
+        ]);
+
+        $ordinaryNotification = UserNotification::query()->create([
+            'user_id' => $admin->id,
+            'type' => 'announcement',
+            'source_id' => 7002,
+            'title' => 'Barangay announcement',
+            'message' => 'This notification arrived after the SOS.',
+            'is_read' => false,
+        ]);
+
+        $this->assertGreaterThan(
+            $emergencyNotification->id,
+            $ordinaryNotification->id
+        );
+
+        $response = $this
+            ->actingAs($admin)
+            ->getJson('/notifications/pulse');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath(
+                'data.latest_notification_id',
+                $ordinaryNotification->id
+            )
+            ->assertJsonPath(
+                'data.notification.type',
+                'announcement'
+            )
+            ->assertJsonPath(
+                'data.latest_emergency_notification_id',
+                $emergencyNotification->id
+            )
+            ->assertJsonPath(
+                'data.emergency_notification.type',
+                'mobile_emergency'
+            );
+    }
+
     private function activeUser(string $role): User
     {
         return User::factory()->create([
