@@ -134,7 +134,6 @@ class NotificationBellService
     private function formatNotification(UserNotification $notification, User $user): array
     {
         $type = strtolower((string) ($notification->type ?? 'notification'));
-        $isMobileEmergency = $type === 'mobile_emergency';
 
         return [
             'id' => $notification->id,
@@ -146,8 +145,7 @@ class NotificationBellService
                 ?: 'No notification message provided.',
             'age' => $this->notificationAge($notification),
             'fallback_url' => $this->fallbackUrlForNotification($user, $notification),
-            'openable' => ! $isMobileEmergency
-                && Route::has('notifications.open')
+            'openable' => Route::has('notifications.open')
                 && ! empty($notification->id),
         ];
     }
@@ -180,7 +178,7 @@ class NotificationBellService
             'dispatch' => 'Dispatch',
             'escalation' => 'Escalation',
             'emergency' => 'Emergency',
-            'mobile_emergency' => 'Mobile Emergency',
+            'mobile_emergency' => 'Distress Signal',
             'resolved' => 'Resolved',
             'announcement' => 'Announcement',
             'calamity' => 'Calamity',
