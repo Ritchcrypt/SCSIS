@@ -12,9 +12,12 @@ use App\Models\Incident;
 use App\Models\IncidentMessage;
 use App\Models\ResidentComplaint;
 use App\Models\TanodProfile;
+use App\Models\TanodTask;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Observers\IncidentMessageNotificationObserver;
+use App\Observers\ResidentComplaintNotificationObserver;
+use App\Observers\TanodTaskNotificationObserver;
 use App\Observers\UserAccountNotificationObserver;
 use App\Policies\ActivityLogPolicy;
 use App\Policies\AnnouncementPolicy;
@@ -115,5 +118,7 @@ class AppServiceProvider extends ServiceProvider
     {
         User::observe(UserAccountNotificationObserver::class);
         IncidentMessage::observe(IncidentMessageNotificationObserver::class);
+        TanodTask::observe(TanodTaskNotificationObserver::class);
+        ResidentComplaint::observe(ResidentComplaintNotificationObserver::class);
     }
 }
