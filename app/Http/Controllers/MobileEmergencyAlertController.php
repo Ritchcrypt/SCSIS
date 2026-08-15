@@ -11,6 +11,21 @@ use Illuminate\View\View;
 
 class MobileEmergencyAlertController extends Controller
 {
+    public function index(Request $request): View
+    {
+        $this->authorizeResponder($request);
+
+        $alerts = MobileEmergencyAlert::query()
+            ->with('user:id,name,role')
+            ->latest('triggered_at')
+            ->latest('id')
+            ->paginate(20);
+
+        return view('emergency-alerts.index', [
+            'alerts' => $alerts,
+        ]);
+    }
+
     public function show(Request $request, MobileEmergencyAlert $emergencyAlert): View
     {
         $this->authorizeResponder($request);
@@ -46,7 +61,7 @@ class MobileEmergencyAlertController extends Controller
             ])->save();
         });
 
-        return back()->with('success', 'Emergency alert acknowledged.');
+        return back()->with('success', 'Mobile SOS acknowledged.');
     }
 
     public function resolve(Request $request, MobileEmergencyAlert $emergencyAlert): RedirectResponse
@@ -67,7 +82,7 @@ class MobileEmergencyAlertController extends Controller
             ])->save();
         });
 
-        return back()->with('success', 'Emergency alert resolved.');
+        return back()->with('success', 'Mobile SOS resolved.');
     }
 
     private function authorizeResponder(Request $request): User
@@ -78,7 +93,7 @@ class MobileEmergencyAlertController extends Controller
         abort_unless(
             $user->isActive() && ($user->isAdmin() || $user->isOfficial()),
             403,
-            'Only active administrators and officials may manage emergency alerts.'
+            'Only active administrators and officials may manage Mobile SOS alerts.'
         );
 
         return $user;
