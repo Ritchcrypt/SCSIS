@@ -20,6 +20,8 @@ class NotificationBellService
             return [
                 'latest_notification_id' => null,
                 'notification' => null,
+                'latest_emergency_notification_id' => null,
+                'emergency_notification' => null,
             ];
         }
 
@@ -28,28 +30,23 @@ class NotificationBellService
             ->orderByDesc('id')
             ->first();
 
-        if (! $latestNotification) {
-            return [
-                'latest_notification_id' => null,
-                'notification' => null,
-            ];
-        }
+        $latestEmergencyNotification = Schema::hasColumn('notifications', 'type')
+            ? UserNotification::query()
+                ->where('user_id', (int) $user->id)
+                ->where('type', 'mobile_emergency')
+                ->orderByDesc('id')
+                ->first()
+            : null;
 
         return [
-            'latest_notification_id' => (int) $latestNotification->id,
-            'notification' => [
-                'id' => (int) $latestNotification->id,
-                'type' => strtolower(trim((string) ($latestNotification->type ?? 'notification'))),
-                'source_id' => $latestNotification->source_id !== null
-                    ? (int) $latestNotification->source_id
-                    : null,
-                'title' => $latestNotification->title ?: 'New notification',
-                'message' => $latestNotification->message
-                    ?: $latestNotification->title
-                    ?: 'You have a new notification.',
-                'is_read' => (bool) $latestNotification->is_read,
-                'created_at' => $latestNotification->created_at?->toIso8601String(),
-            ],
+            'latest_notification_id' => $latestNotification
+                ? (int) $latestNotification->id
+                : null,
+            'notification' => $this->formatPulseNotification($latestNotification),
+            'latest_emergency_notification_id' => $latestEmergencyNotification
+                ? (int) $latestEmergencyNotification->id
+                : null,
+            'emergency_notification' => $this->formatPulseNotification($latestEmergencyNotification),
         ];
     }
 
@@ -74,6 +71,27 @@ class NotificationBellService
                 ->values(),
             'fallback_url' => $this->dashboardUrl($user),
             'can_open' => Route::has('notifications.open'),
+        ];
+    }
+
+    private function formatPulseNotification(?UserNotification $notification): ?array
+    {
+        if (! $notification) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $notification->id,
+            'type' => strtolower(trim((string) ($notification->type ?? 'notification'))),
+            'source_id' => $notification->source_id !== null
+                ? (int) $notification->source_id
+                : null,
+            'title' => $notification->title ?: 'New notification',
+            'message' => $notification->message
+                ?: $notification->title
+                ?: 'You have a new notification.',
+            'is_read' => (bool) $notification->is_read,
+            'created_at' => $notification->created_at?->toIso8601String(),
         ];
     }
 
