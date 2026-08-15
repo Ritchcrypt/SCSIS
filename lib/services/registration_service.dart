@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -20,6 +22,8 @@ class RegistrationService {
     defaultValue: 'http://127.0.0.1:8001',
   );
 
+  static const Duration _requestTimeout = Duration(seconds: 15);
+
   final http.Client _client;
 
   Future<Map<String, dynamic>> registerResident({
@@ -30,21 +34,39 @@ class RegistrationService {
     required String password,
     required String passwordConfirmation,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$_baseUrl/api/v1/auth/register'),
-      headers: const <String, String>{
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(<String, dynamic>{
-        'name': name.trim(),
-        'email': email.trim(),
-        'contact_number': contactNumber.trim(),
-        'address': address.trim(),
-        'password': password,
-        'password_confirmation': passwordConfirmation,
-      }),
-    );
+    late final http.Response response;
+
+    try {
+      response = await _client
+          .post(
+            Uri.parse('$_baseUrl/api/v1/auth/register'),
+            headers: const <String, String>{
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'name': name.trim(),
+              'email': email.trim(),
+              'contact_number': contactNumber.trim(),
+              'address': address.trim(),
+              'password': password,
+              'password_confirmation': passwordConfirmation,
+            }),
+          )
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw const RegistrationException(
+        'The TabangNow server did not respond in time. Check your connection and try again.',
+      );
+    } on SocketException {
+      throw const RegistrationException(
+        'Unable to reach the TabangNow server. Check your network/API connection and try again.',
+      );
+    } on http.ClientException {
+      throw const RegistrationException(
+        'Unable to reach the TabangNow server. Check your network/API connection and try again.',
+      );
+    }
 
     final data = _decode(response);
 
@@ -70,18 +92,15 @@ class RegistrationService {
           : <String, dynamic>{};
     } on FormatException {
       throw RegistrationException(
-        'The server returned an invalid response.',
+        response.statusCode == 404
+            ? 'Mobile registration is not available on this server yet.'
+            : 'The TabangNow server returned an invalid registration response.',
         statusCode: response.statusCode,
       );
     }
   }
 
   String _errorMessage(Map<String, dynamic> data) {
-    final message = data['message'];
-    if (message is String && message.trim().isNotEmpty) {
-      return message.trim();
-    }
-
     final errors = data['errors'];
     if (errors is Map) {
       for (final value in errors.values) {
@@ -92,6 +111,11 @@ class RegistrationService {
           return value.trim();
         }
       }
+    }
+
+    final message = data['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
     }
 
     return 'Unable to create the resident account.';
