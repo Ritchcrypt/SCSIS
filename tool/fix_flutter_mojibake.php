@@ -43,7 +43,7 @@ $suspiciousMarkers = [
     'â€',
     'ðŸ',
     'ï¸',
-    "\u{FFFD}",
+    "\xEF\xBF\xBD",
 ];
 
 $iterator = new RecursiveIteratorIterator(
