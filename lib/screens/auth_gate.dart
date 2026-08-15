@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../widgets/sos_flip_coin_button.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
+import '../widgets/public_emergency_access_card.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -147,11 +148,11 @@ class _AuthGateState extends State<AuthGate> {
   }) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFFCBD5E1)),
-      prefixIcon: Icon(icon, color: const Color(0xFFCBD5E1)),
+      hintStyle: const TextStyle(color: Color(0xFF64748B)),
+      prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: const Color(0xFF101827),
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -159,7 +160,7 @@ class _AuthGateState extends State<AuthGate> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFF273449)),
+        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -221,7 +222,9 @@ class _AuthGateState extends State<AuthGate> {
                       letterSpacing: 3.3,
                     ),
                   ),
-                  const SizedBox(height: 52),
+                  const SizedBox(height: 18),
+                  const PublicEmergencyAccessCard(compact: true),
+                  const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(26, 30, 26, 28),
@@ -270,7 +273,7 @@ class _AuthGateState extends State<AuthGate> {
                             textInputAction: TextInputAction.next,
                             autofillHints: const <String>[AutofillHints.email],
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF0F172A),
                               fontSize: 17,
                             ),
                             decoration: _fieldDecoration(
@@ -300,7 +303,7 @@ class _AuthGateState extends State<AuthGate> {
                             ],
                             onFieldSubmitted: (_) => _login(),
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF0F172A),
                               fontSize: 17,
                             ),
                             decoration: _fieldDecoration(
@@ -314,7 +317,7 @@ class _AuthGateState extends State<AuthGate> {
                                   _obscurePassword
                                       ? Icons.visibility_outlined
                                       : Icons.visibility_off_outlined,
-                                  color: const Color(0xFFCBD5E1),
+                                  color: const Color(0xFF64748B),
                                 ),
                               ),
                             ),

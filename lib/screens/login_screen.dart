@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../widgets/sos_flip_coin_button.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
+import '../widgets/public_emergency_access_card.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -122,7 +123,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   const _TabangNowHeader(),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 16),
+                  const PublicEmergencyAccessCard(compact: true),
+                  const SizedBox(height: 22),
                   Card(
                     elevation: 0,
                     color: Colors.white,
@@ -170,8 +173,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               enabled: !_isLoading,
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.next,
-                              autofillHints: const <String>[AutofillHints.email],
+                              autofillHints: const <String>[
+                                AutofillHints.email,
+                              ],
+                              style: const TextStyle(color: Color(0xFF0F172A)),
                               decoration: const InputDecoration(
+                                filled: true,
+                                fillColor: Colors.white,
                                 labelText: 'Email address',
                                 hintText: 'email@example.com',
                                 prefixIcon: Icon(Icons.email_outlined),
@@ -199,13 +207,18 @@ class _LoginScreenState extends State<LoginScreen> {
                               enableSuggestions: false,
                               autocorrect: false,
                               textInputAction: TextInputAction.done,
-                              autofillHints: const <String>[AutofillHints.password],
+                              autofillHints: const <String>[
+                                AutofillHints.password,
+                              ],
                               onFieldSubmitted: (_) {
                                 if (!_isLoading) {
                                   _login();
                                 }
                               },
+                              style: const TextStyle(color: Color(0xFF0F172A)),
                               decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Colors.white,
                                 labelText: 'Password',
                                 prefixIcon: const Icon(Icons.lock_outline),
                                 border: const OutlineInputBorder(),
@@ -272,10 +285,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 TextButton(
-                                  onPressed: _isLoading ? null : _openRegistration,
+                                  onPressed: _isLoading
+                                      ? null
+                                      : _openRegistration,
                                   child: const Text(
                                     'Sign up',
-                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
                               ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/registration_service.dart';
 import '../widgets/sos_flip_coin_button.dart';
+import '../widgets/public_emergency_access_card.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -119,11 +120,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFFCBD5E1)),
-      prefixIcon: Icon(icon, color: const Color(0xFFCBD5E1)),
+      hintStyle: const TextStyle(color: Color(0xFF64748B)),
+      prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: const Color(0xFF101827),
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -131,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFF273449)),
+        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -187,7 +188,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       letterSpacing: 3,
                     ),
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 16),
+                  const PublicEmergencyAccessCard(compact: true),
+                  const SizedBox(height: 22),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
@@ -232,7 +235,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           TextFormField(
                             controller: _nameController,
                             textCapitalization: TextCapitalization.words,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF0F172A)),
                             decoration: _fieldDecoration(
                               hint: 'Full name',
                               icon: Icons.person_outline_rounded,
@@ -247,7 +250,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             autofillHints: const <String>[AutofillHints.email],
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF0F172A)),
                             decoration: _fieldDecoration(
                               hint: 'Email address',
                               icon: Icons.email_outlined,
@@ -272,7 +275,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             autofillHints: const <String>[
                               AutofillHints.telephoneNumber,
                             ],
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF0F172A)),
                             decoration: _fieldDecoration(
                               hint: '09XXXXXXXXX',
                               icon: Icons.phone_outlined,
@@ -296,7 +299,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             minLines: 2,
                             maxLines: 4,
                             textCapitalization: TextCapitalization.words,
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF0F172A)),
                             decoration: _fieldDecoration(
                               hint: 'Complete address',
                               icon: Icons.location_on_outlined,
@@ -313,7 +316,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             autofillHints: const <String>[
                               AutofillHints.newPassword,
                             ],
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF0F172A)),
                             decoration: _fieldDecoration(
                               hint: 'Password',
                               icon: Icons.lock_outline_rounded,
@@ -325,7 +328,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   _obscurePassword
                                       ? Icons.visibility_outlined
                                       : Icons.visibility_off_outlined,
-                                  color: const Color(0xFFCBD5E1),
+                                  color: const Color(0xFF64748B),
                                 ),
                               ),
                             ),
@@ -347,7 +350,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             autofillHints: const <String>[
                               AutofillHints.newPassword,
                             ],
-                            style: const TextStyle(color: Colors.white),
+                            style: const TextStyle(color: Color(0xFF0F172A)),
                             decoration: _fieldDecoration(
                               hint: 'Confirm password',
                               icon: Icons.lock_reset_rounded,
@@ -360,7 +363,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   _obscureConfirmation
                                       ? Icons.visibility_outlined
                                       : Icons.visibility_off_outlined,
-                                  color: const Color(0xFFCBD5E1),
+                                  color: const Color(0xFF64748B),
                                 ),
                               ),
                             ),

@@ -466,7 +466,11 @@ class _MobileSosFormState extends State<_MobileSosForm> {
                       Expanded(
                         child: Text(
                           'You already confirmed the SOS before opening this form. Press Send only when the emergency details and callback number are correct.',
-                          style: TextStyle(height: 1.4),
+                          style: TextStyle(
+                            height: 1.4,
+                            color: Color(0xFF7C2D12),
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -499,6 +503,9 @@ class _MobileSosFormState extends State<_MobileSosForm> {
                 ),
                 const SizedBox(height: 10),
                 TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                  ),
                   onPressed: _sending
                       ? null
                       : () => Navigator.of(context).pop(),
@@ -586,7 +593,10 @@ class _LocationStatusCard extends StatelessWidget {
                     locationValue.isLastKnown
                         ? 'Last-known location ready'
                         : 'Current GPS location ready',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(
+                      color: Color(0xFF065F46),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ],
@@ -594,7 +604,12 @@ class _LocationStatusCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '${locationValue.latitude.toStringAsFixed(6)}, ${locationValue.longitude.toStringAsFixed(6)} • $accuracyText',
-              style: const TextStyle(fontSize: 12, height: 1.4),
+              style: const TextStyle(
+                color: Color(0xFF047857),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 10),
             TextButton.icon(
@@ -624,7 +639,10 @@ class _LocationStatusCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Location required',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: Color(0xFF991B1B),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ],
