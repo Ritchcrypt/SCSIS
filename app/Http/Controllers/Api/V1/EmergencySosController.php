@@ -64,18 +64,9 @@ class EmergencySosController extends Controller
         );
 
         $recentDuplicate = MobileEmergencyAlert::query()
+            ->where('installation_id', $installationId)
             ->where('status', 'active')
-            ->where('created_at', '>=', now()->subSeconds(30))
-            ->where(function ($query) use ($device, $installationId): void {
-                if ($device) {
-                    $query->where('device_id', $device->id);
-
-                    return;
-                }
-
-                $query->whereNull('device_id')
-                    ->where('request_id', 'like', $installationId.'%');
-            })
+            ->where('triggered_at', '>=', now()->subSeconds(30))
             ->latest('id')
             ->first();
 
@@ -90,12 +81,14 @@ class EmergencySosController extends Controller
             $request,
             $validated,
             $requestId,
+            $installationId,
             $device
         ): MobileEmergencyAlert {
             $alert = MobileEmergencyAlert::query()->create([
                 'alert_code' => 'PENDING-'.Str::uuid(),
                 'device_id' => $device?->id,
                 'user_id' => $device?->user_id,
+                'installation_id' => $installationId,
                 'request_id' => $requestId,
                 'status' => 'active',
                 'latitude' => $validated['latitude'] ?? null,
@@ -115,6 +108,8 @@ class EmergencySosController extends Controller
                 'alert_code' => 'SOS-'.now()->format('Ymd').'-'.str_pad((string) $alert->id, 6, '0', STR_PAD_LEFT),
             ])->save();
 
+            $alert->load('user');
+
             $recipientIds = User::query()
                 ->where('is_active', true)
                 ->whereIn('role', ['admin', 'official', 'dao'])
@@ -133,7 +128,7 @@ class EmergencySosController extends Controller
                 ]);
             }
 
-            return $alert->fresh(['user']);
+            return $alert;
         });
 
         if ($device) {
