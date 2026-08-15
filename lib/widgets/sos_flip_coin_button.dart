@@ -36,10 +36,10 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     _branding.addListener(_onBrandingChanged);
     unawaited(_branding.ensureStarted());
 
-    final cycleMilliseconds = math.max(
-      1600,
-      widget.flipInterval.inMilliseconds * 2,
-    );
+    final requestedCycleMilliseconds = widget.flipInterval.inMilliseconds * 2;
+    final cycleMilliseconds = requestedCycleMilliseconds < 1600
+        ? 1600
+        : requestedCycleMilliseconds;
 
     _controller = AnimationController(
       vsync: this,
