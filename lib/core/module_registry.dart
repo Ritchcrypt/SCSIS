@@ -23,6 +23,13 @@ class ModuleRegistry {
       mobileImplemented: true,
     ),
     AppModuleDefinition(
+      id: AppModuleId.distressSignal,
+      defaultLabel: 'Distress Signal',
+      icon: Icons.warning_amber_rounded,
+      websiteGlyph: '🆘',
+      mobileImplemented: true,
+    ),
+    AppModuleDefinition(
       id: AppModuleId.tanodAlerts,
       defaultLabel: 'Tanod Alerts',
       icon: Icons.notifications_active_rounded,
@@ -127,6 +134,9 @@ class ModuleRegistry {
 
       case AppModuleId.incidents:
         return capabilities.allows(AppCapability.viewIncidents);
+
+      case AppModuleId.distressSignal:
+        return capabilities.allows(AppCapability.manageDistressSignal);
 
       case AppModuleId.tanodAlerts:
         return capabilities.allows(AppCapability.viewTanodAlerts);

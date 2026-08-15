@@ -19,6 +19,8 @@ import '../services/user_management_service.dart';
 import '../services/branding_service.dart';
 import '../services/incident_service.dart';
 import '../services/resident_complaint_service.dart';
+import 'distress_signal_detail_screen.dart';
+import 'distress_signal_screen.dart';
 import 'incident_detail_screen.dart';
 import 'incidents_screen.dart' as incident_ui;
 import 'tanod_alerts_screen.dart';
@@ -46,6 +48,7 @@ final _tabangNowWebsiteLogoBytes = base64Decode(_tabangNowWebsiteLogoBase64);
 enum _HomeModule {
   dashboard,
   incidents,
+  distressSignal,
   tanodAlerts,
   tanodRoster,
   tanodTasks,
@@ -421,6 +424,28 @@ class _HomeScreenState extends State<HomeScreen> {
         _selectModule(_HomeModule.incidents);
         return;
 
+      case 'distressSignal':
+      case 'emergencyAlerts':
+        if (ModuleRegistry.canAccess(_appRole, AppModuleId.distressSignal)) {
+          if (target.sourceId != null) {
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => DistressSignalDetailScreen(
+                  authService: _authService,
+                  alertId: target.sourceId!,
+                ),
+              ),
+            );
+
+            return;
+          }
+
+          _selectModule(_HomeModule.distressSignal);
+          return;
+        }
+
+        break;
+
       case 'tanodAlerts':
         if (ModuleRegistry.canAccess(_appRole, AppModuleId.tanodAlerts)) {
           _selectModule(_HomeModule.tanodAlerts);
@@ -559,6 +584,11 @@ class _HomeScreenState extends State<HomeScreen> {
             authService: _authService,
             user: widget.user,
           ),
+        );
+      case _HomeModule.distressSignal:
+        return DistressSignalScreen(
+          authService: _authService,
+          user: widget.user,
         );
       case _HomeModule.tanodAlerts:
         return KeyedSubtree(
@@ -793,6 +823,7 @@ class _HomeScreenState extends State<HomeScreen> {
   _HomeModule? _homeModuleFor(AppModuleId moduleId) => switch (moduleId) {
     AppModuleId.dashboard => _HomeModule.dashboard,
     AppModuleId.incidents => _HomeModule.incidents,
+    AppModuleId.distressSignal => _HomeModule.distressSignal,
     AppModuleId.tanodAlerts => _HomeModule.tanodAlerts,
     AppModuleId.tanodRoster => _HomeModule.tanodRoster,
     AppModuleId.tanodTasks => _HomeModule.tanodTasks,
@@ -810,6 +841,7 @@ class _HomeScreenState extends State<HomeScreen> {
   AppModuleId _moduleIdForHomeModule(_HomeModule module) => switch (module) {
     _HomeModule.dashboard => AppModuleId.dashboard,
     _HomeModule.incidents => AppModuleId.incidents,
+    _HomeModule.distressSignal => AppModuleId.distressSignal,
     _HomeModule.tanodAlerts => AppModuleId.tanodAlerts,
     _HomeModule.tanodRoster => AppModuleId.tanodRoster,
     _HomeModule.tanodTasks => AppModuleId.tanodTasks,
