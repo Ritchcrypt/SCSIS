@@ -65,17 +65,30 @@ class MobileRegistrationAndEmergencyTest extends TestCase
         $response = $this->postJson('/api/v1/emergency/sos', [
             'request_id' => 'test-anonymous-sos-001',
             'installation_id' => 'test-installation-anonymous-001',
+            'emergency_details' => 'May taong nahimatay at kailangan ng agarang tulong.',
+            'contact_number' => '+63 912 345 6789',
+            'latitude' => 11.3935000,
+            'longitude' => 122.6851000,
+            'accuracy_meters' => 12.5,
+            'location_source' => 'current',
         ]);
 
         $response
             ->assertCreated()
             ->assertJsonPath('data.identified', false)
-            ->assertJsonPath('data.status', 'active');
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.contact_number', '09123456789')
+            ->assertJsonPath('data.location_source', 'current');
 
         $alert = MobileEmergencyAlert::query()->firstOrFail();
 
         $this->assertNull($alert->user_id);
         $this->assertSame('test-installation-anonymous-001', $alert->installation_id);
+        $this->assertSame('09123456789', $alert->contact_number);
+        $this->assertSame('May taong nahimatay at kailangan ng agarang tulong.', $alert->emergency_details);
+        $this->assertSame('current', $alert->location_source);
+        $this->assertSame(11.3935, $alert->latitude);
+        $this->assertSame(122.6851, $alert->longitude);
 
         foreach ([$admin, $official] as $recipient) {
             $this->assertTrue(
@@ -131,16 +144,25 @@ class MobileRegistrationAndEmergencyTest extends TestCase
             'request_id' => 'test-linked-sos-001',
             'installation_id' => 'test-tanod-installation-001',
             'emergency_token' => $emergencyToken,
+            'emergency_details' => 'May aksidente sa kalsada at may nasugatan.',
+            'contact_number' => '09181234567',
+            'latitude' => 11.3951000,
+            'longitude' => 122.6829000,
+            'accuracy_meters' => 35,
+            'location_source' => 'last_known',
         ]);
 
         $sos
             ->assertCreated()
             ->assertJsonPath('data.identified', true)
-            ->assertJsonPath('data.display_name', $tanod->name);
+            ->assertJsonPath('data.display_name', $tanod->name)
+            ->assertJsonPath('data.location_source', 'last_known');
 
         $alert = MobileEmergencyAlert::query()->firstOrFail();
 
         $this->assertSame($tanod->id, $alert->user_id);
+        $this->assertSame('09181234567', $alert->contact_number);
+        $this->assertSame('last_known', $alert->location_source);
     }
 
     public function test_only_admin_and_official_can_manage_emergency_alerts(): void
@@ -150,6 +172,11 @@ class MobileRegistrationAndEmergencyTest extends TestCase
             'installation_id' => 'test-installation-management',
             'request_id' => 'test-management-sos-001',
             'status' => 'active',
+            'emergency_details' => 'Test emergency',
+            'contact_number' => '09171234567',
+            'latitude' => 11.3900000,
+            'longitude' => 122.6800000,
+            'location_source' => 'current',
             'source' => 'mobile',
             'triggered_at' => now(),
         ]);
@@ -173,6 +200,45 @@ class MobileRegistrationAndEmergencyTest extends TestCase
         $this->patchJson("/api/v1/emergency-alerts/{$alert->id}/resolve")
             ->assertOk()
             ->assertJsonPath('data.status', 'resolved');
+    }
+
+    public function test_mobile_sos_module_is_available_only_to_admin_and_official(): void
+    {
+        $alert = MobileEmergencyAlert::query()->create([
+            'alert_code' => 'SOS-TEST-000002',
+            'installation_id' => 'test-installation-module',
+            'request_id' => 'test-module-sos-001',
+            'status' => 'active',
+            'emergency_details' => 'Kailangan ng tulong sa bahay dahil may nasugatan.',
+            'contact_number' => '09175551234',
+            'latitude' => 11.3910000,
+            'longitude' => 122.6810000,
+            'location_source' => 'current',
+            'source' => 'mobile',
+            'triggered_at' => now(),
+        ]);
+
+        $resident = $this->activeUser('resident');
+
+        $this->actingAs($resident)
+            ->get('/admin/mobile-sos')
+            ->assertForbidden();
+
+        $admin = $this->activeUser('admin');
+
+        $this->actingAs($admin)
+            ->get('/admin/mobile-sos')
+            ->assertOk()
+            ->assertSee('Mobile SOS')
+            ->assertSee($alert->alert_code);
+
+        $official = $this->activeUser('official');
+
+        $this->actingAs($official)
+            ->get('/official/mobile-sos')
+            ->assertOk()
+            ->assertSee('Mobile SOS')
+            ->assertSee($alert->alert_code);
     }
 
     public function test_notification_pulse_keeps_mobile_sos_visible_when_a_newer_ordinary_notification_exists(): void
