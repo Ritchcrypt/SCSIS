@@ -35,25 +35,19 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton> {
     _branding.addListener(_onBrandingChanged);
     unawaited(_branding.ensureStarted());
 
-    _timer = Timer.periodic(widget.flipInterval, (_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _showSos = !_showSos;
-      });
-    });
+    _startFlipTimer();
   }
 
   @override
   void didUpdateWidget(covariant SosFlipCoinButton oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.flipInterval == widget.flipInterval) {
-      return;
+    if (oldWidget.flipInterval != widget.flipInterval) {
+      _startFlipTimer();
     }
+  }
 
+  void _startFlipTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(widget.flipInterval, (_) {
       if (!mounted) {
@@ -80,10 +74,6 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton> {
   }
 
   Future<void> _openSos() async {
-    if (!_showSos) {
-      return;
-    }
-
     await GlobalSosOverlay.open(context);
   }
 
@@ -144,17 +134,15 @@ class _CoinFace extends StatelessWidget {
     final customLogo = logoBytes;
 
     return Semantics(
-      button: sos,
-      enabled: sos,
-      label: sos ? 'Emergency SOS' : 'TabangNow system logo',
-      hint: sos
-          ? 'Tap to open the emergency confirmation'
-          : 'The SOS face will flip into view automatically',
+      button: true,
+      enabled: true,
+      label: 'Emergency SOS',
+      hint: 'Tap to open the emergency confirmation. The coin flips automatically.',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: sos ? onTap : null,
+          onTap: onTap,
           child: Ink(
             width: size,
             height: size,
