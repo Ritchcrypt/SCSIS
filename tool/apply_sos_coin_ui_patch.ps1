@@ -116,34 +116,34 @@ if ($overlay -notmatch 'Future<void>\s+_beginSosFlow\s*\(') {
 # Authenticated shell: add the same flipping SOS coin to the common app bar so
 # Admin, Official, Tanod and Resident all retain access after login.
 # -----------------------------------------------------------------------------
-$home = Normalize-Lf (Get-Content $homePath -Raw)
+$homeContent = Normalize-Lf (Get-Content $homePath -Raw)
 
-if ($home -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
+if ($homeContent -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
     $importPattern = "(?m)^(\s*import\s+'\.\./widgets/global_notification_bell\.dart';\s*)$"
-    $importMatches = [regex]::Matches($home, $importPattern)
+    $importMatches = [regex]::Matches($homeContent, $importPattern)
 
     if ($importMatches.Count -ne 1) {
         throw "Could not identify the GlobalNotificationBell import safely. Found $($importMatches.Count). No Dart files were written."
     }
 
-    $home = [regex]::Replace(
-        $home,
+    $homeContent = [regex]::Replace(
+        $homeContent,
         $importPattern,
         '$1' + "`nimport '../widgets/sos_flip_coin_button.dart';",
         1
     )
 }
 
-if ($home -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
+if ($homeContent -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
     $actionsPattern = '(?s)(actions\s*:\s*<Widget>\s*\[\s*\n)(\s*)(GlobalThemeButton\s*\(\s*user:\s*widget\.user\s*,\s*authService:\s*_authService\s*\)\s*,)'
-    $actionsMatches = [regex]::Matches($home, $actionsPattern)
+    $actionsMatches = [regex]::Matches($homeContent, $actionsPattern)
 
     if ($actionsMatches.Count -ne 1) {
         throw "Could not identify the common HomeScreen app-bar actions safely. Found $($actionsMatches.Count). No Dart files were written."
     }
 
-    $home = [regex]::Replace(
-        $home,
+    $homeContent = [regex]::Replace(
+        $homeContent,
         $actionsPattern,
         [System.Text.RegularExpressions.MatchEvaluator]{
             param($m)
@@ -156,16 +156,16 @@ if ($home -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
     )
 }
 
-if ($home -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
+if ($homeContent -notmatch "import\s+'\.\./widgets/sos_flip_coin_button\.dart';") {
     throw 'HomeScreen SOS coin import validation failed. No Dart files were written.'
 }
-if ($home -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
+if ($homeContent -notmatch 'SosFlipCoinButton\s*\(\s*size:\s*42\s*\)') {
     throw 'HomeScreen SOS coin placement validation failed. No Dart files were written.'
 }
 
 # Only now write both Dart files, after all matching and validations succeeded.
 Write-Utf8NoBom $overlayPath $overlay
-Write-Utf8NoBom $homePath $home
+Write-Utf8NoBom $homePath $homeContent
 
 Write-Host 'SOS coin UI integration applied successfully.' -ForegroundColor Green
 Write-Host 'The old floating SOS pill was removed; the confirmation/GPS/send flow was preserved.'
