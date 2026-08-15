@@ -11,7 +11,7 @@ class GlobalBrandingLogoController extends ChangeNotifier {
   static final GlobalBrandingLogoController instance =
       GlobalBrandingLogoController._();
 
-  static const Duration _refreshInterval = Duration(seconds: 30);
+  static const Duration _refreshInterval = Duration(seconds: 15);
 
   final PublicBrandingLogoService _service = PublicBrandingLogoService();
 
