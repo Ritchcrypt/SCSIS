@@ -192,6 +192,14 @@
         }
     }
 
+    function hasStoredValue(storage, key) {
+        try {
+            return storage.getItem(key) !== null;
+        } catch (error) {
+            return false;
+        }
+    }
+
     function writeInteger(storage, key, value) {
         try {
             storage.setItem(key, String(value));
@@ -248,9 +256,14 @@
             const validLatestId = Number.isSafeInteger(latestId) && latestId > 0;
             const validEmergencyId = Number.isSafeInteger(emergencyId) && emergencyId > 0;
 
-            if (!validLatestId && !validEmergencyId) {
-                return;
-            }
+            const sessionCursorInitialized = hasStoredValue(
+                window.sessionStorage,
+                sessionCursorKey
+            );
+            const emergencySessionCursorInitialized = hasStoredValue(
+                window.sessionStorage,
+                emergencySessionCursorKey
+            );
 
             const sessionCursor = readInteger(
                 window.sessionStorage,
@@ -262,49 +275,53 @@
             );
 
             /*
-             * Establish independent silent baselines. The emergency cursor is
-             * deliberately separate so a newer ordinary notification can never
-             * hide an SOS that arrived during the same polling interval.
+             * Establish independent silent baselines once per page session.
+             * Store zero explicitly when nothing exists yet so the first
+             * notification/SOS arriving afterward is treated as new.
              */
-            if (sessionCursor === 0 && validLatestId) {
+            if (!sessionCursorInitialized) {
                 writeInteger(
                     window.sessionStorage,
                     sessionCursorKey,
-                    latestId
+                    validLatestId ? latestId : 0
                 );
 
-                const existingGlobalCursor = readInteger(
-                    window.localStorage,
-                    lastSoundedKey
-                );
-
-                if (latestId > existingGlobalCursor) {
-                    writeInteger(
+                if (validLatestId) {
+                    const existingGlobalCursor = readInteger(
                         window.localStorage,
-                        lastSoundedKey,
-                        latestId
+                        lastSoundedKey
                     );
+
+                    if (latestId > existingGlobalCursor) {
+                        writeInteger(
+                            window.localStorage,
+                            lastSoundedKey,
+                            latestId
+                        );
+                    }
                 }
             }
 
-            if (emergencySessionCursor === 0 && validEmergencyId) {
+            if (!emergencySessionCursorInitialized) {
                 writeInteger(
                     window.sessionStorage,
                     emergencySessionCursorKey,
-                    emergencyId
+                    validEmergencyId ? emergencyId : 0
                 );
 
-                const existingEmergencyGlobalCursor = readInteger(
-                    window.localStorage,
-                    emergencyLastSoundedKey
-                );
-
-                if (emergencyId > existingEmergencyGlobalCursor) {
-                    writeInteger(
+                if (validEmergencyId) {
+                    const existingEmergencyGlobalCursor = readInteger(
                         window.localStorage,
-                        emergencyLastSoundedKey,
-                        emergencyId
+                        emergencyLastSoundedKey
                     );
+
+                    if (emergencyId > existingEmergencyGlobalCursor) {
+                        writeInteger(
+                            window.localStorage,
+                            emergencyLastSoundedKey,
+                            emergencyId
+                        );
+                    }
                 }
             }
 
@@ -313,7 +330,7 @@
 
             if (
                 validEmergencyId
-                && emergencySessionCursor > 0
+                && emergencySessionCursorInitialized
                 && emergencyId > emergencySessionCursor
             ) {
                 newEmergencyObserved = true;
@@ -347,7 +364,7 @@
 
             if (
                 !validLatestId
-                || sessionCursor === 0
+                || !sessionCursorInitialized
                 || latestId <= sessionCursor
             ) {
                 return;
