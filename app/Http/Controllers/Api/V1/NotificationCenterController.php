@@ -136,6 +136,12 @@ class NotificationCenterController extends Controller
                 : $this->target('dashboard');
         }
 
+        if ($type === 'mobile_emergency') {
+            return in_array($role, ['admin', 'official', 'dao'], true)
+                ? $this->target('emergencyAlerts', $sourceId)
+                : $this->target('dashboard');
+        }
+
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return $this->target('announcements', $sourceId);
         }
