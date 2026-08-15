@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\MobileEmergencyAlert;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\NotificationBellService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Sanctum\Sanctum;
@@ -134,10 +135,6 @@ class MobileRegistrationAndEmergencyTest extends TestCase
 
         $this->assertNotSame('', $emergencyToken);
 
-        /*
-         * Clear authentication to prove the actual SOS call does not depend on
-         * a normal account session or Sanctum bearer token.
-         */
         app('auth')->forgetGuards();
 
         $sos = $this->postJson('/api/v1/emergency/sos', [
@@ -229,7 +226,7 @@ class MobileRegistrationAndEmergencyTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/mobile-sos')
             ->assertOk()
-            ->assertSee('Mobile SOS')
+            ->assertSee('Distress Signal')
             ->assertSee($alert->alert_code);
 
         $official = $this->activeUser('official');
@@ -237,8 +234,55 @@ class MobileRegistrationAndEmergencyTest extends TestCase
         $this->actingAs($official)
             ->get('/official/mobile-sos')
             ->assertOk()
-            ->assertSee('Mobile SOS')
+            ->assertSee('Distress Signal')
             ->assertSee($alert->alert_code);
+    }
+
+    public function test_opening_distress_signal_notification_marks_it_read_and_removes_it_from_bell(): void
+    {
+        $admin = $this->activeUser('admin');
+
+        $alert = MobileEmergencyAlert::query()->create([
+            'alert_code' => 'SOS-TEST-000003',
+            'installation_id' => 'test-installation-notification-open',
+            'request_id' => 'test-notification-open-sos-001',
+            'status' => 'active',
+            'emergency_details' => 'Emergency notification open test.',
+            'contact_number' => '09170000001',
+            'latitude' => 11.3920000,
+            'longitude' => 122.6820000,
+            'location_source' => 'current',
+            'source' => 'mobile',
+            'triggered_at' => now(),
+        ]);
+
+        $notification = UserNotification::query()->create([
+            'user_id' => $admin->id,
+            'type' => 'mobile_emergency',
+            'source_id' => $alert->id,
+            'title' => 'URGENT: Mobile SOS',
+            'message' => 'A distress signal needs review.',
+            'is_read' => false,
+        ]);
+
+        $bellBefore = app(NotificationBellService::class)->forUser($admin);
+
+        $this->assertSame(1, $bellBefore['unread_count']);
+        $this->assertTrue((bool) $bellBefore['notifications']->first()['openable']);
+
+        $this->actingAs($admin)
+            ->post(route('notifications.open', $notification))
+            ->assertRedirect(route('emergency-alerts.show', $alert));
+
+        $notification->refresh();
+
+        $this->assertTrue((bool) $notification->is_read);
+        $this->assertNotNull($notification->read_at);
+
+        $bellAfter = app(NotificationBellService::class)->forUser($admin);
+
+        $this->assertSame(0, $bellAfter['unread_count']);
+        $this->assertCount(0, $bellAfter['notifications']);
     }
 
     public function test_notification_pulse_keeps_mobile_sos_visible_when_a_newer_ordinary_notification_exists(): void
