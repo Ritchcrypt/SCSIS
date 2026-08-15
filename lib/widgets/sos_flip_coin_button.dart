@@ -21,13 +21,12 @@ class SosFlipCoinButton extends StatefulWidget {
   State<SosFlipCoinButton> createState() => _SosFlipCoinButtonState();
 }
 
-class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _rotation;
-
+class _SosFlipCoinButtonState extends State<SosFlipCoinButton> {
   final GlobalBrandingLogoController _branding =
       GlobalBrandingLogoController.instance;
+
+  Timer? _timer;
+  bool _showSos = false;
 
   @override
   void initState() {
@@ -36,46 +35,41 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     _branding.addListener(_onBrandingChanged);
     unawaited(_branding.ensureStarted());
 
-    final requestedCycleMilliseconds = widget.flipInterval.inMilliseconds * 2;
-    final cycleMilliseconds = requestedCycleMilliseconds < 1600
-        ? 1600
-        : requestedCycleMilliseconds;
+    _timer = Timer.periodic(widget.flipInterval, (_) {
+      if (!mounted) {
+        return;
+      }
 
-    _controller = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: cycleMilliseconds),
-    );
+      setState(() {
+        _showSos = !_showSos;
+      });
+    });
+  }
 
-    _rotation = TweenSequence<double>(<TweenSequenceItem<double>>[
-      TweenSequenceItem<double>(
-        tween: ConstantTween<double>(0),
-        weight: 35,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 0, end: math.pi).chain(
-          CurveTween(curve: Curves.easeInOutCubic),
-        ),
-        weight: 15,
-      ),
-      TweenSequenceItem<double>(
-        tween: ConstantTween<double>(math.pi),
-        weight: 35,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: math.pi, end: math.pi * 2).chain(
-          CurveTween(curve: Curves.easeInOutCubic),
-        ),
-        weight: 15,
-      ),
-    ]).animate(_controller);
+  @override
+  void didUpdateWidget(covariant SosFlipCoinButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-    _controller.repeat();
+    if (oldWidget.flipInterval == widget.flipInterval) {
+      return;
+    }
+
+    _timer?.cancel();
+    _timer = Timer.periodic(widget.flipInterval, (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _showSos = !_showSos;
+      });
+    });
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _branding.removeListener(_onBrandingChanged);
-    _controller.dispose();
     super.dispose();
   }
 
@@ -85,13 +79,8 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
     }
   }
 
-  bool _sosFaceVisible(double angle) {
-    final normalized = angle % (math.pi * 2);
-    return normalized > math.pi / 2 && normalized < math.pi * 1.5;
-  }
-
   Future<void> _openSos() async {
-    if (!_sosFaceVisible(_rotation.value)) {
+    if (!_showSos) {
       return;
     }
 
@@ -100,83 +89,80 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton>
 
   @override
   Widget build(BuildContext context) {
-    final size = widget.size;
+    return SizedBox.square(
+      dimension: widget.size,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 620),
+        switchInCurve: Curves.easeInOutCubic,
+        switchOutCurve: Curves.easeInOutCubic,
+        transitionBuilder: (child, animation) {
+          return AnimatedBuilder(
+            animation: animation,
+            child: child,
+            builder: (context, animatedChild) {
+              final angle = (1 - animation.value) * math.pi;
 
-    return AnimatedBuilder(
-      animation: _rotation,
-      builder: (context, _) {
-        final angle = _rotation.value;
-        final visibleSos = _sosFaceVisible(angle);
-
-        final face = _CoinFace(
-          size: size,
-          sos: visibleSos,
-          enabled: visibleSos,
+              return Transform(
+                alignment: Alignment.center,
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.0015)
+                  ..rotateY(angle),
+                child: animatedChild,
+              );
+            },
+          );
+        },
+        child: _CoinFace(
+          key: ValueKey<bool>(_showSos),
+          size: widget.size,
+          sos: _showSos,
           logoBytes: _branding.logoBytes,
           onTap: _openSos,
-        );
-
-        final frontFacing = math.cos(angle) >= 0;
-
-        return Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.0015)
-            ..rotateY(angle),
-          child: frontFacing
-              ? face
-              : Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.identity()..rotateY(math.pi),
-                  child: face,
-                ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
 class _CoinFace extends StatelessWidget {
   const _CoinFace({
+    super.key,
     required this.size,
     required this.sos,
-    required this.enabled,
     required this.logoBytes,
     required this.onTap,
   });
 
   final double size;
   final bool sos;
-  final bool enabled;
   final Uint8List? logoBytes;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final compact = size < 60;
-    final background = sos
-        ? const Color(0xFFDC2626)
-        : const Color(0xFF254C99);
     final customLogo = logoBytes;
 
     return Semantics(
       button: sos,
-      enabled: enabled,
+      enabled: sos,
       label: sos ? 'Emergency SOS' : 'TabangNow system logo',
       hint: sos
           ? 'Tap to open the emergency confirmation'
-          : 'The SOS face will rotate into view automatically',
+          : 'The SOS face will flip into view automatically',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: enabled ? onTap : null,
+          onTap: sos ? onTap : null,
           child: Ink(
             width: size,
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: background,
+              color: sos
+                  ? const Color(0xFFDC2626)
+                  : const Color(0xFF254C99),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.20),
                 width: compact ? 1 : 2,
