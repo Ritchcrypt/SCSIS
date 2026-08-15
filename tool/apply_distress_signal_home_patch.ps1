@@ -8,6 +8,7 @@ if (-not (Test-Path $path)) {
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $content = [System.IO.File]::ReadAllText($path)
+$newline = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
 
 if ($content.Contains('_HomeModule.distressSignal')) {
     Write-Host 'Distress Signal is already integrated into HomeScreen.'
@@ -24,16 +25,19 @@ function Replace-ExactOnce {
         [string]$New
     )
 
+    $normalizedOld = [regex]::Replace($Old, "`r?`n", $script:newline)
+    $normalizedNew = [regex]::Replace($New, "`r?`n", $script:newline)
+
     $count = ([regex]::Matches(
         $script:content,
-        [regex]::Escape($Old)
+        [regex]::Escape($normalizedOld)
     )).Count
 
     if ($count -ne 1) {
         throw "$Name expected exactly one match but found $count. No partial file was written."
     }
 
-    $script:content = $script:content.Replace($Old, $New)
+    $script:content = $script:content.Replace($normalizedOld, $normalizedNew)
 }
 
 Replace-ExactOnce `
