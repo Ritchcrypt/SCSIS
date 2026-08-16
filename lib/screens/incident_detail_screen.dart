@@ -10,7 +10,9 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../services/auth_service.dart';
+import '../services/case_management_service.dart';
 import '../services/incident_service.dart';
+import 'case_form_screen.dart';
 
 class IncidentDetailScreen extends StatefulWidget {
   const IncidentDetailScreen({
@@ -29,10 +31,8 @@ class IncidentDetailScreen extends StatefulWidget {
 }
 
 class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
-  final TextEditingController _remarksController = TextEditingController();
   final TextEditingController _escalationReasonController =
       TextEditingController();
-  final TextEditingController _messageController = TextEditingController();
 
   bool _loading = true;
   bool _actionBusy = false;
@@ -43,7 +43,6 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
   Map<String, dynamic> _options = <String, dynamic>{};
 
   int? _selectedStatusId;
-  String _selectedResponder = '__keep__';
   String? _selectedAgency;
 
   String get _role =>
@@ -59,9 +58,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
 
   @override
   void dispose() {
-    _remarksController.dispose();
     _escalationReasonController.dispose();
-    _messageController.dispose();
     super.dispose();
   }
 
@@ -74,14 +71,12 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
       final options = _map(response['options']);
 
       final statuses = _uniqueByIntId(_mapList(options['statuses']));
-      final responders = _uniqueByIntId(_mapList(options['responders']));
       final agencies = _uniqueByStringValue(
         _mapList(options['agencies']),
         key: 'value',
       );
 
       options['statuses'] = statuses;
-      options['responders'] = responders;
       options['agencies'] = agencies;
 
       final currentStatusId = _toInt(incident['status_id']);
@@ -116,8 +111,6 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         _options = options;
 
         _selectedStatusId = safeStatusId;
-
-        _selectedResponder = '__keep__';
 
         _selectedAgency =
             firstAgency != null && validAgencyValues.contains(firstAgency)
@@ -156,26 +149,12 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
       return;
     }
 
-    final canAssign = _can('can_assign');
-    final includeAssignedTo = canAssign && _selectedResponder != '__keep__';
-
-    final assignedTo = includeAssignedTo && _selectedResponder != '__none__'
-        ? int.tryParse(_selectedResponder)
-        : null;
-
     await _runAction(
       action: () => widget.incidentService.updateStatus(
         incidentId: widget.incidentId,
         statusId: statusId,
-        remarks: _remarksController.text,
-        includeAssignedTo: includeAssignedTo,
-        assignedTo: assignedTo,
       ),
       successMessage: 'Incident updated successfully.',
-      clearAfter: () {
-        _remarksController.clear();
-        _selectedResponder = '__keep__';
-      },
     );
   }
 
@@ -200,67 +179,8 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     );
   }
 
-  Future<void> _sendMessage() async {
-    final message = _messageController.text.trim();
-
-    if (message.isEmpty || _actionBusy) {
-      _showMessage('Enter a message first.');
-      return;
-    }
-
-    if (message.length > 3000) {
-      _showMessage('Message must not exceed 3000 characters.');
-      return;
-    }
-
-    await _runAction(
-      action: () => widget.incidentService.addMessage(
-        incidentId: widget.incidentId,
-        message: message,
-      ),
-      successMessage: 'Message added successfully.',
-      clearAfter: _messageController.clear,
-    );
-  }
-
-  Future<void> _deleteIncident() async {
-    if (!_can('can_delete') || _actionBusy) {
-      return;
-    }
-
-    final title = _incident['title']?.toString() ?? 'this incident';
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Incident'),
-        content: Text(
-          'Delete "$title"? This removes the incident and '
-          'its related incident evidence, messages, history, '
-          'escalations, case links, and incident notifications. '
-          'This cannot be undone.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop(false);
-            },
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB91C1C),
-            ),
-            onPressed: () {
-              Navigator.of(dialogContext).pop(true);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) {
+  Future<void> _createRelatedCase() async {
+    if (_role != 'admin' || _actionBusy) {
       return;
     }
 
@@ -269,39 +189,73 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     });
 
     try {
-      await widget.incidentService.deleteIncident(
-        incidentId: widget.incidentId,
+      final service = CaseManagementService(
+        authService: widget.incidentService.authService,
+      );
+
+      final response = await service.index(page: 1);
+      final options = _map(response['options']);
+      final caseTypes = _mapList(options['case_types']);
+      final caseStatuses = _mapList(options['case_statuses']);
+      final incidents = _mapList(options['incidents']);
+
+      final hasCurrentIncident = incidents.any(
+        (item) => _toInt(item['id']) == widget.incidentId,
+      );
+
+      if (!hasCurrentIncident) {
+        final title =
+            _incident['title']?.toString().trim() ?? 'Untitled Incident';
+
+        incidents.insert(0, <String, dynamic>{
+          'id': widget.incidentId,
+          'title': title,
+          'label': 'Incident #${widget.incidentId} — $title',
+        });
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _actionBusy = false;
+      });
+
+      final message = await Navigator.of(context).push<String>(
+        MaterialPageRoute<String>(
+          builder: (_) => CaseFormScreen(
+            service: service,
+            caseTypes: caseTypes,
+            caseStatuses: caseStatuses,
+            incidents: incidents,
+            initialIncidentId: widget.incidentId,
+          ),
+        ),
       );
 
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Incident deleted successfully.')),
-      );
-
-      Navigator.of(context).pop(true);
+      if (message != null && message.trim().isNotEmpty) {
+        _showMessage(message);
+        await _load();
+      }
     } on AuthException catch (exception) {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        _showMessage(exception.message);
       }
-
-      _showMessage(exception.message);
-
-      setState(() {
-        _actionBusy = false;
-      });
     } catch (_) {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        _showMessage('Unable to open the Create Case form.');
       }
-
-      _showMessage('Unable to delete the incident.');
-
-      setState(() {
-        _actionBusy = false;
-      });
+    } finally {
+      if (mounted && _actionBusy) {
+        setState(() {
+          _actionBusy = false;
+        });
+      }
     }
   }
 
@@ -471,12 +425,9 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
 
     final incident = _incident;
     final reporter = _map(incident['reporter']);
-    final assignedTanod = _map(incident['assigned_tanod']);
     final location = _map(incident['location']);
     final evidence = _mapList(incident['evidence']);
     final histories = _mapList(incident['status_history']);
-    final escalations = _mapList(incident['escalations']);
-    final messages = _mapList(incident['messages']);
     final relatedCases = _mapList(incident['related_cases']);
 
     final latitude = _toDouble(location['latitude']);
@@ -503,7 +454,6 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
           subtitle:
               'Detailed incident report information, reporter '
               'details, location, evidence, and status history.',
-          incidentCode: incident['incident_code']?.toString(),
         ),
         const SizedBox(height: 16),
         _DetailSection(
@@ -532,15 +482,11 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                     rawBadgeValue: incident['priority']?.toString(),
                   ),
                   _InfoItem(
-                    label: 'Assigned Responder',
-                    value: assignedTanod['name']?.toString() ?? 'Not assigned',
-                  ),
-                  _InfoItem(
-                    label: 'Reported Date',
+                    label: 'Date Reported',
                     value: reported == null ? '—' : _formatLongDate(reported),
                   ),
                   _InfoItem(
-                    label: 'Reported Time',
+                    label: 'Time Reported',
                     value: reported == null ? '—' : _formatTime(reported),
                   ),
                 ],
@@ -559,20 +505,6 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
             ),
           ),
         ),
-        if ((incident['persons_involved']?.toString().trim() ?? '')
-            .isNotEmpty) ...<Widget>[
-          const SizedBox(height: 16),
-          _DetailSection(
-            title: 'Persons Involved',
-            child: Text(
-              incident['persons_involved'].toString(),
-              style: TextStyle(
-                color: TabangNowTheme.of(context).textSoft,
-                height: 1.55,
-              ),
-            ),
-          ),
-        ],
         const SizedBox(height: 16),
         _DetailSection(
           title: 'Location Details',
@@ -703,10 +635,6 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                 value: '#${incident['id'] ?? '—'}',
               ),
               _InfoItem(
-                label: 'Incident Code',
-                value: incident['incident_code']?.toString() ?? '—',
-              ),
-              _InfoItem(
                 label: 'Last Updated',
                 value: updated == null
                     ? '—'
@@ -718,7 +646,12 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         ),
         if (_role == 'admin') ...<Widget>[
           const SizedBox(height: 16),
-          _RelatedCasesSection(relatedCases: relatedCases),
+          _RelatedCasesSection(
+            relatedCases: relatedCases,
+            onCreateCase: relatedCases.isEmpty && !_actionBusy
+                ? _createRelatedCase
+                : null,
+          ),
         ],
         if (_can('can_update')) ...<Widget>[
           const SizedBox(height: 16),
@@ -730,29 +663,12 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         ],
         const SizedBox(height: 16),
         _StatusHistorySection(histories: histories),
-        if (escalations.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 16),
-          _EscalationHistorySection(escalations: escalations),
-        ],
-        const SizedBox(height: 16),
-        _MessagesSection(
-          messages: messages,
-          canMessage: _can('can_message'),
-          controller: _messageController,
-          busy: _actionBusy,
-          onSend: _sendMessage,
-        ),
-        if (_can('can_delete')) ...<Widget>[
-          const SizedBox(height: 16),
-          _DangerZone(busy: _actionBusy, onDelete: _deleteIncident),
-        ],
       ],
     );
   }
 
   Widget _buildUpdateIncidentSection() {
     final statuses = _uniqueByIntId(_mapList(_options['statuses']));
-    final responders = _uniqueByIntId(_mapList(_options['responders']));
 
     final statusIds = statuses
         .map((status) => _toInt(status['id']))
@@ -764,25 +680,9 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
         ? _selectedStatusId
         : (statuses.isNotEmpty ? _toInt(statuses.first['id']) : null);
 
-    final responderValues = responders
-        .map((responder) => _toInt(responder['id']))
-        .whereType<int>()
-        .map((id) => id.toString())
-        .toSet();
-
-    final safeSelectedResponder =
-        _selectedResponder == '__keep__' ||
-            _selectedResponder == '__none__' ||
-            responderValues.contains(_selectedResponder)
-        ? _selectedResponder
-        : '__keep__';
-
     return _DetailSection(
       title: 'Update Incident',
-      subtitle: _can('can_assign')
-          ? 'Change the current status, assign a responder, '
-                'and add remarks.'
-          : 'Change the current status and add remarks.',
+      subtitle: 'Change the current status for this incident.',
       child: Column(
         children: <Widget>[
           DropdownButtonFormField<int>(
@@ -817,66 +717,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                     });
                   },
           ),
-          if (_can('can_assign')) ...<Widget>[
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              key: ValueKey<String>(
-                'incident-responder-${widget.incidentId}-$safeSelectedResponder-${responders.length}',
-              ),
-              initialValue: safeSelectedResponder,
-              decoration: const InputDecoration(
-                labelText: 'Assigned Responder',
-                border: OutlineInputBorder(),
-              ),
-              items: <DropdownMenuItem<String>>[
-                const DropdownMenuItem<String>(
-                  value: '__keep__',
-                  child: Text('Keep current responder'),
-                ),
-                const DropdownMenuItem<String>(
-                  value: '__none__',
-                  child: Text('Not assigned'),
-                ),
-                ...responders.map((responder) {
-                  final id = _toInt(responder['id']);
-
-                  if (id == null) {
-                    return null;
-                  }
-
-                  return DropdownMenuItem<String>(
-                    value: id.toString(),
-                    child: Text(responder['name']?.toString() ?? 'Tanod #$id'),
-                  );
-                }).whereType<DropdownMenuItem<String>>(),
-              ],
-              onChanged: _actionBusy
-                  ? null
-                  : (value) {
-                      if (value == null) {
-                        return;
-                      }
-
-                      setState(() {
-                        _selectedResponder = value;
-                      });
-                    },
-            ),
-          ],
           const SizedBox(height: 12),
-          TextField(
-            controller: _remarksController,
-            enabled: !_actionBusy,
-            maxLength: 3000,
-            minLines: 3,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Remarks',
-              hintText: 'Optional update remarks...',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 4),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -1057,15 +898,10 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
 }
 
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({
-    required this.title,
-    required this.subtitle,
-    required this.incidentCode,
-  });
+  const _HeaderCard({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
-  final String? incidentCode;
 
   @override
   Widget build(BuildContext context) {
@@ -1075,17 +911,6 @@ class _HeaderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          if ((incidentCode ?? '').isNotEmpty) ...<Widget>[
-            Text(
-              incidentCode!,
-              style: const TextStyle(
-                color: Color(0xFF1D4ED8),
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 5),
-          ],
           Text(
             title,
             style: TextStyle(
@@ -1552,9 +1377,13 @@ class _EvidenceCard extends StatelessWidget {
 }
 
 class _RelatedCasesSection extends StatelessWidget {
-  const _RelatedCasesSection({required this.relatedCases});
+  const _RelatedCasesSection({
+    required this.relatedCases,
+    required this.onCreateCase,
+  });
 
   final List<Map<String, dynamic>> relatedCases;
+  final VoidCallback? onCreateCase;
 
   @override
   Widget build(BuildContext context) {
@@ -1562,14 +1391,27 @@ class _RelatedCasesSection extends StatelessWidget {
       title: 'Related Cases',
       subtitle: 'Barangay case records connected to this incident.',
       child: relatedCases.isEmpty
-          ? const _EmptyPanel(
-              icon: Icons.folder_open_rounded,
-              title: 'No related case yet',
-              message:
-                  'If formal barangay handling is needed, '
-                  'the case can be created from the Case '
-                  'Management mobile module when that module '
-                  'is connected.',
+          ? Column(
+              children: <Widget>[
+                const _EmptyPanel(
+                  icon: Icons.folder_open_rounded,
+                  title: 'No related case yet',
+                  message:
+                      'Create a case record if this incident needs '
+                      'formal barangay handling.',
+                ),
+                if (onCreateCase != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: onCreateCase,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Create Case'),
+                    ),
+                  ),
+                ],
+              ],
             )
           : Column(
               children: relatedCases
@@ -1758,252 +1600,6 @@ class _StatusHistoryItem extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _EscalationHistorySection extends StatelessWidget {
-  const _EscalationHistorySection({required this.escalations});
-
-  final List<Map<String, dynamic>> escalations;
-
-  @override
-  Widget build(BuildContext context) {
-    return _DetailSection(
-      title: 'Escalation History',
-      child: Column(
-        children: escalations
-            .map((item) => _EscalationItem(item: item))
-            .toList(),
-      ),
-    );
-  }
-}
-
-class _EscalationItem extends StatelessWidget {
-  const _EscalationItem({required this.item});
-
-  final Map<String, dynamic> item;
-
-  @override
-  Widget build(BuildContext context) {
-    final by = _map(item['escalated_by']);
-    final date = _parseDate(item['escalated_at']);
-    final reason = item['reason']?.toString().trim() ?? '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        border: Border.all(color: const Color(0xFFFECACA)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Escalated to ${item['agency'] ?? 'Agency'}',
-            style: const TextStyle(
-              color: Color(0xFF991B1B),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'By ${by['name'] ?? 'System'}'
-            '${date == null ? '' : ' • '
-                      '${_formatShortDate(date)} '
-                      '${_formatTime(date)}'}',
-            style: const TextStyle(color: Color(0xFF7F1D1D), fontSize: 12),
-          ),
-          if (reason.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 6),
-            Text(
-              reason,
-              style: const TextStyle(color: Color(0xFF7F1D1D), height: 1.4),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MessagesSection extends StatelessWidget {
-  const _MessagesSection({
-    required this.messages,
-    required this.canMessage,
-    required this.controller,
-    required this.busy,
-    required this.onSend,
-  });
-
-  final List<Map<String, dynamic>> messages;
-  final bool canMessage;
-  final TextEditingController controller;
-  final bool busy;
-  final VoidCallback onSend;
-
-  @override
-  Widget build(BuildContext context) {
-    return _DetailSection(
-      title: 'Incident Messages',
-      subtitle: 'Communication attached to this incident.',
-      child: Column(
-        children: <Widget>[
-          if (messages.isEmpty)
-            const _EmptyPanel(
-              icon: Icons.message_outlined,
-              title: 'No messages yet',
-              message:
-                  'Messages added to this incident will '
-                  'appear here.',
-            )
-          else
-            ...messages.map((message) => _MessageCard(message: message)),
-          if (canMessage) ...<Widget>[
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              enabled: !busy,
-              maxLength: 3000,
-              minLines: 3,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: 'Add Message',
-                hintText: 'Write an incident message or update...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 4),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: busy ? null : onSend,
-                icon: const Icon(Icons.send_rounded),
-                label: const Text('Send Message'),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageCard extends StatelessWidget {
-  const _MessageCard({required this.message});
-
-  final Map<String, dynamic> message;
-
-  @override
-  Widget build(BuildContext context) {
-    final user = message['user'] is Map
-        ? _map(message['user'])
-        : <String, dynamic>{'name': message['user']?.toString()};
-
-    final date = _parseDate(message['created_at']);
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: TabangNowTheme.of(context).surfaceMuted,
-        border: Border.all(color: TabangNowTheme.of(context).border),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Icon(
-                Icons.person_outline_rounded,
-                size: 18,
-                color: TabangNowTheme.of(context).textSoft,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  user['name']?.toString() ?? 'User',
-                  style: TextStyle(
-                    color: TabangNowTheme.of(context).textMain,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              if (date != null)
-                Text(
-                  '${_formatShortDate(date)} '
-                  '${_formatTime(date)}',
-                  style: TextStyle(
-                    color: TabangNowTheme.of(context).textFaint,
-                    fontSize: 10,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Text(
-            message['message']?.toString() ?? '',
-            style: TextStyle(
-              color: TabangNowTheme.of(context).textSoft,
-              height: 1.45,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DangerZone extends StatelessWidget {
-  const _DangerZone({required this.busy, required this.onDelete});
-
-  final bool busy;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        border: Border.all(color: const Color(0xFFFECACA)),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Text(
-            'Danger Zone',
-            style: TextStyle(
-              color: Color(0xFF991B1B),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Only administrators can permanently delete an '
-            'incident record.',
-            style: TextStyle(color: Color(0xFFB91C1C), height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFB91C1C),
-              ),
-              onPressed: busy ? null : onDelete,
-              icon: const Icon(Icons.delete_outline_rounded),
-              label: const Text('Delete Incident'),
-            ),
-          ),
         ],
       ),
     );

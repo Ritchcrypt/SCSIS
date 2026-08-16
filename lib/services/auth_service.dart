@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +11,7 @@ class AuthService {
       _storage = storage ?? const FlutterSecureStorage();
 
   static const String _tokenKey = 'tabangnow_access_token';
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
@@ -23,18 +26,36 @@ class AuthService {
     required String password,
     required String deviceName,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$_baseUrl/api/v1/auth/login'),
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'email': email.trim(),
-        'password': password,
-        'device_name': deviceName.trim(),
-      }),
-    );
+    late final http.Response response;
+
+    try {
+      response = await _client
+          .post(
+            Uri.parse('$_baseUrl/api/v1/auth/login'),
+            headers: const <String, String>{
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(<String, dynamic>{
+              'email': email.trim(),
+              'password': password,
+              'device_name': deviceName.trim(),
+            }),
+          )
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw AuthException(
+        'The TabangNow server at $_baseUrl did not respond. For local physical-device testing, keep Laravel running on port 8000 and enable ADB reverse for tcp:8000.',
+      );
+    } on SocketException catch (exception) {
+      throw AuthException(
+        'Unable to reach the TabangNow server at $_baseUrl (${exception.message}). For a USB-connected Android device, run adb reverse tcp:8000 tcp:8000.',
+      );
+    } on http.ClientException catch (exception) {
+      throw AuthException(
+        'Unable to reach the TabangNow server at $_baseUrl (${exception.message}).',
+      );
+    }
 
     final data = _decodeResponse(response);
 
@@ -253,6 +274,32 @@ class AuthException implements Exception {
 
   final String message;
   final int? statusCode;
+
+  String get userMessage {
+    final normalized = message.trim().toLowerCase();
+
+    const technicalNetworkFragments = <String>[
+      '127.0.0.1',
+      'localhost',
+      'connection refused',
+      'connection reset',
+      'connection timed out',
+      'failed host lookup',
+      'network is unreachable',
+      'socketexception',
+      'clientexception',
+      'httpexception',
+      'adb reverse',
+      'tcp:8000',
+      'api_base_url',
+    ];
+
+    if (technicalNetworkFragments.any(normalized.contains)) {
+      return 'Unable to connect to TabangNow right now. Please try again.';
+    }
+
+    return message;
+  }
 
   @override
   String toString() => message;

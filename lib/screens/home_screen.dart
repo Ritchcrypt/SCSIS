@@ -16,7 +16,6 @@ import '../core/app_role.dart';
 import '../core/module_registry.dart';
 
 import '../services/auth_service.dart';
-import '../services/user_management_service.dart';
 import '../services/branding_service.dart';
 import '../services/incident_service.dart';
 import '../services/resident_complaint_service.dart';
@@ -30,7 +29,6 @@ import 'emergency_hotlines_screen.dart';
 import 'barangay_map_screen.dart';
 import 'reports_screen.dart';
 import 'user_management_screen.dart';
-import 'user_management_detail_screen.dart';
 import 'activity_logs_screen.dart';
 import 'current_account_profile_screen.dart';
 import 'login_screen.dart';
@@ -105,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _dashboardLoading = true;
   bool _loggingOut = false;
+  int _profileRevision = 0;
 
   String? _dashboardError;
 
@@ -329,71 +328,61 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openAccountProfile() async {
-    final userId = int.tryParse(widget.user['id']?.toString() ?? '') ?? 0;
-
-    if (userId <= 0) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('The current account could not be resolved.'),
-          ),
-        );
-
-      return;
-    }
-
     final scaffoldState = _scaffoldKey.currentState;
 
     if (scaffoldState != null && scaffoldState.isDrawerOpen) {
       Navigator.of(context).pop();
     }
 
-    if (_appRole == AppRole.admin &&
-        ModuleRegistry.canAccess(_appRole, AppModuleId.userManagement)) {
-      final message = await Navigator.of(context).push<String>(
-        MaterialPageRoute<String>(
-          builder: (_) => UserManagementDetailScreen(
-            service: UserManagementService(authService: _authService),
-            userId: userId,
-          ),
-        ),
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      if (message != null && message.trim().isNotEmpty) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(message)));
-      }
-
-      try {
-        final response = await _authService.me();
-        final rawUser = response['user'];
-
-        if (rawUser is Map && mounted) {
-          setState(() {
-            widget.user.addAll(Map<String, dynamic>.from(rawUser));
-          });
-        }
-      } catch (_) {
-        // Keep the current shell identity if refresh fails.
-      }
-
-      return;
-    }
-
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+    final result = await Navigator.of(context).push<Map<String, dynamic>?>(
+      MaterialPageRoute<Map<String, dynamic>?>(
         builder: (_) => CurrentAccountProfileScreen(
           authService: _authService,
           fallbackUser: widget.user,
         ),
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result?['account_deleted'] == true) {
+      await _authService.clearToken();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
+    final refreshedIdentity = <String, dynamic>{};
+
+    if (result != null) {
+      refreshedIdentity.addAll(result);
+    }
+
+    try {
+      final response = await _authService.me();
+      final rawUser = response['user'];
+
+      if (rawUser is Map) {
+        refreshedIdentity.addAll(Map<String, dynamic>.from(rawUser));
+      }
+    } catch (_) {
+      // The self-profile API already saved the data. A follow-up identity
+      // refresh failure must not roll the visible account back.
+    }
+
+    if (mounted) {
+      setState(() {
+        widget.user.addAll(refreshedIdentity);
+        _profileRevision++;
+      });
+    }
   }
 
   Future<void> _openGlobalNotification(NotificationOpenTarget target) async {
@@ -706,16 +695,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          if (_capabilities.allows(
-            AppCapability.manageSystemBranding,
-          )) ...<Widget>[
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: Color(0xFFBFDBFE),
-              size: 20,
-            ),
-          ],
         ],
       ),
     );
@@ -806,6 +785,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const Divider(height: 1, color: Color(0xFF1E3A8A)),
             GlobalAccountFooter(
+              key: ValueKey<int>(_profileRevision),
               user: widget.user,
               authService: _authService,
               roleLabel: _roleLabel(_role),

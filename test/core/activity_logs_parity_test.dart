@@ -184,7 +184,7 @@ void main() {
 
       expect(home, contains('_openAccountProfile'));
 
-      expect(home, contains('UserManagementDetailScreen('));
+      expect(home, isNot(contains('UserManagementDetailScreen(')));
 
       expect(home, contains('CurrentAccountProfileScreen('));
     },

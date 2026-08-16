@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
-import '../services/user_management_service.dart';
+import '../services/profile_service.dart';
 
 class GlobalAccountFooter extends StatefulWidget {
   const GlobalAccountFooter({
@@ -32,7 +32,7 @@ class GlobalAccountFooter extends StatefulWidget {
 }
 
 class _GlobalAccountFooterState extends State<GlobalAccountFooter> {
-  late UserManagementService _userService;
+  late ProfileService _profileService;
 
   Uint8List? _photoBytes;
   bool _photoLoaded = false;
@@ -49,7 +49,7 @@ class _GlobalAccountFooterState extends State<GlobalAccountFooter> {
   void initState() {
     super.initState();
 
-    _userService = UserManagementService(authService: widget.authService);
+    _profileService = ProfileService(authService: widget.authService);
 
     _loadPhoto();
   }
@@ -59,12 +59,17 @@ class _GlobalAccountFooterState extends State<GlobalAccountFooter> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.authService != widget.authService) {
-      _userService = UserManagementService(authService: widget.authService);
+      _profileService = ProfileService(authService: widget.authService);
     }
 
     final oldId = int.tryParse(oldWidget.user['id']?.toString() ?? '') ?? 0;
 
-    if (oldId != _userId || oldWidget.user['name'] != widget.user['name']) {
+    final oldPhotoVersion = oldWidget.user['profile_photo_version']?.toString();
+    final newPhotoVersion = widget.user['profile_photo_version']?.toString();
+
+    if (oldId != _userId ||
+        oldWidget.user['name'] != widget.user['name'] ||
+        oldPhotoVersion != newPhotoVersion) {
       _photoBytes = null;
       _photoLoaded = false;
       _loadPhoto();
@@ -79,7 +84,7 @@ class _GlobalAccountFooterState extends State<GlobalAccountFooter> {
     _photoLoaded = true;
 
     try {
-      final bytes = await _userService.profilePhotoBytes(_userId);
+      final bytes = await _profileService.photoBytes();
 
       if (!mounted) {
         return;

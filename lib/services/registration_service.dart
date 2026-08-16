@@ -10,6 +10,34 @@ class RegistrationException implements Exception {
   final String message;
   final int? statusCode;
 
+  String get userMessage {
+    final normalized = message.trim().toLowerCase();
+
+    const technicalNetworkFragments = <String>[
+      '127.0.0.1',
+      'localhost',
+      'connection refused',
+      'connection reset',
+      'connection timed out',
+      'failed host lookup',
+      'network is unreachable',
+      'socketexception',
+      'clientexception',
+      'httpexception',
+      'adb reverse',
+      'tcp:8000',
+      'api_base_url',
+      'server did not respond at http',
+      'unable to reach http',
+    ];
+
+    if (technicalNetworkFragments.any(normalized.contains)) {
+      return 'Unable to connect to TabangNow right now. Please try again.';
+    }
+
+    return message;
+  }
+
   @override
   String toString() => message;
 }

@@ -18,7 +18,7 @@ class UserManagementService {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8001',
+    defaultValue: 'http://127.0.0.1:8000',
   );
 
   final AuthService authService;
@@ -26,7 +26,7 @@ class UserManagementService {
 
   Future<Map<String, dynamic>> index({
     int page = 1,
-    int perPage = 10,
+    int perPage = 25,
     String search = '',
     String role = 'all',
     String status = 'all',
@@ -179,10 +179,14 @@ class UserManagementService {
   }
 
   Future<Uint8List> profilePhotoBytes(int userId) async {
-    final response = await _client.get(
-      Uri.parse('$baseUrl/api/v1/users/$userId/profile-photo'),
-      headers: await _headers(),
-    );
+    final uri = Uri.parse('$baseUrl/api/v1/users/$userId/profile-photo')
+        .replace(
+          queryParameters: <String, String>{
+            'v': DateTime.now().millisecondsSinceEpoch.toString(),
+          },
+        );
+
+    final response = await _client.get(uri, headers: await _headers());
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return response.bodyBytes;

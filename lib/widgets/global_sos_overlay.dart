@@ -175,6 +175,7 @@ class _MobileSosForm extends StatefulWidget {
 
 class _MobileSosFormState extends State<_MobileSosForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _detailsController = TextEditingController();
   final TextEditingController _mobileController = TextEditingController();
 
@@ -194,16 +195,26 @@ class _MobileSosFormState extends State<_MobileSosForm> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _detailsController.dispose();
     _mobileController.dispose();
     super.dispose();
   }
 
   Future<void> _initialize() async {
-    final prefill = await _service.prefillContactNumber();
+    final prefill = await _service.prefillIdentity();
 
-    if (mounted && prefill != null && _mobileController.text.trim().isEmpty) {
-      _mobileController.text = prefill;
+    if (mounted) {
+      final name = prefill['name']?.trim() ?? '';
+      final contactNumber = prefill['contact_number']?.trim() ?? '';
+
+      if (name.isNotEmpty && _nameController.text.trim().isEmpty) {
+        _nameController.text = name;
+      }
+
+      if (contactNumber.isNotEmpty && _mobileController.text.trim().isEmpty) {
+        _mobileController.text = contactNumber;
+      }
     }
 
     await _acquireLocation();
@@ -287,6 +298,7 @@ class _MobileSosFormState extends State<_MobileSosForm> {
 
     try {
       final result = await _service.send(
+        name: _nameController.text,
         emergencyDetails: _detailsController.text,
         contactNumber: _mobileController.text,
         location: location,
@@ -375,7 +387,7 @@ class _MobileSosFormState extends State<_MobileSosForm> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Describe the emergency, confirm a callback number, and wait while TabangNow obtains your current GPS or last-known device location.',
+                  'Enter your name and callback number, describe the emergency, and wait while TabangNow obtains your current GPS or last-known device location.',
                   style: TextStyle(
                     color: theme.colorScheme.onSurfaceVariant,
                     height: 1.45,
@@ -383,10 +395,68 @@ class _MobileSosFormState extends State<_MobileSosForm> {
                 ),
                 const SizedBox(height: 22),
                 TextFormField(
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  autofillHints: const <String>[AutofillHints.name],
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: 'Full name',
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                  ),
+                  validator: (value) {
+                    final text = value?.trim() ?? '';
+
+                    if (text.isEmpty) {
+                      return 'Enter your name.';
+                    }
+
+                    if (text.length < 2) {
+                      return 'Enter at least 2 characters.';
+                    }
+
+                    if (text.length > 120) {
+                      return 'Name must not exceed 120 characters.';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _mobileController,
+                  keyboardType: TextInputType.phone,
+                  autofillHints: const <String>[AutofillHints.telephoneNumber],
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Mobile Number',
+                    hintText: '09XXXXXXXXX',
+                    prefixIcon: Icon(Icons.phone_rounded),
+                  ),
+                  validator: (value) {
+                    var number = (value ?? '').trim().replaceAll(
+                      RegExp(r'[\s\-\(\)]'),
+                      '',
+                    );
+
+                    if (number.startsWith('+63')) {
+                      number = '0${number.substring(3)}';
+                    }
+
+                    if (!RegExp(r'^09\d{9}$').hasMatch(number)) {
+                      return 'Enter a valid Philippine mobile number.';
+                    }
+
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
                   controller: _detailsController,
                   minLines: 4,
                   maxLines: 7,
                   textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.newline,
                   decoration: const InputDecoration(
                     labelText: 'What is the emergency?',
                     hintText:
@@ -406,33 +476,6 @@ class _MobileSosFormState extends State<_MobileSosForm> {
 
                     if (text.length > 1000) {
                       return 'Emergency details must not exceed 1000 characters.';
-                    }
-
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _mobileController,
-                  keyboardType: TextInputType.phone,
-                  autofillHints: const <String>[AutofillHints.telephoneNumber],
-                  decoration: const InputDecoration(
-                    labelText: 'Mobile Number',
-                    hintText: '09XXXXXXXXX',
-                    prefixIcon: Icon(Icons.phone_rounded),
-                  ),
-                  validator: (value) {
-                    var number = (value ?? '').trim().replaceAll(
-                      RegExp(r'[\s\-\(\)]'),
-                      '',
-                    );
-
-                    if (number.startsWith('+63')) {
-                      number = '0${number.substring(3)}';
-                    }
-
-                    if (!RegExp(r'^09\d{9}$').hasMatch(number)) {
-                      return 'Enter a valid Philippine mobile number.';
                     }
 
                     return null;
@@ -465,7 +508,7 @@ class _MobileSosFormState extends State<_MobileSosForm> {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'You already confirmed the SOS before opening this form. Press Send only when the emergency details and callback number are correct.',
+                          'You already confirmed the SOS before opening this form. Press Send only when the name, callback number, and emergency details are correct.',
                           style: TextStyle(
                             height: 1.4,
                             color: Color(0xFF7C2D12),

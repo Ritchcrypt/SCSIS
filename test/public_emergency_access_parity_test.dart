@@ -3,22 +3,52 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('public auth screens expose SOS without authentication', () {
-    final authGate = File('lib/screens/auth_gate.dart').readAsStringSync();
-    final register = File(
+  test('public auth screens keep only the spinning SOS launcher', () {
+    for (final path in <String>[
+      'lib/screens/auth_gate.dart',
+      'lib/screens/login_screen.dart',
       'lib/screens/register_screen.dart',
-    ).readAsStringSync();
-    final card = File(
-      'lib/widgets/public_emergency_access_card.dart',
-    ).readAsStringSync();
+    ]) {
+      final source = File(path).readAsStringSync();
 
-    expect(authGate, contains('PublicEmergencyAccessCard(compact: true)'));
-    expect(register, contains('PublicEmergencyAccessCard(compact: true)'));
-
-    expect(card, contains('no account or login required'));
-    expect(card, contains('Open Emergency SOS'));
-    expect(card, contains('GlobalSosOverlay.open(context)'));
+      expect(
+        source,
+        contains('SosFlipCoinButton'),
+        reason: '$path must retain the public spinning SOS launcher.',
+      );
+      expect(
+        source,
+        isNot(contains('PublicEmergencyAccessCard')),
+        reason: '$path must not render the removed Emergency SOS card.',
+      );
+    }
   });
+
+  test(
+    'global SOS form uses Name, Mobile Number, Emergency, then location',
+    () {
+      final overlay = File(
+        'lib/widgets/global_sos_overlay.dart',
+      ).readAsStringSync();
+      final service = File(
+        'lib/services/mobile_sos_service.dart',
+      ).readAsStringSync();
+
+      final name = overlay.indexOf("labelText: 'Name'");
+      final mobile = overlay.indexOf("labelText: 'Mobile Number'");
+      final emergency = overlay.indexOf("labelText: 'What is the emergency?'");
+      final location = overlay.indexOf('_LocationStatusCard(');
+
+      expect(name, greaterThanOrEqualTo(0));
+      expect(mobile, greaterThan(name));
+      expect(emergency, greaterThan(mobile));
+      expect(location, greaterThan(emergency));
+
+      expect(overlay, contains('name: _nameController.text'));
+      expect(service, contains('required String name'));
+      expect(service, contains("'name': name.trim()"));
+    },
+  );
 
   test('SOS light semantic cards retain readable text in dark mode', () {
     final overlay = File(

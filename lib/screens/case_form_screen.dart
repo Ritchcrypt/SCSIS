@@ -11,6 +11,7 @@ class CaseFormScreen extends StatefulWidget {
     required this.caseStatuses,
     required this.incidents,
     this.caseRecord,
+    this.initialIncidentId,
   });
 
   final CaseManagementService service;
@@ -18,6 +19,7 @@ class CaseFormScreen extends StatefulWidget {
   final List<Map<String, dynamic>> caseStatuses;
   final List<Map<String, dynamic>> incidents;
   final Map<String, dynamic>? caseRecord;
+  final int? initialIncidentId;
 
   bool get editing => caseRecord != null;
 
@@ -68,7 +70,18 @@ class _CaseFormScreenState extends State<CaseFormScreen> {
     final status = _text(record['status']);
     _status = status.isEmpty ? 'open' : status;
 
-    _incidentId = _intOrNull(record['incident_id']);
+    _incidentId = widget.editing ? _intOrNull(record['incident_id']) : null;
+
+    if (!widget.editing && widget.initialIncidentId != null) {
+      final matches = widget.incidents.where(
+        (incident) => _intOrNull(incident['id']) == widget.initialIncidentId,
+      );
+
+      if (matches.isNotEmpty) {
+        _incidentId = widget.initialIncidentId;
+        _incidentTitle.text = _text(matches.first['title']);
+      }
+    }
 
     final hearing = _text(record['hearing_date']);
     _hearingDate = hearing.isEmpty ? null : DateTime.tryParse(hearing);

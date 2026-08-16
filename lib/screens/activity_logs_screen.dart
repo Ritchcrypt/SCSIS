@@ -38,7 +38,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
   int _page = 1;
   int _lastPage = 1;
   int _total = 0;
-  int _perPage = 25;
+  int _perPage = 50;
 
   String _category = '';
   String _event = '';
@@ -115,7 +115,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
 
         _total = _int(pagination['total']);
 
-        _perPage = _int(filters['per_page'], fallback: 25);
+        _perPage = _int(filters['per_page'], fallback: 50);
 
         _loading = false;
       });
@@ -145,7 +145,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
       _actorId = null;
       _dateFrom = '';
       _dateTo = '';
-      _perPage = 25;
+      _perPage = 50;
       _page = 1;
     });
 
@@ -177,7 +177,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
 
             final pageSizes = _intList(
               _options['per_page'],
-              fallback: const <int>[10, 25, 50, 100],
+              fallback: const <int>[10, 25, 50, 100, 250],
             );
 
             Future<void> pickDate({required bool from}) async {
@@ -416,7 +416,7 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
       _actorId = _nullableInt(result['actor_id']);
       _dateFrom = _text(result['date_from'], '');
       _dateTo = _text(result['date_to'], '');
-      _perPage = _int(result['per_page'], fallback: 25);
+      _perPage = _int(result['per_page'], fallback: 50);
       _page = 1;
     });
 

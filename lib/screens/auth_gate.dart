@@ -4,7 +4,6 @@ import '../services/auth_service.dart';
 import '../widgets/sos_flip_coin_button.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
-import '../widgets/public_emergency_access_card.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -113,7 +112,7 @@ class _AuthGateState extends State<AuthGate> {
 
       setState(() {
         _loggingIn = false;
-        _loginError = exception.message;
+        _loginError = exception.userMessage;
       });
     } catch (_) {
       if (!mounted) {
@@ -222,9 +221,7 @@ class _AuthGateState extends State<AuthGate> {
                       letterSpacing: 3.3,
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  const PublicEmergencyAccessCard(compact: true),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 52),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(26, 30, 26, 28),

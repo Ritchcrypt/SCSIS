@@ -10,7 +10,7 @@ class ActivityLogService {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8001',
+    defaultValue: 'http://127.0.0.1:8000',
   );
 
   final AuthService authService;
@@ -18,7 +18,7 @@ class ActivityLogService {
 
   Future<Map<String, dynamic>> index({
     int page = 1,
-    int perPage = 25,
+    int perPage = 50,
     String search = '',
     String category = '',
     String event = '',

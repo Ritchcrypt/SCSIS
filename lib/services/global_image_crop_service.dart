@@ -57,9 +57,7 @@ class GlobalImageCropService {
         : ImageCompressFormat.jpg;
 
     final presets = mode == GlobalImageCropMode.square
-        ? const <CropAspectRatioPresetData>[
-            CropAspectRatioPreset.square,
-          ]
+        ? const <CropAspectRatioPresetData>[CropAspectRatioPreset.square]
         : const <CropAspectRatioPresetData>[
             CropAspectRatioPreset.original,
             CropAspectRatioPreset.square,

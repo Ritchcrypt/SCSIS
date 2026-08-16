@@ -45,7 +45,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   int _page = 1;
   int _lastPage = 1;
   int _total = 0;
-  int _perPage = 10;
+  int _perPage = 25;
 
   String _role = 'all';
   String _status = 'all';
@@ -177,7 +177,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             final perPageOptions =
                 (_options['per_page'] is List
                         ? List<Object?>.from(_options['per_page'] as List)
-                        : const <Object?>[10, 25, 50, 100])
+                        : const <Object?>[10, 25, 50, 100, 250])
                     .map(_int)
                     .where((value) => value > 0)
                     .toList(growable: false);
@@ -300,7 +300,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         ),
                         items:
                             (perPageOptions.isEmpty
-                                    ? const <int>[10, 25, 50, 100]
+                                    ? const <int>[10, 25, 50, 100, 250]
                                     : perPageOptions)
                                 .map(
                                   (value) => DropdownMenuItem<int>(
@@ -361,7 +361,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       _role = _text(result['role'], 'all');
       _status = _text(result['status'], 'all');
       _date = _text(result['date'], 'all');
-      _perPage = _int(result['per_page'], fallback: 10);
+      _perPage = _int(result['per_page'], fallback: 25);
       _page = 1;
     });
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/registration_service.dart';
 import '../widgets/sos_flip_coin_button.dart';
-import '../widgets/public_emergency_access_card.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -96,7 +95,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _submitting = false);
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(exception.message)));
+        ..showSnackBar(SnackBar(content: Text(exception.userMessage)));
     } catch (_) {
       if (!mounted) {
         return;
@@ -188,9 +187,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       letterSpacing: 3,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const PublicEmergencyAccessCard(compact: true),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 26),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),

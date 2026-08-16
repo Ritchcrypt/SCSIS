@@ -4,7 +4,6 @@ import '../services/auth_service.dart';
 import '../widgets/sos_flip_coin_button.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
-import '../widgets/public_emergency_access_card.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -123,9 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   const _TabangNowHeader(),
-                  const SizedBox(height: 16),
-                  const PublicEmergencyAccessCard(compact: true),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 32),
                   Card(
                     elevation: 0,
                     color: Colors.white,

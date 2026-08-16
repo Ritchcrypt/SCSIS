@@ -60,22 +60,26 @@ class MobileSosService {
   final http.Client _client;
   final FlutterSecureStorage _secureStorage;
 
-  Future<String?> prefillContactNumber() async {
+  Future<Map<String, String>> prefillIdentity() async {
     try {
       final response = await authService.me();
       final rawUser = response['user'];
 
       if (rawUser is! Map) {
-        return null;
+        return const <String, String>{};
       }
 
       final user = Map<String, dynamic>.from(rawUser);
-      final value = user['contact_number'] ?? user['phone'];
-      final text = value?.toString().trim() ?? '';
+      final name = user['name']?.toString().trim() ?? '';
+      final contactValue = user['contact_number'] ?? user['phone'];
+      final contactNumber = contactValue?.toString().trim() ?? '';
 
-      return text.isEmpty ? null : text;
+      return <String, String>{
+        if (name.isNotEmpty) 'name': name,
+        if (contactNumber.isNotEmpty) 'contact_number': contactNumber,
+      };
     } catch (_) {
-      return null;
+      return const <String, String>{};
     }
   }
 
@@ -155,6 +159,7 @@ class MobileSosService {
   }
 
   Future<MobileSosSendResult> send({
+    required String name,
     required String emergencyDetails,
     required String contactNumber,
     required MobileSosLocation location,
@@ -165,6 +170,7 @@ class MobileSosService {
     final payload = <String, dynamic>{
       'request_id': _requestId(),
       'installation_id': installationId,
+      'name': name.trim(),
       'emergency_details': emergencyDetails.trim(),
       'contact_number': contactNumber.trim(),
       'latitude': location.latitude,

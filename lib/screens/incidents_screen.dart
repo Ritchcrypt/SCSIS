@@ -581,7 +581,6 @@ class _IncidentReportCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final id = incident['id']?.toString() ?? '—';
-    final code = incident['incident_code']?.toString().trim() ?? '';
     final title = incident['title']?.toString() ?? 'Untitled Incident';
     final description =
         incident['description']?.toString() ?? 'No description provided.';
@@ -612,7 +611,7 @@ class _IncidentReportCard extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  '#$id${code.isEmpty ? '' : ' • $code'}',
+                  '#$id',
                   style: TextStyle(
                     color: TabangNowTheme.of(context).textSoft,
                     fontSize: 12,
