@@ -57,3 +57,6 @@ android/key.properties
 # Flutter generated artifacts
 .dart_tool/
 build/
+
+# Local Android release output
+/dist/

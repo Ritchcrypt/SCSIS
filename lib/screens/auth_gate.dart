@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../widgets/sos_flip_coin_button.dart';
+import 'forgot_password_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 
@@ -21,6 +22,7 @@ class _AuthGateState extends State<AuthGate> {
   bool _checkingSession = true;
   bool _loggingIn = false;
   bool _obscurePassword = true;
+  bool _rememberMe = false;
   Map<String, dynamic>? _user;
   String? _loginError;
 
@@ -88,6 +90,7 @@ class _AuthGateState extends State<AuthGate> {
         email: _emailController.text,
         password: _passwordController.text,
         deviceName: 'TabangNow Android',
+        remember: _rememberMe,
       );
 
       final rawUser = response['user'];
@@ -124,6 +127,18 @@ class _AuthGateState extends State<AuthGate> {
         _loginError = 'Unable to connect to TabangNow.';
       });
     }
+  }
+
+  Future<void> _openForgotPassword() async {
+    if (_loggingIn) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ForgotPasswordScreen(authService: _authService),
+      ),
+    );
   }
 
   Future<void> _openRegistration() async {
@@ -321,6 +336,59 @@ class _AuthGateState extends State<AuthGate> {
                             validator: (value) => (value?.isEmpty ?? true)
                                 ? 'Enter your password.'
                                 : null,
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: <Widget>[
+                              Padding(
+                                padding: const EdgeInsets.only(left: 2),
+                                child: Checkbox(
+                                  value: _rememberMe,
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  onChanged: _loggingIn
+                                      ? null
+                                      : (value) {
+                                          setState(() {
+                                            _rememberMe = value ?? false;
+                                          });
+                                        },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  'Remember me',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.visible,
+                                  style: TextStyle(
+                                    color: Color(0xFF475569),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 8,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              onPressed: _loggingIn
+                                  ? null
+                                  : _openForgotPassword,
+                              child: const Text('Forgot your password?'),
+                            ),
                           ),
                           if (_loginError != null) ...<Widget>[
                             const SizedBox(height: 14),

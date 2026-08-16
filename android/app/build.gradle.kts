@@ -1,11 +1,47 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+
+if (keystorePropertiesFile.exists()) {
+    /*
+     * PowerShell 5 may write UTF-8 text with a BOM. Read the file as UTF-8,
+     * remove that BOM when present, then parse the properties through a Reader.
+     */
+    val keyPropertiesText =
+        keystorePropertiesFile
+            .readText(Charsets.UTF_8)
+            .removePrefix("\uFEFF")
+
+    keystoreProperties.load(keyPropertiesText.reader())
+}
+
+val releaseKeyAlias =
+    keystoreProperties.getProperty("keyAlias")?.trim()
+
+val releaseKeyPassword =
+    keystoreProperties.getProperty("keyPassword")
+
+val releaseStoreFile =
+    keystoreProperties.getProperty("storeFile")?.trim()
+
+val releaseStorePassword =
+    keystoreProperties.getProperty("storePassword")
+
+val hasReleaseSigningProperties =
+    !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank() &&
+        !releaseStoreFile.isNullOrBlank() &&
+        !releaseStorePassword.isNullOrBlank()
+
 android {
-    namespace = "com.example.tabangnow_flutter"
+    namespace = "ph.tabangnow.dao"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,21 +51,40 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.tabangnow_flutter"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "ph.tabangnow.dao"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        /*
+         * Release signing exists only when ALL private values are valid.
+         * Debug builds remain completely independent of release credentials.
+         */
+        if (hasReleaseSigningProperties) {
+            create("release") {
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                storeFile = releaseStoreFile?.let { file(it) }
+                storePassword = releaseStorePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            /*
+             * Never fall back to the Android debug certificate for a
+             * distributable TabangNow APK.
+             *
+             * tool/build_android_release.ps1 refuses to build unless the
+             * private release signing configuration is present.
+             */
+            if (hasReleaseSigningProperties) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

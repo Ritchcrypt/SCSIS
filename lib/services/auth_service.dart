@@ -11,6 +11,7 @@ class AuthService {
       _storage = storage ?? const FlutterSecureStorage();
 
   static const String _tokenKey = 'tabangnow_access_token';
+  static String? _sessionToken;
   static const Duration _requestTimeout = Duration(seconds: 15);
 
   static const String _baseUrl = String.fromEnvironment(
@@ -25,6 +26,7 @@ class AuthService {
     required String email,
     required String password,
     required String deviceName,
+    bool remember = false,
   }) async {
     late final http.Response response;
 
@@ -66,9 +68,59 @@ class AuthService {
         throw const AuthException('The server did not return an access token.');
       }
 
-      await _storage.write(key: _tokenKey, value: token);
+      _sessionToken = token;
+
+      if (remember) {
+        await _storage.write(key: _tokenKey, value: token);
+      } else {
+        await _storage.delete(key: _tokenKey);
+      }
 
       return data;
+    }
+
+    throw AuthException(
+      _extractErrorMessage(data),
+      statusCode: response.statusCode,
+    );
+  }
+
+  Future<String> requestPasswordReset({required String email}) async {
+    late final http.Response response;
+
+    try {
+      response = await _client
+          .post(
+            Uri.parse('$_baseUrl/api/v1/auth/forgot-password'),
+            headers: const <String, String>{
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(<String, dynamic>{'email': email.trim()}),
+          )
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw const AuthException(
+        'Unable to connect to TabangNow right now. Please try again.',
+      );
+    } on SocketException {
+      throw const AuthException(
+        'Unable to connect to TabangNow right now. Please try again.',
+      );
+    } on http.ClientException {
+      throw const AuthException(
+        'Unable to connect to TabangNow right now. Please try again.',
+      );
+    }
+
+    final data = _decodeResponse(response);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final message = data['message']?.toString().trim();
+
+      return message == null || message.isEmpty
+          ? 'A reset link will be sent if the account exists.'
+          : message;
     }
 
     throw AuthException(
@@ -94,6 +146,7 @@ class AuthService {
         );
       }
 
+      _sessionToken = token;
       await _storage.write(key: _tokenKey, value: token);
 
       return data;
@@ -209,8 +262,20 @@ class AuthService {
     }
   }
 
-  Future<String?> getToken() {
-    return _storage.read(key: _tokenKey);
+  Future<String?> getToken() async {
+    final sessionToken = _sessionToken;
+
+    if (sessionToken != null && sessionToken.isNotEmpty) {
+      return sessionToken;
+    }
+
+    final persistedToken = await _storage.read(key: _tokenKey);
+
+    if (persistedToken != null && persistedToken.isNotEmpty) {
+      _sessionToken = persistedToken;
+    }
+
+    return persistedToken;
   }
 
   Future<bool> hasToken() async {
@@ -219,8 +284,9 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  Future<void> clearToken() {
-    return _storage.delete(key: _tokenKey);
+  Future<void> clearToken() async {
+    _sessionToken = null;
+    await _storage.delete(key: _tokenKey);
   }
 
   Map<String, dynamic> _decodeResponse(http.Response response) {

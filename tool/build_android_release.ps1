@@ -1,0 +1,224 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$ApiBaseUrl
+)
+
+$ErrorActionPreference = "Stop"
+
+function Test-PrivateOrLocalHost {
+    param([string]$HostName)
+
+    $hostValue = $HostName.Trim().ToLowerInvariant()
+
+    if (
+        $hostValue -eq "localhost" -or
+        $hostValue -eq "127.0.0.1" -or
+        $hostValue -eq "0.0.0.0" -or
+        $hostValue -eq "::1" -or
+        $hostValue.EndsWith(".local")
+    ) {
+        return $true
+    }
+
+    if ($hostValue -match "^10\.") {
+        return $true
+    }
+
+    if ($hostValue -match "^192\.168\.") {
+        return $true
+    }
+
+    if ($hostValue -match "^172\.(1[6-9]|2[0-9]|3[0-1])\.") {
+        return $true
+    }
+
+    return $false
+}
+
+$flutterRoot = Split-Path -Parent $PSScriptRoot
+Set-Location -LiteralPath $flutterRoot
+
+if (-not (Test-Path -LiteralPath ".\pubspec.yaml")) {
+    throw "pubspec.yaml was not found in $flutterRoot"
+}
+
+$normalizedApiUrl = $ApiBaseUrl.Trim().TrimEnd("/")
+
+$uri = $null
+if (-not [Uri]::TryCreate(
+    $normalizedApiUrl,
+    [UriKind]::Absolute,
+    [ref]$uri
+)) {
+    throw "API_BASE_URL must be an absolute HTTPS URL."
+}
+
+if ($uri.Scheme -ne "https") {
+    throw "Production TabangNow APK builds require HTTPS. Received: $($uri.Scheme)"
+}
+
+if (Test-PrivateOrLocalHost -HostName $uri.Host) {
+    throw "Production APK cannot target localhost/private-network host: $($uri.Host)"
+}
+
+if ($normalizedApiUrl -match "/api(/|$)" -or $normalizedApiUrl -match "/api/v1") {
+    throw @"
+Pass the Laravel ROOT URL, not /api or /api/v1.
+Example:
+https://tabangnow.example.com
+"@
+}
+
+$keyPropertiesPath = Join-Path $flutterRoot "android\key.properties"
+
+if (-not (Test-Path -LiteralPath $keyPropertiesPath)) {
+    throw @"
+Production signing is not configured.
+
+Run:
+powershell -ExecutionPolicy Bypass -File .\tool\create_android_release_keystore.ps1
+"@
+}
+
+$keyProperties = @{}
+
+Get-Content -LiteralPath $keyPropertiesPath | ForEach-Object {
+    $line = $_.Trim()
+
+    if (
+        $line.Length -gt 0 -and
+        -not $line.StartsWith("#") -and
+        $line.Contains("=")
+    ) {
+        $parts = $line.Split("=", 2)
+        $keyProperties[$parts[0].Trim()] = $parts[1].Trim()
+    }
+}
+
+foreach ($requiredKey in @(
+    "storePassword",
+    "keyPassword",
+    "keyAlias",
+    "storeFile"
+)) {
+    if (
+        -not $keyProperties.ContainsKey($requiredKey) -or
+        [string]::IsNullOrWhiteSpace($keyProperties[$requiredKey])
+    ) {
+        throw "android/key.properties is missing required value: $requiredKey"
+    }
+}
+
+$storeFileValue = $keyProperties["storeFile"].Replace("\\", "\")
+
+if ([IO.Path]::IsPathRooted($storeFileValue)) {
+    $storeFilePath = $storeFileValue
+}
+else {
+    $storeFilePath = Join-Path `
+        (Join-Path $flutterRoot "android\app") `
+        $storeFileValue
+}
+
+$storeFilePath = [IO.Path]::GetFullPath($storeFilePath)
+
+if (-not (Test-Path -LiteralPath $storeFilePath)) {
+    throw "Release keystore file does not exist: $storeFilePath"
+}
+
+Write-Host ""
+Write-Host "TabangNow Production APK Build" -ForegroundColor Cyan
+Write-Host "------------------------------" -ForegroundColor Cyan
+Write-Host "API: $normalizedApiUrl" -ForegroundColor Green
+Write-Host ""
+
+Write-Host "[1/5] flutter pub get" -ForegroundColor Yellow
+flutter pub get
+if ($LASTEXITCODE -ne 0) {
+    throw "flutter pub get failed."
+}
+
+Write-Host "[2/5] flutter analyze" -ForegroundColor Yellow
+flutter analyze --no-fatal-infos --no-fatal-warnings
+if ($LASTEXITCODE -ne 0) {
+    throw "flutter analyze failed."
+}
+
+Write-Host "[3/5] flutter test" -ForegroundColor Yellow
+flutter test
+if ($LASTEXITCODE -ne 0) {
+    throw "flutter test failed."
+}
+
+Write-Host "[4/5] Building signed release APK" -ForegroundColor Yellow
+flutter build apk `
+    --release `
+    "--dart-define=API_BASE_URL=$normalizedApiUrl"
+
+if ($LASTEXITCODE -ne 0) {
+    throw "flutter build apk --release failed."
+}
+
+$builtApk = Join-Path `
+    $flutterRoot `
+    "build\app\outputs\flutter-apk\app-release.apk"
+
+if (-not (Test-Path -LiteralPath $builtApk)) {
+    throw "Expected release APK was not produced: $builtApk"
+}
+
+Write-Host "[5/5] Verifying APK signature" -ForegroundColor Yellow
+
+$sdkRoot = if ($env:ANDROID_HOME) {
+    $env:ANDROID_HOME
+}
+elseif ($env:ANDROID_SDK_ROOT) {
+    $env:ANDROID_SDK_ROOT
+}
+else {
+    Join-Path $env:LOCALAPPDATA "Android\Sdk"
+}
+
+$buildToolsRoot = Join-Path $sdkRoot "build-tools"
+
+if (-not (Test-Path -LiteralPath $buildToolsRoot)) {
+    throw "Android SDK build-tools directory was not found: $buildToolsRoot"
+}
+
+$apksigner = Get-ChildItem `
+    -LiteralPath $buildToolsRoot `
+    -Directory |
+    Sort-Object Name -Descending |
+    ForEach-Object {
+        $candidate = Join-Path $_.FullName "apksigner.bat"
+        if (Test-Path -LiteralPath $candidate) {
+            $candidate
+        }
+    } |
+    Select-Object -First 1
+
+if ([string]::IsNullOrWhiteSpace($apksigner)) {
+    throw "apksigner.bat was not found in Android SDK build-tools."
+}
+
+& $apksigner verify --verbose --print-certs $builtApk
+
+if ($LASTEXITCODE -ne 0) {
+    throw "APK signature verification failed."
+}
+
+$distDir = Join-Path $flutterRoot "dist"
+New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+$distApk = Join-Path $distDir "TabangNow.apk"
+Copy-Item -LiteralPath $builtApk -Destination $distApk -Force
+
+$hash = Get-FileHash -Algorithm SHA256 -LiteralPath $distApk
+
+Write-Host ""
+Write-Host "SUCCESS: Signed TabangNow production APK created." -ForegroundColor Green
+Write-Host "APK:    $distApk" -ForegroundColor Green
+Write-Host "SHA256: $($hash.Hash)" -ForegroundColor Green
+Write-Host ""
+Write-Host "This APK targets:" -ForegroundColor Cyan
+Write-Host $normalizedApiUrl

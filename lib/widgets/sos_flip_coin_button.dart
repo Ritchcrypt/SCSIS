@@ -11,7 +11,7 @@ class SosFlipCoinButton extends StatefulWidget {
   const SosFlipCoinButton({
     super.key,
     this.size = 96,
-    this.flipInterval = const Duration(seconds: 2),
+    this.flipInterval = const Duration(seconds: 10),
   });
 
   final double size;
@@ -68,9 +68,14 @@ class _SosFlipCoinButtonState extends State<SosFlipCoinButton> {
   }
 
   void _onBrandingChanged() {
-    if (mounted) {
-      setState(() {});
+    if (!mounted) {
+      return;
     }
+
+    setState(() {
+      _showSos = false;
+    });
+    _startFlipTimer();
   }
 
   Future<void> _openSos() async {
@@ -149,11 +154,13 @@ class _CoinFace extends StatelessWidget {
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: sos ? const Color(0xFFDC2626) : const Color(0xFF254C99),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.20),
-                width: compact ? 1 : 2,
-              ),
+              color: sos ? const Color(0xFFDC2626) : Colors.transparent,
+              border: sos
+                  ? Border.all(
+                      color: Colors.white.withValues(alpha: 0.20),
+                      width: compact ? 1 : 2,
+                    )
+                  : null,
               boxShadow: <BoxShadow>[
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.16),
@@ -186,20 +193,12 @@ class _CoinFace extends StatelessWidget {
                           filterQuality: FilterQuality.high,
                           gaplessPlayback: true,
                           errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.health_and_safety_rounded,
-                              color: Colors.white,
-                              size: compact ? size * 0.58 : size * 0.52,
-                            );
+                            return const SizedBox.shrink();
                           },
                         ),
                       ),
                     )
-                  : Icon(
-                      Icons.health_and_safety_rounded,
-                      color: Colors.white,
-                      size: compact ? size * 0.58 : size * 0.52,
-                    ),
+                  : const SizedBox.shrink(),
             ),
           ),
         ),
