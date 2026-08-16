@@ -61,6 +61,7 @@ class ActivityLogController extends Controller
                     25,
                     50,
                     100,
+                    250,
                 ]),
             ],
         ]);
@@ -188,7 +189,7 @@ class ActivityLogController extends Controller
 
         $perPage = (int) (
             $validated['per_page']
-            ?? 25
+            ?? 50
         );
 
         $activityLogs = $query

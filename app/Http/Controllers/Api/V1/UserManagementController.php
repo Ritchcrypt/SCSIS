@@ -40,10 +40,10 @@ class UserManagementController extends Controller
     {
         Gate::authorize('viewAny', User::class);
 
-        $perPage = (int) $request->query('per_page', 10);
+        $perPage = (int) $request->query('per_page', 25);
 
-        if (! in_array($perPage, [10, 25, 50, 100], true)) {
-            $perPage = 10;
+        if (! in_array($perPage, [10, 25, 50, 100, 250], true)) {
+            $perPage = 25;
         }
 
         $users = $this->filteredUsersQuery($request)
@@ -95,7 +95,7 @@ class UserManagementController extends Controller
                         )
                         ->values()
                         ->all(),
-                    'per_page' => [10, 25, 50, 100],
+                    'per_page' => [10, 25, 50, 100, 250],
                 ],
 
                 'filters' => [

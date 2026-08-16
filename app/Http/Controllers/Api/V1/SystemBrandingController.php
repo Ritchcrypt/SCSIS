@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\SystemSetting;
 use App\Rules\SecureUploadedFile;
+use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -18,6 +19,11 @@ use Throwable;
 
 class SystemBrandingController extends Controller
 {
+    public function __construct(
+        private readonly ActivityLogger $activityLogger
+    ) {
+    }
+
     public function show(): JsonResponse
     {
         return response()->json([
@@ -61,6 +67,10 @@ class SystemBrandingController extends Controller
         ]);
 
         $setting = $this->currentSetting();
+
+        $previousSystemName = (string) $setting->system_name;
+        $previousSystemSubtitle = (string) $setting->system_subtitle;
+
         $oldLogoPath = $this->safeLogoPath(
             $setting->system_logo_path
         );
@@ -125,6 +135,45 @@ class SystemBrandingController extends Controller
         }
 
         $setting->refresh();
+
+        $changedFields = [];
+
+        if ($previousSystemName !== (string) $setting->system_name) {
+            $changedFields[] = 'system_name';
+        }
+
+        if (
+            $previousSystemSubtitle
+            !== (string) $setting->system_subtitle
+        ) {
+            $changedFields[] = 'system_subtitle';
+        }
+
+        $logoAction = match (true) {
+            $newLogoPath !== null => 'replaced',
+            $request->boolean('remove_logo') => 'removed',
+            default => 'unchanged',
+        };
+
+        if ($logoAction !== 'unchanged') {
+            $changedFields[] = 'system_logo';
+        }
+
+        if ($changedFields !== []) {
+            $this->activityLogger->record(
+                event: 'system_branding.updated',
+                category: 'configuration',
+                description: 'System branding settings were updated.',
+                actor: $request->user(),
+                target: null,
+                metadata: [
+                    'changed_fields' => $changedFields,
+                    'logo_action' => $logoAction,
+                    'source' => 'mobile_api',
+                ],
+                request: $request,
+            );
+        }
 
         return response()->json([
             'message' =>

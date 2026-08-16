@@ -61,6 +61,7 @@ class ActivityLogController extends Controller
                     25,
                     50,
                     100,
+                    250,
                 ]),
             ],
         ]);
@@ -204,6 +205,7 @@ class ActivityLogController extends Controller
                         25,
                         50,
                         100,
+                        250,
                     ],
                 ],
 
@@ -389,7 +391,7 @@ class ActivityLogController extends Controller
                 $validated[
                     'per_page'
                 ]
-                ?? 25
+                ?? 50
             ),
         ];
     }

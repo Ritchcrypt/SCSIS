@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
@@ -219,6 +220,40 @@ class AuthController extends Controller
         ]);
     }
 
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->merge([
+            'email' => Str::lower(
+                trim((string) $request->input('email'))
+            ),
+        ]);
+
+        $validated = $request->validate([
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+            ],
+        ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Existing TabangNow password-reset broker
+        |--------------------------------------------------------------------------
+        |
+        | This is the same broker used by the website. The response remains
+        | neutral so the API does not disclose whether an account exists.
+        |
+        */
+        Password::sendResetLink([
+            'email' => $validated['email'],
+        ]);
+
+        return response()->json([
+            'message' => 'A reset link will be sent if the account exists.',
+        ]);
+    }
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -275,8 +310,18 @@ class AuthController extends Controller
             'name' => $user->name,
             'username' => $user->username,
             'email' => $user->email,
+            'contact_number' => Schema::hasColumn('users', 'contact_number')
+                ? $user->contact_number
+                : null,
+            'address' => Schema::hasColumn('users', 'address')
+                ? $user->address
+                : null,
             'role' => $user->role,
             'barangay_id' => $user->barangay_id,
+            'has_profile_photo' => Schema::hasColumn('users', 'profile_photo_path')
+                && ! empty($user->profile_photo_path),
+            'profile_photo_version' => optional($user->updated_at)
+                ->toIso8601String(),
         ];
     }
 }

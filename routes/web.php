@@ -82,8 +82,6 @@ Route::post(
 )
     ->name('notifications.open');
 
-    Route::post('/notifications/{notification}/open', [NotificationOpenController::class, 'open'])
-        ->name('notifications.open');
 
     Route::get('/resident-complaint-proofs/{proof}/file', [ResidentComplaintController::class, 'proofFile'])
         ->name('resident-complaint-proofs.file');
@@ -430,8 +428,6 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
         Route::patch('/tanod-tasks/responses/{response}', [TanodTaskController::class, 'respond'])
             ->name('tanod-tasks.respond');
 
-Route::patch('/tanod-tasks/responses/{response}', [TanodTaskController::class, 'respond'])
-    ->name('tanod-tasks.respond');
 
         Route::get('/alerts', [TanodAlertController::class, 'index'])
             ->name('tanod-alerts.index');

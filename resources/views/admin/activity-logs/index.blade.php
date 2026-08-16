@@ -133,7 +133,7 @@
                 <select id="per_page"
                         name="per_page"
                         class="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
-                    @foreach ([10, 25, 50, 100] as $size)
+                    @foreach ([10, 25, 50, 100, 250] as $size)
                         <option value="{{ $size }}"
                                 @selected((int) $filters['per_page'] === $size)>
                             {{ $size }} per page

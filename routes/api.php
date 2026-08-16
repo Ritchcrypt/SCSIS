@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AnnouncementController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\UserManagementController;
 use App\Http\Controllers\Api\V1\ReportController;
@@ -38,6 +39,11 @@ Route::prefix('v1/auth')->group(function (): void {
         AuthController::class,
         'login',
     ])->name('api.v1.auth.login');
+    Route::post('/forgot-password', [
+        AuthController::class,
+        'forgotPassword',
+    ])->middleware('throttle:5,1')
+        ->name('api.v1.auth.forgot-password');
 
     /*
     | Temporary local development bypass.
@@ -88,6 +94,43 @@ Route::prefix('v1')
             DashboardParityController::class,
             'index',
         ])->name('api.v1.dashboard');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Current Account Profile
+        |--------------------------------------------------------------------------
+        | Every active authenticated role can view/update only its own profile.
+        */
+
+        Route::get('/profile', [
+            ProfileController::class,
+            'show',
+        ])->name('api.v1.profile.show');
+
+        Route::post('/profile/update', [
+            ProfileController::class,
+            'update',
+        ])->name('api.v1.profile.update');
+
+        Route::get('/profile/photo', [
+            ProfileController::class,
+            'photo',
+        ])->name('api.v1.profile.photo');
+
+        Route::patch('/profile/password', [
+            ProfileController::class,
+            'updatePassword',
+        ])->name('api.v1.profile.password.update');
+
+        Route::delete('/profile/other-sessions', [
+            ProfileController::class,
+            'destroyOtherSessions',
+        ])->name('api.v1.profile.other-sessions.destroy');
+
+        Route::delete('/profile/self-delete', [
+            ProfileController::class,
+            'destroyOwnAccount',
+        ])->name('api.v1.profile.self-delete');
         /*
         |--------------------------------------------------------------------------
         | System Branding

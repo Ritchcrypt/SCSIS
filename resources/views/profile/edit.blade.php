@@ -365,7 +365,7 @@ html[data-theme='dark'] input.tn-password-input:-webkit-autofill {
                                class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
 
                         <p class="mt-2 text-xs text-slate-500">
-                            Accepted formats: JPG, PNG, or WEBP. Maximum size: 50 MB.
+                            Accepted formats: JPG, PNG, or WEBP. Maximum size: 5 MB.
                             @if ($profilePhotoUrl)
                                 Uploading a new image will replace the current profile picture.
                             @endif
