@@ -33,8 +33,6 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
 
   Map<String, dynamic> _options = <String, dynamic>{};
 
-  Map<String, dynamic> _ipCapture = <String, dynamic>{};
-
   int _page = 1;
   int _lastPage = 1;
   int _total = 0;
@@ -106,8 +104,6 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
         _logs = _mapList(response['data']);
 
         _options = _map(response['options']);
-
-        _ipCapture = _map(response['ip_capture']);
 
         _page = _int(pagination['current_page'], fallback: page);
 
@@ -532,9 +528,6 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
           ),
           const SizedBox(height: 16),
 
-          _IpCaptureNotice(capture: _ipCapture),
-          const SizedBox(height: 16),
-
           _Surface(
             child: Column(
               children: <Widget>[
@@ -659,61 +652,6 @@ class _ActivityLogsScreenState extends State<ActivityLogsScreen> {
       _dateFrom.isNotEmpty ||
       _dateTo.isNotEmpty ||
       _perPage != 25;
-}
-
-class _IpCaptureNotice extends StatelessWidget {
-  const _IpCaptureNotice({required this.capture});
-
-  final Map<String, dynamic> capture;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = TabangNowTheme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: palette.isDark
-            ? const Color(0xFF172554)
-            : const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFF93C5FD)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Icon(Icons.security_outlined, color: Color(0xFF2563EB)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'IP addresses are request-derived, not static.',
-                  style: TextStyle(
-                    color: palette.textMain,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _text(
-                    capture['development_note'],
-                    'Laravel records request()->ip(). Loopback is expected during localhost or ADB reverse development.',
-                  ),
-                  style: TextStyle(
-                    color: palette.textSoft,
-                    fontSize: 11,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _ActivityLogCard extends StatelessWidget {

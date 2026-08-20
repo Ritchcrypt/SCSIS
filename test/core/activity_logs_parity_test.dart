@@ -133,7 +133,7 @@ void main() {
   );
 
   test(
-    'IP UI explicitly explains loopback rather than inventing a client IP',
+    'Activity Logs keeps IP audit data without the development explanation box',
     () {
       final list = File(
         'lib/screens/activity_logs_screen.dart',
@@ -143,18 +143,36 @@ void main() {
         'lib/screens/activity_log_detail_screen.dart',
       ).readAsStringSync();
 
+      expect(
+        list,
+        isNot(contains('IP addresses are request-derived, not static.')),
+        reason: 'The removed IP explanation notice must not return.',
+      );
+
+      expect(
+        list,
+        isNot(contains('class _IpCaptureNotice extends StatelessWidget')),
+        reason: 'The removed IP explanation widget must not return.',
+      );
+
       for (final marker in <String>[
-        'IP addresses are request-derived, not static.',
-        'request()->ip()',
-        '127.0.0.1',
-        'ADB reverse',
+        "log['ip_address']",
+        "log['ip_context']",
+        'LOCAL BRIDGE',
+        'Actor, event, description, route, or IP',
       ]) {
         expect(
-          '$list\n$detail',
+          list,
           contains(marker),
-          reason: 'Missing IP explanation marker: $marker',
+          reason: 'Missing Activity Logs IP functionality marker: $marker',
         );
       }
+
+      expect(
+        detail,
+        contains('IP address'),
+        reason: 'Activity Log detail must continue to show the stored IP.',
+      );
     },
   );
 
