@@ -200,35 +200,42 @@ class SystemBrandingController extends Controller
         | Public read-only branding asset
         |--------------------------------------------------------------------------
         |
-        | Authentication pages need this image before login. This action only
-        | reads the existing setting and never creates or updates a DB record.
+        | Authentication pages and the mobile app need a logo before login.
+        | Serve the configured custom logo when it exists. A fresh deployment
+        | may not have a system setting or persisted custom logo yet, so fall
+        | back to the bundled TabangNow logo instead of returning a blank 404.
         |
         */
 
         $setting = SystemSetting::query()->first();
 
-        if (! $setting) {
-            abort(404);
-        }
-
-        $logoPath = $this->safeLogoPath(
-            $setting->system_logo_path
-        );
+        $logoPath = $setting
+            ? $this->safeLogoPath($setting->system_logo_path)
+            : null;
 
         if (
-            ! $logoPath
-            || ! Storage::disk('public')->exists($logoPath)
+            $logoPath
+            && Storage::disk('public')->exists($logoPath)
         ) {
+            $absolutePath = Storage::disk('public')->path($logoPath);
+
+            if (is_file($absolutePath)) {
+                return response()->file($absolutePath, [
+                    'Cache-Control' => 'public, max-age=86400',
+                    'X-Content-Type-Options' => 'nosniff',
+                ]);
+            }
+        }
+
+        $defaultLogoPath = public_path(
+            'images/tabangnow-default-logo.svg'
+        );
+
+        if (! is_file($defaultLogoPath)) {
             abort(404);
         }
 
-        $absolutePath = Storage::disk('public')->path($logoPath);
-
-        if (! is_file($absolutePath)) {
-            abort(404);
-        }
-
-        return response()->file($absolutePath, [
+        return response()->file($defaultLogoPath, [
             'Cache-Control' => 'public, max-age=86400',
             'X-Content-Type-Options' => 'nosniff',
         ]);

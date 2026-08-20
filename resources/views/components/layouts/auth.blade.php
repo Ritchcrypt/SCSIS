@@ -17,13 +17,19 @@
 
     /*
     |--------------------------------------------------------------------------
-    | Temporary Authentication Logo
+    | Public Authentication Branding
     |--------------------------------------------------------------------------
-    | The official barangay seal remains stored but is not displayed publicly
-    | until the final branding has been approved.
+    | The public branding endpoint serves the configured custom logo and
+    | automatically falls back to the bundled TabangNow logo when needed.
+    | Include the settings timestamp so replacing the logo invalidates the
+    | browser's cached image URL immediately.
     */
 
-    $logoUrl = asset('images/tabangnow-default-logo.svg');
+    $logoVersion = optional($setting?->updated_at)->timestamp ?? 0;
+
+    $logoUrl = route('system-branding.logo')
+        . '?v='
+        . $logoVersion;
 @endphp
 
 <!DOCTYPE html>
