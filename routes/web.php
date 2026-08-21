@@ -9,6 +9,7 @@ use App\Http\Controllers\EmergencyModeController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\NotificationOpenController;
 use App\Http\Controllers\PresenceController;
+use App\Http\Controllers\PublicDownloadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResidentComplaintController;
@@ -37,6 +38,12 @@ Route::get('/', function () {
 
 Route::get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
     ->name('system-branding.logo');
+
+Route::get('/download', [PublicDownloadController::class, 'index'])
+    ->name('download');
+
+Route::get('/download/apk', [PublicDownloadController::class, 'apk'])
+    ->name('download.apk');
 
 /*
 |--------------------------------------------------------------------------
