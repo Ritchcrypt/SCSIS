@@ -29,3 +29,34 @@ Schedule::command('activity-logs:prune --force')
         )
     )
     ->withoutOverlapping();
+
+/*
+|--------------------------------------------------------------------------
+| Production off-site backups
+|--------------------------------------------------------------------------
+|
+| The command is a no-op unless BACKUP_ENABLED=true. The Railway runtime
+| must run Laravel's scheduler for this schedule to execute automatically.
+|
+*/
+
+Schedule::command('backup:production')
+    ->dailyAt(
+        (string) config(
+            'backup.schedule_time',
+            '03:15'
+        )
+    )
+    ->timezone(
+        (string) config(
+            'app.timezone',
+            'Asia/Manila'
+        )
+    )
+    ->when(
+        fn (): bool => (bool) config(
+            'backup.enabled',
+            false
+        )
+    )
+    ->withoutOverlapping(180);
