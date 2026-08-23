@@ -350,14 +350,18 @@ class IncidentController extends Controller
             'evidence.*.max' => 'Each evidence file must not exceed 10MB.',
         ]);
 
-        $pendingStatus = Status::query()
-            ->whereRaw('LOWER(status_name) = ?', ['pending'])
+        $initialStatus = Status::query()
+            ->active()
+            ->whereRaw('LOWER(status_name) = ?', ['reported'])
             ->first();
 
-        if (! $pendingStatus) {
+        if (! $initialStatus) {
             return back()
                 ->withInput()
-                ->with('error', 'Pending status is missing. Please add a Pending status record first.');
+                ->with(
+                    'error',
+                    'Incident status configuration is unavailable. Please contact an administrator.'
+                );
         }
 
         $incident = null;
@@ -367,7 +371,7 @@ try {
     DB::transaction(function () use (
         $request,
         $validated,
-        $pendingStatus,
+        $initialStatus,
         &$incident,
         &$storedEvidencePaths
     ): void {
@@ -410,11 +414,11 @@ try {
         }
 
         if (Schema::hasColumn('incidents', 'status_id')) {
-            $incident->status_id = $pendingStatus->id;
+            $incident->status_id = $initialStatus->id;
         }
 
         if (Schema::hasColumn('incidents', 'status')) {
-            $incident->status = $pendingStatus->status_name ?? 'pending';
+            $incident->status = $initialStatus->status_name ?? 'pending';
         }
 
         if (Schema::hasColumn('incidents', 'incident_title')) {
@@ -466,7 +470,7 @@ try {
 
         IncidentStatusHistory::create([
             'incident_id' => $incident->id,
-            'status_id' => $pendingStatus->id,
+            'status_id' => $initialStatus->id,
             'updated_by' => $request->user()->id,
             'remarks' => 'Incident report submitted.',
             'status_changed_at' => now(),

@@ -331,7 +331,7 @@ class IncidentController extends Controller
                         'email' => $user->email,
                         'contact_number' => $user->contact_number,
                     ],
-                    'initial_status' => 'Pending',
+                    'initial_status' => 'Reported',
                     'date' => now()->toIso8601String(),
                 ],
                 'permissions' => [
@@ -529,17 +529,18 @@ class IncidentController extends Controller
                 'Please provide the incident location or landmark.',
         ]);
 
-        $pendingStatus = Status::query()
+        $initialStatus = Status::query()
+            ->active()
             ->whereRaw(
                 'LOWER(status_name) = ?',
-                ['pending']
+                ['reported']
             )
             ->first();
 
-        if (! $pendingStatus) {
+        if (! $initialStatus) {
             return response()->json([
                 'message' =>
-                    'Pending status is missing. Please add a Pending status record first.',
+                    'Incident status configuration is unavailable. Please contact an administrator.',
             ], 422);
         }
 
@@ -550,7 +551,7 @@ class IncidentController extends Controller
             DB::transaction(function () use (
                 $request,
                 $validated,
-                $pendingStatus,
+                $initialStatus,
                 &$incident,
                 &$storedEvidencePaths
             ): void {
@@ -610,13 +611,13 @@ class IncidentController extends Controller
 
                 if (Schema::hasColumn('incidents', 'status_id')) {
                     $incident->status_id =
-                        (int) $pendingStatus->id;
+                        (int) $initialStatus->id;
                 }
 
                 if (Schema::hasColumn('incidents', 'status')) {
                     $incident->setAttribute(
                         'status',
-                        $pendingStatus->status_name
+                        $initialStatus->status_name
                             ?? 'pending'
                     );
                 }
@@ -683,7 +684,7 @@ class IncidentController extends Controller
 
                 IncidentStatusHistory::query()->create([
                     'incident_id' => $incident->id,
-                    'status_id' => $pendingStatus->id,
+                    'status_id' => $initialStatus->id,
                     'updated_by' => $request->user()->id,
                     'remarks' => 'Incident report submitted.',
                     'status_changed_at' => now(),

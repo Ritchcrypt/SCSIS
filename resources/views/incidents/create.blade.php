@@ -453,7 +453,7 @@
 
                             <p class="mt-1">
                                 <span class="inline-flex rounded-full border border-yellow-200 bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">
-                                    Pending
+                                    Reported
                                 </span>
                             </p>
                         </div>
