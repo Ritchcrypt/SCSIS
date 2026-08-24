@@ -38,9 +38,9 @@ class PublicDownloadPageTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('Download TabangNow')
-            ->assertSee('v1.0.0')
+            ->assertSee('v1.0.1')
             ->assertSee(
-                'CAB0693E05D47D9004935E63AB9852FBB354297C25BFF3464ADF05536EDC0509'
+                'F58685F2345659AE26ED810AACF24D9FD055A81400D46FB975BD26FEDBF5CFD2'
             );
     }
 
