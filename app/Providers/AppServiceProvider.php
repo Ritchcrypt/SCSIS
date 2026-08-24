@@ -38,9 +38,13 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use RuntimeException;
+use Symfony\Component\Mailer\Bridge\Brevo\Transport\BrevoTransportFactory;
+use Symfony\Component\Mailer\Transport\Dsn;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -117,6 +121,24 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Mail::extend('brevo', function () {
+            $apiKey = trim((string) config('services.brevo.key'));
+
+            if ($apiKey === '') {
+                throw new RuntimeException(
+                    'BREVO_API_KEY is not configured.'
+                );
+            }
+
+            return (new BrevoTransportFactory)->create(
+                new Dsn(
+                    'brevo+api',
+                    'default',
+                    $apiKey
+                )
+            );
+        });
+
         User::observe(UserAccountNotificationObserver::class);
         UserNotification::observe(UserNotificationPushObserver::class);
         IncidentMessage::observe(IncidentMessageNotificationObserver::class);
