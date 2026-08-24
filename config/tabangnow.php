@@ -26,6 +26,21 @@ return [
             '1.0.0'
         ),
 
+        'build_number' => max(
+            1,
+            (int) env('TABANGNOW_APK_BUILD_NUMBER', 1)
+        ),
+
+        'minimum_supported_build_number' => max(
+            1,
+            (int) env('TABANGNOW_MIN_SUPPORTED_BUILD_NUMBER', 1)
+        ),
+
+        'update_message' => env(
+            'TABANGNOW_UPDATE_MESSAGE',
+            'A newer version of TabangNow is available.'
+        ),
+
         'apk_sha256' => env(
             'TABANGNOW_APK_SHA256',
             'CAB0693E05D47D9004935E63AB9852FBB354297C25BFF3464ADF05536EDC0509'

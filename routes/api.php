@@ -20,8 +20,20 @@ use App\Http\Controllers\Api\V1\ThemePreferenceController;
 use App\Http\Controllers\Api\V1\NotificationCenterController;
 use App\Http\Controllers\Api\V1\TanodAlertController;
 use App\Http\Controllers\Api\V1\SystemBrandingController;
+use App\Http\Controllers\Api\V1\MobileVersionController;
 use App\Http\Middleware\EnsureApiUserIsActive;
 use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Public Mobile Version Policy
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/v1/mobile/version', [
+    MobileVersionController::class,
+    'show',
+])->name('api.v1.mobile.version');
 
 /*
 |--------------------------------------------------------------------------
