@@ -23,12 +23,12 @@ return [
 
         'version' => env(
             'TABANGNOW_APK_VERSION',
-            '1.0.0'
+            '1.0.1'
         ),
 
         'build_number' => max(
             1,
-            (int) env('TABANGNOW_APK_BUILD_NUMBER', 1)
+            (int) env('TABANGNOW_APK_BUILD_NUMBER', 2)
         ),
 
         'minimum_supported_build_number' => max(
@@ -43,12 +43,12 @@ return [
 
         'apk_sha256' => env(
             'TABANGNOW_APK_SHA256',
-            'CAB0693E05D47D9004935E63AB9852FBB354297C25BFF3464ADF05536EDC0509'
+            'F58685F2345659AE26ED810AACF24D9FD055A81400D46FB975BD26FEDBF5CFD2'
         ),
 
         'apk_size_bytes' => (int) env(
             'TABANGNOW_APK_SIZE_BYTES',
-            60035318
+            60086529
         ),
     ],
 ];
