@@ -19,6 +19,7 @@ use App\Observers\IncidentMessageNotificationObserver;
 use App\Observers\ResidentComplaintNotificationObserver;
 use App\Observers\TanodTaskNotificationObserver;
 use App\Observers\UserAccountNotificationObserver;
+use App\Observers\UserNotificationPushObserver;
 use App\Policies\ActivityLogPolicy;
 use App\Policies\AnnouncementPolicy;
 use App\Policies\CaseRecordPolicy;
@@ -117,6 +118,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         User::observe(UserAccountNotificationObserver::class);
+        UserNotification::observe(UserNotificationPushObserver::class);
         IncidentMessage::observe(IncidentMessageNotificationObserver::class);
         TanodTask::observe(TanodTaskNotificationObserver::class);
         ResidentComplaint::observe(ResidentComplaintNotificationObserver::class);
