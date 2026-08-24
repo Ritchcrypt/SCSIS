@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\TanodRosterController;
 use App\Http\Controllers\Api\V1\TanodTaskController;
 use App\Http\Controllers\Api\V1\ThemePreferenceController;
 use App\Http\Controllers\Api\V1\NotificationCenterController;
+use App\Http\Controllers\Api\V1\PushTokenController;
 use App\Http\Controllers\Api\V1\TanodAlertController;
 use App\Http\Controllers\Api\V1\SystemBrandingController;
 use App\Http\Controllers\Api\V1\MobileVersionController;
@@ -353,6 +354,16 @@ Route::prefix('v1')
         ])->whereNumber('notification')
             ->name('api.v1.notifications.open');
 
+        Route::post('/push-tokens', [
+            PushTokenController::class,
+            'store',
+        ])->name('api.v1.push-tokens.store');
+
+        Route::delete('/push-tokens/current', [
+            PushTokenController::class,
+            'destroyCurrent',
+        ])->name('api.v1.push-tokens.current.destroy');
+
         /*
         |--------------------------------------------------------------------------
         | Tanod Tasks
@@ -649,5 +660,3 @@ Route::prefix('v1')
         ])->whereNumber('activityLog')
             ->name('api.v1.activity-logs.show');
     });
-
-
