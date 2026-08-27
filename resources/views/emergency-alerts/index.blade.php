@@ -14,8 +14,23 @@
                 </p>
             </div>
 
-            <div class="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
-                {{ $alerts->total() }} total alert{{ $alerts->total() === 1 ? '' : 's' }}
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+                    {{ $alerts->total() }} total alert{{ $alerts->total() === 1 ? '' : 's' }}
+                </div>
+
+                @if ($alerts->total() > 0)
+                    <form method="POST"
+                          action="{{ route('emergency-alerts.destroy-all') }}"
+                          onsubmit="return confirm('Delete ALL distress signals? This removes active, acknowledged, and resolved reports from the responder module and cannot be undone.');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit"
+                                class="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-black text-red-700 shadow-sm hover:bg-red-50">
+                            Delete All
+                        </button>
+                    </form>
+                @endif
             </div>
         </div>
     </div>
@@ -75,10 +90,23 @@
                             </td>
 
                             <td class="px-5 py-4 text-center">
-                                <a href="{{ route('emergency-alerts.show', $alert) }}"
-                                   class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50">
-                                    View
-                                </a>
+                                <div class="flex flex-wrap items-center justify-center gap-2">
+                                    <a href="{{ route('emergency-alerts.show', $alert) }}"
+                                       class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-50">
+                                        View
+                                    </a>
+
+                                    <form method="POST"
+                                          action="{{ route('emergency-alerts.destroy', $alert) }}"
+                                          onsubmit="return confirm('Delete {{ $alert->alert_code }}? This distress signal will be removed from the responder module.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit"
+                                                class="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-700 shadow-sm hover:bg-red-50">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty

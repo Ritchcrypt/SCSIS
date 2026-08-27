@@ -30,4 +30,14 @@ Route::middleware(['web', 'auth', 'active.user'])->group(function (): void {
         MobileEmergencyAlertController::class,
         'resolve',
     ])->name('emergency-alerts.resolve');
+
+    Route::delete('/emergency-alerts', [
+        MobileEmergencyAlertController::class,
+        'destroyAll',
+    ])->name('emergency-alerts.destroy-all');
+
+    Route::delete('/emergency-alerts/{emergencyAlert}', [
+        MobileEmergencyAlertController::class,
+        'destroy',
+    ])->name('emergency-alerts.destroy');
 });

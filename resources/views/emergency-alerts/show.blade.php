@@ -149,6 +149,16 @@
                     </button>
                 </form>
             @endif
+            <form method="POST"
+                  action="{{ route('emergency-alerts.destroy', $alert) }}"
+                  onsubmit="return confirm('Delete {{ $alert->alert_code }}? This distress signal will be removed from the responder module.');">
+                @csrf
+                @method('DELETE')
+                <button type="submit"
+                        class="rounded-xl border border-red-300 bg-white px-5 py-3 text-sm font-black text-red-700 shadow-sm hover:bg-red-50">
+                    Delete Distress Signal
+                </button>
+            </form>
         </div>
 
         <div class="mt-6 grid gap-4 text-sm sm:grid-cols-2">

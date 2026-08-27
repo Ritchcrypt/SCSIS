@@ -161,7 +161,7 @@
 <body>
     <div class="page">
         <div class="header">
-            <p class="header-title">Reports</p>
+            <p class="header-title">Barangay Operations Report</p>
 
             <div class="header-subtitle">
                 TabangNow - Dao, Capiz 
@@ -169,7 +169,21 @@
 
             <table class="meta-table">
                 <tr>
+                    <td>
+                        <strong>Reporting Period:</strong> {{ $periodLabel }}
+                    </td>
+                </tr>
 
+                <tr>
+                    <td>
+                        <strong>Date Range:</strong>
+                        {{ $startDate->format('M d, Y h:i A') }}
+                        —
+                        {{ $endDate->format('M d, Y h:i A') }}
+                    </td>
+                </tr>
+
+                <tr>
                     <td>
                         <strong>Generated:</strong> {{ $generatedAt->format('F d, Y h:i A') }}
                     </td>
@@ -211,6 +225,89 @@
 
                 </tr>
             </table>
+
+            <table class="summary-grid" style="margin-top: 8px;">
+                <tr>
+                    <td style="width: 33.33%;">
+                        <div class="summary-label">Resident Complaints</div>
+                        <div class="summary-value">{{ $residentComplaints ?? 0 }}</div>
+                    </td>
+
+                    <td style="width: 33.33%;">
+                        <div class="summary-label">Distress Signals</div>
+                        <div class="summary-value">{{ $distressSignals ?? 0 }}</div>
+                    </td>
+
+                    <td style="width: 33.33%;">
+                        <div class="summary-label">Announcements</div>
+                        <div class="summary-value">{{ $announcements ?? 0 }}</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Incident Operational Summary</div>
+
+            <table class="two-column">
+                <tr>
+                    <td>
+                        <strong>Status Breakdown</strong>
+                        @if (count($statusSummary))
+                            <table class="data-table" style="margin-top: 6px;">
+                                @foreach ($statusSummary as $row)
+                                    <tr>
+                                        <td>{{ $row['label'] }}</td>
+                                        <td style="width: 25%; text-align: center;">{{ $row['total'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </table>
+                        @else
+                            <div class="empty" style="margin-top: 6px;">No status data.</div>
+                        @endif
+                    </td>
+
+                    <td>
+                        <strong>Severity Breakdown</strong>
+                        @if (count($severitySummary))
+                            <table class="data-table" style="margin-top: 6px;">
+                                @foreach ($severitySummary as $row)
+                                    <tr>
+                                        <td>{{ $row['label'] }}</td>
+                                        <td style="width: 25%; text-align: center;">{{ $row['total'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </table>
+                        @else
+                            <div class="empty" style="margin-top: 6px;">No severity data.</div>
+                        @endif
+                    </td>
+                </tr>
+            </table>
+
+            <div style="margin-top: 10px;">
+                <strong>Top Barangay Areas by Incident Count</strong>
+                @if (count($barangaySummary))
+                    <table class="data-table" style="margin-top: 6px;">
+                        <thead>
+                            <tr>
+                                <th>Barangay Area</th>
+                                <th style="width: 20%;">Incidents</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($barangaySummary as $row)
+                                <tr>
+                                    <td>{{ $row['label'] }}</td>
+                                    <td>{{ $row['total'] }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <div class="empty" style="margin-top: 6px;">No barangay incident data.</div>
+                @endif
+            </div>
         </div>
 
         <div class="section">
@@ -221,11 +318,12 @@
                     <thead>
                         <tr>
                             <th style="width: 11%;">Category</th>
-                            <th style="width: 27%;">Details</th>
+                            <th style="width: 23%;">Details</th>
+                            <th style="width: 12%;">Type</th>
                             <th style="width: 10%;">Severity</th>
-                            <th style="width: 17%;">Barangay Areas</th>
-                            <th style="width: 15%;">Incident Status</th>
-                            <th style="width: 20%;">Date & Time</th>
+                            <th style="width: 14%;">Area / Location</th>
+                            <th style="width: 12%;">Status</th>
+                            <th style="width: 18%;">Date & Time</th>
                         </tr>
                     </thead>
 
@@ -234,6 +332,7 @@
                             <tr>
                                 <td>{{ $record['category'] }}</td>
                                 <td>{{ $record['title'] }}</td>
+                                <td>{{ $record['type'] ?? '—' }}</td>
                                 <td>{{ $record['severity'] ?? '—' }}</td>
                                 <td>{{ $record['barangay'] ?? '—' }}</td>
                                 <td>{{ $record['status'] ?? '—' }}</td>

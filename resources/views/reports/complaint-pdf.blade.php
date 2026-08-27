@@ -183,6 +183,11 @@
             </tr>
 
             <tr>
+                <td class="label">Contact Number</td>
+                <td class="value">{{ $value('contact_number') }}</td>
+            </tr>
+
+            <tr>
                 <td class="label">Address / Location</td>
                 <td class="value">{{ $value('address') }}</td>
             </tr>

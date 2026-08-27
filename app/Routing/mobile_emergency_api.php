@@ -48,5 +48,15 @@ Route::prefix('v1')->group(function (): void {
             EmergencyAlertManagementController::class,
             'resolve',
         ])->name('api.v1.emergency-alerts.resolve');
+
+        Route::delete('/emergency-alerts', [
+            EmergencyAlertManagementController::class,
+            'destroyAll',
+        ])->name('api.v1.emergency-alerts.destroy-all');
+
+        Route::delete('/emergency-alerts/{emergencyAlert}', [
+            EmergencyAlertManagementController::class,
+            'destroy',
+        ])->name('api.v1.emergency-alerts.destroy');
     });
 });

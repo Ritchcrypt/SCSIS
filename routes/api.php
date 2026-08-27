@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\PushTokenController;
 use App\Http\Controllers\Api\V1\TanodAlertController;
 use App\Http\Controllers\Api\V1\SystemBrandingController;
 use App\Http\Controllers\Api\V1\MobileVersionController;
+use App\Http\Controllers\PresenceController;
 use App\Http\Middleware\EnsureApiUserIsActive;
 use Illuminate\Support\Facades\Route;
 
@@ -97,6 +98,28 @@ Route::prefix('v1')
         EnsureApiUserIsActive::class,
     ])
     ->group(function (): void {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Global User Presence
+        |--------------------------------------------------------------------------
+        |
+        | Every active authenticated mobile role may heartbeat. The users
+        | snapshot remains protected by the existing viewUserPresence Gate
+        | inside PresenceController, so only authorized administrators can
+        | inspect system-wide presence.
+        |
+        */
+
+        Route::post('/presence/heartbeat', [
+            PresenceController::class,
+            'heartbeat',
+        ])->name('api.v1.presence.heartbeat');
+
+        Route::get('/presence/users', [
+            PresenceController::class,
+            'users',
+        ])->name('api.v1.presence.users');
         /*
         |--------------------------------------------------------------------------
         | Dashboard
@@ -572,6 +595,11 @@ Route::prefix('v1')
             'downloadComplaintPdf',
         ])->whereNumber('residentComplaint')
             ->name('api.v1.reports.complaint-pdf');
+        Route::get('/reports/sos/{mobileEmergencyAlert}/pdf', [
+            ReportController::class,
+            'downloadSosPdf',
+        ])->whereNumber('mobileEmergencyAlert')
+            ->name('api.v1.reports.sos-pdf');
 
         /*
         |--------------------------------------------------------------------------
@@ -654,6 +682,10 @@ Route::prefix('v1')
             'index',
         ])->name('api.v1.activity-logs.index');
 
+        Route::delete('/activity-logs', [
+            ActivityLogController::class,
+            'destroyAll',
+        ])->name('api.v1.activity-logs.destroy-all');
         Route::get('/activity-logs/{activityLog}', [
             ActivityLogController::class,
             'show',

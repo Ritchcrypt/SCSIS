@@ -136,6 +136,8 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
             ->name('reports.complaint-pdf');
+        Route::get('/reports/sos/{mobileEmergencyAlert}/pdf', [ReportController::class, 'downloadSosPdf'])
+            ->name('reports.sos-pdf');
 
         Route::get('/resident-complaints', [ResidentComplaintController::class, 'index'])
             ->name('resident-complaints.index');
@@ -216,9 +218,15 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])
             ->name('users.destroy');
 
-        /* Activity Logs: read-only administrator module. */
+        /*
+         * Activity Logs remain immutable per record. Admin may explicitly
+         * reset the complete audit trail after destructive confirmation.
+         */
         Route::get('/activity-logs', [ActivityLogController::class, 'index'])
             ->name('activity-logs.index');
+
+        Route::delete('/activity-logs', [ActivityLogController::class, 'destroyAll'])
+            ->name('activity-logs.destroy-all');
 
         Route::get('/activity-logs/{activityLog}', [ActivityLogController::class, 'show'])
             ->name('activity-logs.show');

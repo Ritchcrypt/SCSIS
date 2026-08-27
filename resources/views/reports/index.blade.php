@@ -56,6 +56,11 @@
         class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
     Complaint PDF
 </button>
+<button type="button"
+        onclick="openSpecificSosReportModal()"
+        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+    SOS PDF
+</button>
 
             <a href="{{ route('admin.reports.pdf', ['period' => $period]) }}"
                class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
@@ -343,11 +348,6 @@
                                     onclick="selectSpecificReportOption(this, 'specific_incident_id', 'specificIncidentSelectedLabel')"
                                     class="mb-2 block w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800">
 
-                                    const caseWarning = document.getElementById('caseReportWarning');
-
-if (caseWarning) {
-    caseWarning.classList.add('hidden');
-}
                                 {{ $incidentOption['label'] }}
                             </button>
                         @endforeach
@@ -574,6 +574,106 @@ if (caseWarning) {
     </div>
 </div>
 
+
+{{-- SOS / Distress Signal Report Modal --}}
+<div id="specificSosReportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <div class="mb-5 flex items-start justify-between gap-4">
+            <div>
+                <h2 class="text-xl font-bold text-slate-900">
+                    SOS / Distress Signal Report
+                </h2>
+
+                <p class="mt-1 text-sm leading-6 text-slate-500">
+                    Generate a structured A4 PDF for one selected SOS / Distress Signal record.
+                </p>
+            </div>
+
+            <button type="button"
+                    onclick="closeSpecificSosReportModal()"
+                    class="text-2xl leading-none text-slate-500 hover:text-slate-900">
+                &times;
+            </button>
+        </div>
+
+        @if (($sosReportOptions ?? collect())->count())
+            <form id="specificSosReportForm"
+                  data-report-url-template="{{ url('/admin/reports/sos/__SOS_ID__/pdf') }}"
+                  class="space-y-5">
+                <input type="hidden" id="specific_sos_id">
+
+                <div>
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <label class="block text-sm font-semibold text-slate-700">
+                            Select SOS / Distress Signal
+                        </label>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    onclick="scrollSpecificReportList('specificSosReportList', 'up')"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+                                ↑
+                            </button>
+
+                            <button type="button"
+                                    onclick="scrollSpecificReportList('specificSosReportList', 'down')"
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+                                ↓
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="specificSosSelectedLabel"
+                         class="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                        No SOS / Distress Signal selected
+                    </div>
+
+                    <div id="specificSosReportList"
+                         data-specific-report-list
+                         class="max-h-64 overflow-y-auto rounded-xl border border-slate-300 bg-white p-2">
+                        @foreach ($sosReportOptions as $sosOption)
+                            <button type="button"
+                                    data-specific-report-option
+                                    data-value="{{ $sosOption['id'] }}"
+                                    onclick="selectSpecificReportOption(this, 'specific_sos_id', 'specificSosSelectedLabel')"
+                                    class="mb-2 block w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800">
+                                {{ $sosOption['label'] }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div id="specificSosWarning"
+                     class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    Select one SOS / Distress Signal first.
+                </div>
+
+                <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
+                    <button type="button"
+                            onclick="closeSpecificSosReportModal()"
+                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                        Cancel
+                    </button>
+
+                    <button type="submit"
+                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                        Generate PDF
+                    </button>
+                </div>
+            </form>
+        @else
+            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <h3 class="text-sm font-bold text-slate-900">
+                    No SOS / Distress Signal records available
+                </h3>
+
+                <p class="mt-1 text-sm text-slate-500">
+                    SOS reports will appear here after a distress signal has been received.
+                </p>
+            </div>
+        @endif
+    </div>
+</div>
 <script>
     function toggleRecordsBreakdown() {
         const extraRows = document.querySelectorAll('.extra-record-row');
@@ -587,42 +687,16 @@ if (caseWarning) {
         const isHidden = extraRows[0].classList.contains('hidden');
 
         extraRows.forEach(function (row) {
-            if (isHidden) {
-                row.classList.remove('hidden');
-            } else {
-                row.classList.add('hidden');
-            }
+            row.classList.toggle('hidden', !isHidden);
         });
 
-        if (isHidden) {
-            button.textContent = '↑';
+        button.textContent = isHidden ? '↑' : '↓';
 
-            if (text) {
-                text.textContent = 'Showing all records';
-            }
-        } else {
-            button.textContent = '↓';
-
-            if (text) {
-                text.textContent = 'Showing 5 records only';
-            }
+        if (text) {
+            text.textContent = isHidden
+                ? 'Showing all records'
+                : 'Showing 5 records only';
         }
-    }
-
-    function openSpecificIncidentReportModal() {
-        openSpecificReportModal('specificIncidentReportModal');
-    }
-
-    function closeSpecificIncidentReportModal() {
-        closeSpecificReportModal('specificIncidentReportModal');
-    }
-
-    function openSpecificComplaintReportModal() {
-        openSpecificReportModal('specificComplaintReportModal');
-    }
-
-    function closeSpecificComplaintReportModal() {
-        closeSpecificReportModal('specificComplaintReportModal');
     }
 
     function openSpecificReportModal(modalId) {
@@ -647,13 +721,37 @@ if (caseWarning) {
         modal.classList.remove('flex');
     }
 
-    function openCaseReportModal() {
-    openSpecificReportModal('caseReportModal');
-}
+    function openSpecificIncidentReportModal() {
+        openSpecificReportModal('specificIncidentReportModal');
+    }
 
-function closeCaseReportModal() {
-    closeSpecificReportModal('caseReportModal');
-}
+    function closeSpecificIncidentReportModal() {
+        closeSpecificReportModal('specificIncidentReportModal');
+    }
+
+    function openCaseReportModal() {
+        openSpecificReportModal('caseReportModal');
+    }
+
+    function closeCaseReportModal() {
+        closeSpecificReportModal('caseReportModal');
+    }
+
+    function openSpecificComplaintReportModal() {
+        openSpecificReportModal('specificComplaintReportModal');
+    }
+
+    function closeSpecificComplaintReportModal() {
+        closeSpecificReportModal('specificComplaintReportModal');
+    }
+
+    function openSpecificSosReportModal() {
+        openSpecificReportModal('specificSosReportModal');
+    }
+
+    function closeSpecificSosReportModal() {
+        closeSpecificReportModal('specificSosReportModal');
+    }
 
     function scrollSpecificReportList(listId, direction) {
         const list = document.getElementById(listId);
@@ -680,104 +778,105 @@ function closeCaseReportModal() {
 
         if (list) {
             list.querySelectorAll('[data-specific-report-option]').forEach(function (option) {
-                option.classList.remove('bg-blue-100', 'text-blue-900', 'ring-2', 'ring-blue-200');
+                option.classList.remove(
+                    'bg-blue-100',
+                    'text-blue-900',
+                    'ring-2',
+                    'ring-blue-200'
+                );
             });
         }
 
-        button.classList.add('bg-blue-100', 'text-blue-900', 'ring-2', 'ring-blue-200');
+        button.classList.add(
+            'bg-blue-100',
+            'text-blue-900',
+            'ring-2',
+            'ring-blue-200'
+        );
 
         input.value = button.dataset.value || '';
         label.textContent = button.textContent.trim();
 
-        const incidentWarning = document.getElementById('specificIncidentWarning');
-        const complaintWarning = document.getElementById('specificComplaintWarning');
+        [
+            'specificIncidentWarning',
+            'caseReportWarning',
+            'specificComplaintWarning',
+            'specificSosWarning',
+        ].forEach(function (warningId) {
+            const warning = document.getElementById(warningId);
 
-        if (incidentWarning) {
-            incidentWarning.classList.add('hidden');
+            if (warning) {
+                warning.classList.add('hidden');
+            }
+        });
+    }
+
+    function bindSpecificReportForm(
+        formId,
+        inputId,
+        warningId,
+        placeholder
+    ) {
+        const form = document.getElementById(formId);
+        const input = document.getElementById(inputId);
+        const warning = document.getElementById(warningId);
+
+        if (!form || !input) {
+            return;
         }
 
-        if (complaintWarning) {
-            complaintWarning.classList.add('hidden');
-        }
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            if (!input.value) {
+                if (warning) {
+                    warning.classList.remove('hidden');
+                }
+
+                return;
+            }
+
+            const template = form.dataset.reportUrlTemplate;
+
+            if (!template) {
+                return;
+            }
+
+            window.location.href = template.replace(
+                placeholder,
+                encodeURIComponent(input.value)
+            );
+        });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const incidentForm = document.getElementById('specificIncidentReportForm');
-        const incidentInput = document.getElementById('specific_incident_id');
-        const incidentWarning = document.getElementById('specificIncidentWarning');
+        bindSpecificReportForm(
+            'specificIncidentReportForm',
+            'specific_incident_id',
+            'specificIncidentWarning',
+            '__INCIDENT_ID__'
+        );
 
-        if (incidentForm && incidentInput) {
-            incidentForm.addEventListener('submit', function (event) {
-                event.preventDefault();
+        bindSpecificReportForm(
+            'caseReportForm',
+            'case_report_id',
+            'caseReportWarning',
+            '__CASE_ID__'
+        );
 
-                if (!incidentInput.value) {
-                    if (incidentWarning) {
-                        incidentWarning.classList.remove('hidden');
-                    }
+        bindSpecificReportForm(
+            'specificComplaintReportForm',
+            'specific_complaint_id',
+            'specificComplaintWarning',
+            '__COMPLAINT_ID__'
+        );
 
-                    return;
-                }
-
-                const template = incidentForm.dataset.reportUrlTemplate;
-                const caseForm = document.getElementById('caseReportForm');
-const caseInput = document.getElementById('case_report_id');
-const caseWarning = document.getElementById('caseReportWarning');
-
-if (caseForm && caseInput) {
-    caseForm.addEventListener('submit', function (event) {
-        event.preventDefault();
-
-        if (!caseInput.value) {
-            if (caseWarning) {
-                caseWarning.classList.remove('hidden');
-            }
-
-            return;
-        }
-
-        const template = caseForm.dataset.reportUrlTemplate;
-
-        if (!template) {
-            return;
-        }
-
-        window.location.href = template.replace('__CASE_ID__', encodeURIComponent(caseInput.value));
-    });
-}
-
-                if (!template) {
-                    return;
-                }
-
-                window.location.href = template.replace('__INCIDENT_ID__', encodeURIComponent(incidentInput.value));
-            });
-        }
-
-        const complaintForm = document.getElementById('specificComplaintReportForm');
-        const complaintInput = document.getElementById('specific_complaint_id');
-        const complaintWarning = document.getElementById('specificComplaintWarning');
-
-        if (complaintForm && complaintInput) {
-            complaintForm.addEventListener('submit', function (event) {
-                event.preventDefault();
-
-                if (!complaintInput.value) {
-                    if (complaintWarning) {
-                        complaintWarning.classList.remove('hidden');
-                    }
-
-                    return;
-                }
-
-                const template = complaintForm.dataset.reportUrlTemplate;
-
-                if (!template) {
-                    return;
-                }
-
-                window.location.href = template.replace('__COMPLAINT_ID__', encodeURIComponent(complaintInput.value));
-            });
-        }
+        bindSpecificReportForm(
+            'specificSosReportForm',
+            'specific_sos_id',
+            'specificSosWarning',
+            '__SOS_ID__'
+        );
     });
 </script>
 

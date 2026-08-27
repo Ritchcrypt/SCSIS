@@ -10,12 +10,15 @@ use App\Models\CaseRecord;
 use App\Models\EmergencyHotline;
 use App\Models\Incident;
 use App\Models\IncidentMessage;
+use App\Models\MobileEmergencyAlert;
 use App\Models\ResidentComplaint;
 use App\Models\TanodProfile;
 use App\Models\TanodTask;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Observers\CaseRecordNotificationObserver;
 use App\Observers\IncidentMessageNotificationObserver;
+use App\Observers\MobileEmergencyAlertNotificationObserver;
 use App\Observers\ResidentComplaintNotificationObserver;
 use App\Observers\TanodTaskNotificationObserver;
 use App\Observers\UserAccountNotificationObserver;
@@ -141,7 +144,9 @@ class AppServiceProvider extends ServiceProvider
 
         User::observe(UserAccountNotificationObserver::class);
         UserNotification::observe(UserNotificationPushObserver::class);
+        CaseRecord::observe(CaseRecordNotificationObserver::class);
         IncidentMessage::observe(IncidentMessageNotificationObserver::class);
+        MobileEmergencyAlert::observe(MobileEmergencyAlertNotificationObserver::class);
         TanodTask::observe(TanodTaskNotificationObserver::class);
         ResidentComplaint::observe(ResidentComplaintNotificationObserver::class);
     }

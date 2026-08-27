@@ -53,12 +53,12 @@
 
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Online</p>
-            <p class="mt-3 text-3xl font-bold text-green-600">{{ $summary['online'] }}</p>
+            <p id="userPresenceOnlineCount" class="mt-3 text-3xl font-bold text-green-600">{{ $summary['online'] }}</p>
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Offline</p>
-            <p class="mt-3 text-3xl font-bold text-slate-500">{{ $summary['offline'] }}</p>
+            <p id="userPresenceOfflineCount" class="mt-3 text-3xl font-bold text-slate-500">{{ $summary['offline'] }}</p>
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -259,18 +259,20 @@
                                 </span>
                             </td>
 
-                            <td class="px-5 py-4">
-                                @if ($isOnline)
-                                    <span class="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
-                                        <span class="h-2 w-2 rounded-full bg-green-500"></span>
-                                        Online
+                            <td class="px-5 py-4"
+                                data-user-presence-id="{{ (int) $userRecord->id }}">
+                                <span data-user-presence-badge
+                                      class="{{ $isOnline
+                                          ? 'inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-700'
+                                          : 'inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600' }}">
+                                    <span data-user-presence-dot
+                                          class="{{ $isOnline
+                                              ? 'h-2 w-2 rounded-full bg-green-500'
+                                              : 'h-2 w-2 rounded-full bg-slate-400' }}"></span>
+                                    <span data-user-presence-label>
+                                        {{ $isOnline ? 'Online' : 'Offline' }}
                                     </span>
-                                @else
-                                    <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                                        <span class="h-2 w-2 rounded-full bg-slate-400"></span>
-                                        Offline
-                                    </span>
-                                @endif
+                                </span>
                             </td>
 
                             <td class="px-5 py-4 text-sm text-slate-700">
@@ -480,4 +482,149 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+
+<script>
+    (() => {
+        const presenceUrl = @json(route('admin.users.presence'));
+        const pollMilliseconds = 30000;
+
+        let presenceTimer = null;
+        let presenceRequest = null;
+
+        function setPresenceBadge(cell, online) {
+            if (!cell) {
+                return;
+            }
+
+            const badge = cell.querySelector('[data-user-presence-badge]');
+            const dot = cell.querySelector('[data-user-presence-dot]');
+            const label = cell.querySelector('[data-user-presence-label]');
+
+            if (!badge || !dot || !label) {
+                return;
+            }
+
+            badge.className = online
+                ? 'inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-700'
+                : 'inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600';
+
+            dot.className = online
+                ? 'h-2 w-2 rounded-full bg-green-500'
+                : 'h-2 w-2 rounded-full bg-slate-400';
+
+            label.textContent = online ? 'Online' : 'Offline';
+            cell.dataset.userPresenceOnline = online ? '1' : '0';
+        }
+
+        async function refreshUserPresence() {
+            if (document.hidden || !presenceUrl || presenceRequest) {
+                return;
+            }
+
+            const controller = new AbortController();
+            presenceRequest = controller;
+
+            try {
+                const response = await fetch(presenceUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    signal: controller.signal,
+                });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const payload = await response.json();
+                const users = payload?.users ?? {};
+                const summary = payload?.summary ?? {};
+
+                document
+                    .querySelectorAll('[data-user-presence-id]')
+                    .forEach((cell) => {
+                        const userId = String(
+                            cell.getAttribute('data-user-presence-id') ?? ''
+                        );
+
+                        if (!userId || !Object.prototype.hasOwnProperty.call(users, userId)) {
+                            return;
+                        }
+
+                        setPresenceBadge(
+                            cell,
+                            users[userId]?.online === true
+                        );
+                    });
+
+                const onlineCount = document.getElementById(
+                    'userPresenceOnlineCount'
+                );
+                const offlineCount = document.getElementById(
+                    'userPresenceOfflineCount'
+                );
+
+                if (
+                    onlineCount
+                    && Number.isFinite(Number(summary.online))
+                ) {
+                    onlineCount.textContent = String(summary.online);
+                }
+
+                if (
+                    offlineCount
+                    && Number.isFinite(Number(summary.offline))
+                ) {
+                    offlineCount.textContent = String(summary.offline);
+                }
+            } catch (error) {
+                if (error?.name !== 'AbortError') {
+                    // Presence is informational. A temporary polling failure
+                    // must not interrupt User Management.
+                }
+            } finally {
+                if (presenceRequest === controller) {
+                    presenceRequest = null;
+                }
+            }
+        }
+
+        function startPresencePolling() {
+            if (presenceTimer) {
+                window.clearInterval(presenceTimer);
+            }
+
+            refreshUserPresence();
+
+            presenceTimer = window.setInterval(
+                refreshUserPresence,
+                pollMilliseconds
+            );
+        }
+
+        document.addEventListener('DOMContentLoaded', startPresencePolling);
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                refreshUserPresence();
+            }
+        });
+
+        window.addEventListener('focus', refreshUserPresence);
+
+        window.addEventListener('beforeunload', () => {
+            if (presenceTimer) {
+                window.clearInterval(presenceTimer);
+            }
+
+            if (presenceRequest) {
+                presenceRequest.abort();
+            }
+        });
+    })();
+</script>
 @endsection

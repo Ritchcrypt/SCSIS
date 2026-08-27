@@ -7,6 +7,7 @@ use App\Models\SystemSetting;
 use App\Rules\SecureUploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -14,7 +15,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 class SystemBrandingController extends Controller
@@ -193,17 +193,17 @@ class SystemBrandingController extends Controller
             );
     }
 
-    public function logo(): BinaryFileResponse
+    public function logo(): Response
     {
         /*
         |--------------------------------------------------------------------------
         | Public read-only branding asset
         |--------------------------------------------------------------------------
         |
-        | Authentication pages and the mobile app need a logo before login.
-        | Serve the configured custom logo when it exists. A fresh deployment
-        | may not have a system setting or persisted custom logo yet, so fall
-        | back to the bundled TabangNow logo instead of returning a blank 404.
+        | Serve only the administrator-uploaded custom logo. Read the asset
+        | through Laravel's Storage API so the endpoint works consistently
+        | with local persistent storage, test fake disks, and other supported
+        | storage drivers. The retired bundled fallback is never served.
         |
         */
 
@@ -214,28 +214,27 @@ class SystemBrandingController extends Controller
             : null;
 
         if (
-            $logoPath
-            && Storage::disk('public')->exists($logoPath)
+            ! $logoPath
+            || ! Storage::disk('public')->exists($logoPath)
         ) {
-            $absolutePath = Storage::disk('public')->path($logoPath);
-
-            if (is_file($absolutePath)) {
-                return response()->file($absolutePath, [
-                    'Cache-Control' => 'public, max-age=86400',
-                    'X-Content-Type-Options' => 'nosniff',
-                ]);
-            }
-        }
-
-        $defaultLogoPath = public_path(
-            'images/tabangnow-default-logo.svg'
-        );
-
-        if (! is_file($defaultLogoPath)) {
             abort(404);
         }
 
-        return response()->file($defaultLogoPath, [
+        $contents = Storage::disk('public')->get($logoPath);
+
+        $extension = strtolower(
+            pathinfo($logoPath, PATHINFO_EXTENSION)
+        );
+
+        $contentType = match ($extension) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            default => 'application/octet-stream',
+        };
+
+        return response($contents, 200, [
+            'Content-Type' => $contentType,
             'Cache-Control' => 'public, max-age=86400',
             'X-Content-Type-Options' => 'nosniff',
         ]);
