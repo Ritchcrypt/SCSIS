@@ -140,9 +140,22 @@ class NotificationCenterController extends Controller
             return $this->target('dashboard');
         }
 
+        if (in_array($type, [
+            'mobile_emergency_received',
+            'mobile_emergency_acknowledged',
+            'mobile_emergency_resolved',
+        ], true)) {
+            return $this->target('dashboard');
+        }
         if ($type === 'mobile_emergency') {
             return in_array($role, ['admin', 'official', 'dao'], true)
                 ? $this->target('distressSignal', $sourceId)
+                : $this->target('dashboard');
+        }
+
+        if (in_array($type, ['case_created', 'case_updated', 'case_deleted'], true)) {
+            return $role === 'admin'
+                ? $this->target('caseManagement', $sourceId)
                 : $this->target('dashboard');
         }
 

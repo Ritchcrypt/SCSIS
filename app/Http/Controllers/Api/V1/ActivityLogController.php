@@ -9,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
@@ -253,6 +254,11 @@ class ActivityLogController extends Controller
                 'permissions' => [
                     'can_view' => true,
                     'read_only' => true,
+                    'individual_records_read_only' => true,
+                    'can_delete_all' => Gate::allows(
+                        'deleteAny',
+                        ActivityLog::class
+                    ),
                 ],
             ])
             ->header(
@@ -261,6 +267,42 @@ class ActivityLogController extends Controller
             );
     }
 
+
+    public function destroyAll(
+        Request $request
+    ): JsonResponse {
+        Gate::authorize(
+            'deleteAny',
+            ActivityLog::class
+        );
+
+        /*
+         * Individual ActivityLog Eloquent deletes remain forbidden. This is
+         * the explicit Admin-only collection reset requested by the module.
+         */
+        $table = (new ActivityLog())->getTable();
+
+        $deletedCount = DB::table(
+            $table
+        )->delete();
+
+        return response()
+            ->json([
+                'message' =>
+                    $deletedCount === 1
+                        ? '1 activity log was permanently deleted. New activity will continue to be recorded.'
+                        : number_format(
+                            $deletedCount
+                        )
+                            . ' activity logs were permanently deleted. New activity will continue to be recorded.',
+                'deleted_count' =>
+                    (int) $deletedCount,
+            ])
+            ->header(
+                'Cache-Control',
+                'no-store, private'
+            );
+    }
     public function show(
         ActivityLog $activityLog
     ): JsonResponse {
@@ -305,6 +347,11 @@ class ActivityLogController extends Controller
                 'permissions' => [
                     'can_view' => true,
                     'read_only' => true,
+                    'individual_records_read_only' => true,
+                    'can_delete_all' => Gate::allows(
+                        'deleteAny',
+                        ActivityLog::class
+                    ),
                 ],
             ])
             ->header(

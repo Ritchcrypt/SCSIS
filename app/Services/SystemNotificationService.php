@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\IncidentMessage;
+use App\Models\MobileEmergencyAlert;
+use App\Models\CaseRecord;
 use App\Models\ResidentComplaint;
 use App\Models\TanodTask;
 use App\Models\User;
@@ -85,6 +87,108 @@ class SystemNotificationService
         return UserNotification::query()->create($payload);
     }
 
+
+    public function notifyCaseRecord(
+        CaseRecord $caseRecord,
+        string $event
+    ): void {
+        $event = strtolower(trim($event));
+
+        if (! in_array($event, ['created', 'updated', 'deleted'], true)) {
+            return;
+        }
+
+        $caseNumber = trim((string) $caseRecord->case_number);
+        $caseLabel = $caseNumber !== ''
+            ? 'Case #' . $caseNumber
+            : 'Case record #' . (int) $caseRecord->id;
+
+        $title = match ($event) {
+            'created' => 'Case record created',
+            'updated' => 'Case record updated',
+            'deleted' => 'Case record deleted',
+        };
+
+        $message = match ($event) {
+            'created' => $caseLabel . ' was created in Case Management.',
+            'updated' => $caseLabel . ' was updated in Case Management.',
+            'deleted' => $caseLabel . ' was deleted from Case Management.',
+        };
+
+        foreach ($this->activeUserIdsForRoles(['admin']) as $adminId) {
+            $this->send(
+                userId: $adminId,
+                type: 'case_' . $event,
+                sourceId: (int) $caseRecord->id,
+                title: $title,
+                message: $message,
+                replaceExisting: false
+            );
+        }
+    }
+
+    public function notifyMobileEmergencyReporter(
+        MobileEmergencyAlert $alert,
+        string $event
+    ): void {
+        $userId = (int) $alert->user_id;
+
+        if ($userId <= 0) {
+            return;
+        }
+
+        $event = strtolower(trim($event));
+
+        if (! in_array(
+            $event,
+            ['received', 'acknowledged', 'resolved'],
+            true
+        )) {
+            return;
+        }
+
+        $alertCode = trim((string) $alert->alert_code);
+        $safeCode = $alertCode !== '' && ! str_starts_with($alertCode, 'TMP-')
+            ? $alertCode
+            : 'Your distress signal';
+
+        $responderName = null;
+
+        if ($event === 'acknowledged') {
+            $alert->loadMissing('acknowledgedBy:id,name');
+            $responderName = $alert->acknowledgedBy?->name;
+        } elseif ($event === 'resolved') {
+            $alert->loadMissing('resolvedBy:id,name');
+            $responderName = $alert->resolvedBy?->name;
+        }
+
+        $title = match ($event) {
+            'received' => 'Distress signal received',
+            'acknowledged' => 'Distress signal acknowledged',
+            'resolved' => 'Distress signal resolved',
+        };
+
+        $message = match ($event) {
+            'received' => 'Your distress signal was received successfully. TabangNow administrators and officials have been notified.',
+            'acknowledged' => $safeCode
+                . ' has been acknowledged'
+                . ($responderName ? ' by ' . $responderName : ' by a TabangNow responder')
+                . '. Responders are handling your report.',
+            'resolved' => $safeCode
+                . ' has been marked resolved'
+                . ($responderName ? ' by ' . $responderName : ' by a TabangNow responder')
+                . '.',
+        };
+
+        $this->send(
+            userId: $userId,
+            type: 'mobile_emergency_' . $event,
+            sourceId: (int) $alert->id,
+            title: $title,
+            message: $message,
+            replaceExisting: true
+        );
+    }
     public function notifyPendingRegistration(User $registeredUser): void
     {
         if (

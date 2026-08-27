@@ -7,7 +7,9 @@ use App\Models\ActivityLog;
 use App\Support\SqlLikePattern;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -252,6 +254,40 @@ class ActivityLogController extends Controller
         );
     }
 
+
+    public function destroyAll(
+        Request $request
+    ): RedirectResponse {
+        Gate::authorize(
+            'deleteAny',
+            ActivityLog::class
+        );
+
+        /*
+         * ActivityLog intentionally blocks Eloquent deletion. The only
+         * supported destructive operation is this explicit Admin collection
+         * purge, which uses the query builder exactly like retention pruning.
+         */
+        $table = (new ActivityLog())->getTable();
+
+        $deletedCount = DB::table(
+            $table
+        )->delete();
+
+        return redirect()
+            ->route(
+                'admin.activity-logs.index'
+            )
+            ->with(
+                'success',
+                $deletedCount === 1
+                    ? '1 activity log was permanently deleted. New activity will continue to be recorded.'
+                    : number_format(
+                        $deletedCount
+                    )
+                        . ' activity logs were permanently deleted. New activity will continue to be recorded.'
+            );
+    }
     public function show(
         ActivityLog $activityLog
     ): View {

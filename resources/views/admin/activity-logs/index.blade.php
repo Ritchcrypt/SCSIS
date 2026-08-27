@@ -17,18 +17,49 @@
             <p class="mt-2 max-w-3xl text-sm text-slate-600">
                 Review authentication, account-management, incident, complaint,
                 tanod, announcement, configuration, and security events.
-                Activity logs are read-only.
+                Individual activity records are read-only. Administrators may permanently clear the complete audit trail.
             </p>
         </div>
 
-        <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-            <span class="font-semibold text-slate-900">
-                {{ number_format($activityLogs->total()) }}
-            </span>
-            matching record{{ $activityLogs->total() === 1 ? '' : 's' }}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+                <span class="font-semibold text-slate-900">
+                    {{ number_format($activityLogs->total()) }}
+                </span>
+                matching record{{ $activityLogs->total() === 1 ? '' : 's' }}
+            </div>
+
+            <form method="POST"
+                  action="{{ route('admin.activity-logs.destroy-all') }}"
+                  onsubmit="return confirm('Delete ALL activity logs permanently? This removes the complete audit trail, not only the currently filtered records. This cannot be undone.');">
+                @csrf
+                @method('DELETE')
+
+                <button type="submit"
+                        class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 shadow-sm transition hover:border-red-400 hover:bg-red-100">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         viewBox="0 0 24 24"
+                         fill="none"
+                         stroke="currentColor"
+                         stroke-width="2"
+                         class="h-4 w-4"
+                         aria-hidden="true">
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M14.74 9 14.394 18m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166M19.228 5.79 18.16 19.673A2.25 2.25 0 0 1 15.916 21H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-10.978.397c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0V4.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.364 0c-1.18.037-2.09 1.022-2.09 2.201v.312m7.544 0a48.667 48.667 0 0 0-7.544 0" />
+                    </svg>
+
+                    Delete All Permanently
+                </button>
+            </form>
         </div>
     </div>
 
+    @if (session('success'))
+        <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+            {{ session('success') }}
+        </div>
+    @endif
     @if ($errors->any())
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <p class="font-semibold">The filters could not be applied.</p>

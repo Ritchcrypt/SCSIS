@@ -12,6 +12,7 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Password;
@@ -212,6 +213,18 @@ class AuthController extends Controller
 
         event(new Login('sanctum', $user, false));
 
+        if (Schema::hasColumn('users', 'last_seen_at')) {
+            $seenAt = now();
+
+            DB::table('users')
+                ->where('id', $user->id)
+                ->update([
+                    'last_seen_at' => $seenAt,
+                ]);
+
+            $user->last_seen_at = $seenAt;
+        }
+
         return response()->json([
             'message' => 'Login successful.',
             'token_type' => 'Bearer',
@@ -283,6 +296,16 @@ class AuthController extends Controller
 
         if ($accessToken instanceof PersonalAccessToken) {
             $accessToken->delete();
+        }
+
+        if (Schema::hasColumn('users', 'last_seen_at')) {
+            DB::table('users')
+                ->where('id', $user->id)
+                ->update([
+                    'last_seen_at' => null,
+                ]);
+
+            $user->last_seen_at = null;
         }
 
         event(new Logout('sanctum', $user));

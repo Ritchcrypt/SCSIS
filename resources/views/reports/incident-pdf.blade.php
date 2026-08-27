@@ -18,6 +18,15 @@
             margin-bottom: 18px;
         }
 
+        .system-title {
+            margin: 0;
+            color: #1e3a8a;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
         .title {
             font-size: 22px;
             font-weight: bold;
@@ -89,6 +98,7 @@
 </head>
 <body>
     <div class="header">
+        <p class="system-title">TabangNow / DaoSystem</p>
         <p class="title">Incident Report</p>
         <p class="subtitle">
             Barangay Incident Documentation — Dao, Capiz
@@ -112,6 +122,11 @@
             <tr>
                 <td class="label">Title</td>
                 <td>{{ $incidentReport['title'] }}</td>
+            </tr>
+
+            <tr>
+                <td class="label">Incident Category</td>
+                <td>{{ $incidentReport['category'] }}</td>
             </tr>
 
             <tr>
@@ -142,6 +157,40 @@
             <tr>
                 <td class="label">Last Updated</td>
                 <td>{{ $incidentReport['updated_at'] }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Reporting, Assignment & Location</div>
+
+        <table>
+            <tr>
+                <td class="label">Reported By</td>
+                <td>{{ $incidentReport['reporter'] }}</td>
+            </tr>
+
+            <tr>
+                <td class="label">Reported At</td>
+                <td>{{ $incidentReport['reported_at'] }}</td>
+            </tr>
+
+            <tr>
+                <td class="label">Assigned Responder</td>
+                <td>{{ $incidentReport['assigned_responder'] }}</td>
+            </tr>
+
+            <tr>
+                <td class="label">Location</td>
+                <td>{{ $incidentReport['location_name'] }}</td>
+            </tr>
+
+            <tr>
+                <td class="label">GPS Coordinates</td>
+                <td>
+                    {{ $incidentReport['latitude'] }},
+                    {{ $incidentReport['longitude'] }}
+                </td>
             </tr>
         </table>
     </div>
@@ -294,7 +343,7 @@
     </div>
 
     <div class="footer">
-        This report is generated from TabangNow sytem records. It contains only the selected incident and its directly related records.
+        This report is generated from TabangNow system records. It contains only the selected incident and its directly related records.
     </div>
 </body>
 </html>

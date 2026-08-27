@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\MobileEmergencyAlert;
 use App\Models\User;
+use App\Models\UserNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +94,68 @@ class EmergencyAlertManagementController extends Controller
         ]);
     }
 
+
+    public function destroy(
+        Request $request,
+        MobileEmergencyAlert $emergencyAlert
+    ): JsonResponse {
+        $this->authorizeResponder($request);
+
+        $deleted = $this->deleteAlertIds([(int) $emergencyAlert->id]);
+
+        return response()->json([
+            'message' => $deleted > 0
+                ? 'Distress signal deleted.'
+                : 'Distress signal was already removed.',
+            'data' => [
+                'deleted_count' => $deleted,
+            ],
+        ]);
+    }
+
+    public function destroyAll(Request $request): JsonResponse
+    {
+        $this->authorizeResponder($request);
+
+        $ids = MobileEmergencyAlert::query()
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        $deleted = $this->deleteAlertIds($ids);
+
+        return response()->json([
+            'message' => $deleted === 1
+                ? '1 distress signal deleted.'
+                : "{$deleted} distress signals deleted.",
+            'data' => [
+                'deleted_count' => $deleted,
+            ],
+        ]);
+    }
+
+    private function deleteAlertIds(array $ids): int
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $ids),
+            fn (int $id): bool => $id > 0
+        )));
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        return DB::transaction(function () use ($ids): int {
+            UserNotification::query()
+                ->where('type', 'mobile_emergency')
+                ->whereIn('source_id', $ids)
+                ->delete();
+
+            return MobileEmergencyAlert::query()
+                ->whereIn('id', $ids)
+                ->delete();
+        });
+    }
     private function authorizeResponder(Request $request): User
     {
         $user = $request->user();

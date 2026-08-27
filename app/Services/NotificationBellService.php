@@ -167,6 +167,9 @@ class NotificationBellService
             'user_registration' => 'New Registration',
             'account_activated' => 'Account Activated',
             'account_deactivated' => 'Account Deactivated',
+            'case_created' => 'Case Created',
+            'case_updated' => 'Case Updated',
+            'case_deleted' => 'Case Deleted',
             'resident_complaint' => 'Resident Complaint',
             'resident_complaint_update' => 'Complaint Update',
             'resident_complaint_status_update' => 'Complaint Status Update',
@@ -185,6 +188,9 @@ class NotificationBellService
             'escalation' => 'Escalation',
             'emergency' => 'Emergency',
             'mobile_emergency' => 'Distress Signal',
+            'mobile_emergency_received' => 'Distress Signal Received',
+            'mobile_emergency_acknowledged' => 'Distress Signal Acknowledged',
+            'mobile_emergency_resolved' => 'Distress Signal Resolved',
             'resolved' => 'Resolved',
             'announcement' => 'Announcement',
             'calamity' => 'Calamity',
@@ -214,6 +220,12 @@ class NotificationBellService
             && Route::has('emergency-alerts.show')
         ) {
             return route('emergency-alerts.show', (int) $notification->source_id);
+        }
+
+        if (in_array($type, ['case_created', 'case_updated', 'case_deleted'], true)) {
+            return $role === 'admin'
+                ? $this->roleRouteUrl($role, 'cases.index')
+                : $this->dashboardUrl($user);
         }
 
         if (in_array($type, ['announcement', 'calamity'], true)) {

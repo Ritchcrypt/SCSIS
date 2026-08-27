@@ -45,6 +45,15 @@ class ActivityLogPolicy
         return false;
     }
 
+
+    /**
+     * Administrators may intentionally reset the complete audit trail.
+     * Individual log records remain immutable and non-deletable.
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->isAdmin();
+    }
     public function delete(
         User $user,
         ActivityLog $activityLog

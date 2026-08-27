@@ -6,7 +6,9 @@ use App\Models\Announcement;
 use App\Models\CaseRecord;
 use App\Models\Employee;
 use App\Models\Incident;
+use App\Models\MobileEmergencyAlert;
 use App\Models\ResidentComplaint;
+use App\Models\TanodTask;
 use App\Support\SafeDatabaseIdentifier;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -175,6 +177,31 @@ class ReportController extends Controller
     }
 
 
+
+    public function downloadSosPdf(
+        Request $request,
+        MobileEmergencyAlert $mobileEmergencyAlert
+    ) {
+        Gate::authorize('viewReports');
+
+        $data = $this->specificSosReportData($mobileEmergencyAlert);
+
+        $code = $data['sosReport']['alert_code']
+            ?? ('sos-' . $mobileEmergencyAlert->id);
+
+        $fileName = 'sos-report-'
+            . $this->safeFileToken(
+                $code,
+                'sos-' . $mobileEmergencyAlert->id
+            )
+            . '-'
+            . now()->format('Ymd-His')
+            . '.pdf';
+
+        return Pdf::loadView('reports.sos-pdf', $data)
+            ->setPaper('a4', 'portrait')
+            ->download($fileName);
+    }
     private function casePdfHtml(array $data): string
 {
     $caseReport = $data['caseReport'] ?? [];
@@ -357,6 +384,21 @@ class ReportController extends Controller
             </tr>
 
             <tr>
+                <td class="label">Contact Number</td>
+                <td class="value">' . $value('contact') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Address</td>
+                <td class="value">' . $value('address') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Linked Incident</td>
+                <td class="value">' . $value('linked_incident') . '</td>
+            </tr>
+
+            <tr>
                 <td class="label">Status</td>
                 <td class="value">' . $value('status') . '</td>
             </tr>
@@ -372,8 +414,18 @@ class ReportController extends Controller
             </tr>
 
             <tr>
+                <td class="label">Created By</td>
+                <td class="value">' . $value('created_by') . '</td>
+            </tr>
+
+            <tr>
                 <td class="label">Created At</td>
                 <td class="value">' . $value('created_at') . '</td>
+            </tr>
+
+            <tr>
+                <td class="label">Last Updated By</td>
+                <td class="value">' . $value('updated_by') . '</td>
             </tr>
 
             <tr>
@@ -459,6 +511,8 @@ class ReportController extends Controller
             'activeIncidents' => $activeIncidents,
             'resolvedIncidents' => $resolvedIncidents,
             'casesFiled' => $this->countTableByDate('case_records', $startDate, $endDate),
+            'residentComplaints' => $this->residentComplaintCount($startDate, $endDate),
+            'distressSignals' => $this->distressSignalCount($startDate, $endDate),
             'announcements' => $this->countTableByDate('announcements', $startDate, $endDate),
 
             'records' => $this->recordsBreakdown($startDate, $endDate),
@@ -470,12 +524,20 @@ class ReportController extends Controller
             'incidentReportOptions' => $this->incidentReportOptions(),
 'caseReportOptions' => $this->caseReportOptions(),
 'complaintReportOptions' => $this->complaintReportOptions(),
+'sosReportOptions' => $this->sosReportOptions(),
         ];
     }
 
     private function specificIncidentReportData(Incident $incident): array
     {
-        $incident->loadMissing(['barangay', 'category', 'currentStatus']);
+        $incident->loadMissing([
+            'barangay',
+            'category',
+            'currentStatus',
+            'reporter:id,name',
+            'resident.user:id,name',
+            'assignedResponder.user:id,name',
+        ]);
 
         $currentUser = Auth::user();
 
@@ -503,6 +565,27 @@ class ReportController extends Controller
                     ?? $incident->currentStatus?->name
                     ?? 'Pending',
                 'priority' => ucfirst((string) ($incident->priority ?? $incident->severity ?? 'Low')),
+                'reporter' => $incident->reporter?->name
+                    ?? $incident->resident?->full_name
+                    ?? $incident->resident?->user?->name
+                    ?? 'Not identified',
+                'assigned_responder' => $incident->assignedResponder?->user?->name
+                    ?? 'Not assigned',
+                'reported_at' => $this->formatDateTime(
+                    $incident->reported_at
+                    ?? $incident->created_at
+                    ?? null
+                ),
+                'location_name' => $incident->map_location_name
+                    ?: ($incident->barangay?->barangay_name
+                        ?? $incident->barangay?->name
+                        ?? 'Not specified'),
+                'latitude' => $incident->latitude !== null
+                    ? number_format((float) $incident->latitude, 7, '.', '')
+                    : 'Unavailable',
+                'longitude' => $incident->longitude !== null
+                    ? number_format((float) $incident->longitude, 7, '.', '')
+                    : 'Unavailable',
                 'date_time' => $this->formatDateTime($incidentDateTime),
                 'created_at' => $this->formatDateTime($incident->created_at),
                 'updated_at' => $this->formatDateTime($incident->updated_at),
@@ -516,7 +599,19 @@ class ReportController extends Controller
 
     private function specificCaseReportData(CaseRecord $caseRecord): array
 {
+    $caseRecord->loadMissing([
+        'incident',
+        'creator:id,name',
+        'updater:id,name',
+    ]);
+
     $currentUser = Auth::user();
+
+    $linkedIncident = $caseRecord->incident
+        ? $caseRecord->incident->display_code
+            . ' - '
+            . $caseRecord->incident->display_title
+        : ($caseRecord->incident_title ?: 'No linked incident');
 
     $caseReport = [
         'id' => $caseRecord->id,
@@ -532,6 +627,7 @@ class ReportController extends Controller
             'case_title',
             'subject',
             'complaint_title',
+            'incident_title',
         ], 'Barangay case record'),
 
         'case_type' => ucfirst(str_replace('_', ' ', $this->firstTextValue($caseRecord, [
@@ -559,6 +655,21 @@ class ReportController extends Controller
             'mediator',
             'officer_in_charge',
         ], 'Not specified'),
+
+        'contact' => $this->firstTextValue($caseRecord, [
+            'contact',
+            'contact_number',
+            'phone',
+        ], 'Not specified'),
+
+        'address' => $this->firstTextValue($caseRecord, [
+            'address',
+            'location',
+        ], 'Not specified'),
+
+        'linked_incident' => $linkedIncident,
+        'created_by' => $caseRecord->creator?->name ?: 'Not recorded',
+        'updated_by' => $caseRecord->updater?->name ?: 'Not recorded',
 
         'hearing_date' => $this->formatDateOnly($caseRecord->hearing_date ?? null),
 
@@ -590,6 +701,64 @@ class ReportController extends Controller
     ];
 }
 
+
+    private function specificSosReportData(
+        MobileEmergencyAlert $alert
+    ): array {
+        $alert->loadMissing([
+            'user:id,name,role,address,contact_number',
+            'acknowledgedBy:id,name',
+            'resolvedBy:id,name',
+        ]);
+
+        $currentUser = Auth::user();
+
+        $status = trim((string) $alert->status);
+        $locationSource = trim((string) $alert->location_source);
+
+        return [
+            'generatedAt' => now(),
+            'generatedBy' => $currentUser ? $currentUser->name : 'System',
+            'alert' => $alert,
+
+            'sosReport' => [
+                'id' => (int) $alert->id,
+                'alert_code' => $alert->alert_code
+                    ?: 'SOS-' . str_pad((string) $alert->id, 6, '0', STR_PAD_LEFT),
+                'status' => $status !== ''
+                    ? ucwords(str_replace('_', ' ', $status))
+                    : 'Active',
+                'source' => ucfirst((string) ($alert->source ?: 'mobile')),
+                'reporter_name' => $alert->display_name,
+                'reporter_role' => $alert->user
+                    ? ucfirst((string) $alert->user->role)
+                    : 'Unidentified / Public SOS',
+                'registered_address' => $alert->user?->address ?: 'Not available',
+                'contact_number' => $alert->contact_number ?: 'Not provided',
+                'emergency_details' => $alert->emergency_details
+                    ?: 'No emergency description available.',
+                'location_source' => $locationSource === 'last_known'
+                    ? 'Last known device location'
+                    : 'Current device GPS',
+                'latitude' => $alert->latitude !== null
+                    ? number_format((float) $alert->latitude, 7, '.', '')
+                    : 'Unavailable',
+                'longitude' => $alert->longitude !== null
+                    ? number_format((float) $alert->longitude, 7, '.', '')
+                    : 'Unavailable',
+                'accuracy' => $alert->accuracy_meters !== null
+                    ? number_format((float) $alert->accuracy_meters, 1) . ' meters'
+                    : 'Not reported',
+                'triggered_at' => $this->formatDateTime($alert->triggered_at),
+                'acknowledged_at' => $this->formatDateTime($alert->acknowledged_at),
+                'acknowledged_by' => $alert->acknowledgedBy?->name ?: 'Not yet acknowledged',
+                'resolved_at' => $this->formatDateTime($alert->resolved_at),
+                'resolved_by' => $alert->resolvedBy?->name ?: 'Not yet resolved',
+                'created_at' => $this->formatDateTime($alert->created_at),
+                'updated_at' => $this->formatDateTime($alert->updated_at),
+            ],
+        ];
+    }
     private function specificComplaintReportData(ResidentComplaint $complaint): array
     {
         $currentUser = Auth::user();
@@ -633,12 +802,19 @@ class ReportController extends Controller
                     'location',
                 ], 'Not specified'),
 
+                'contact_number' => $this->firstTextValue($complaint, [
+                    'contact_number',
+                    'contact',
+                    'phone',
+                ], 'Not provided'),
+
                 'status' => ucfirst(str_replace('_', ' ', $this->firstTextValue($complaint, [
                     'status',
                     'complaint_status',
                 ], 'Pending'))),
 
                 'description' => $this->firstTextValue($complaint, [
+                    'complaint_description',
                     'description',
                     'complaint',
                     'complaint_body',
@@ -649,7 +825,8 @@ class ReportController extends Controller
                 ], '—'),
 
                 'date_time' => $this->formatDateTime(
-                    $complaint->complaint_datetime
+                    $complaint->submitted_at
+                    ?? $complaint->complaint_datetime
                     ?? $complaint->reported_at
                     ?? $complaint->created_at
                     ?? null
@@ -882,6 +1059,11 @@ class ReportController extends Controller
             </tr>
 
             <tr>
+                <td class="label">Contact Number</td>
+                <td class="value">' . $value('contact_number') . '</td>
+            </tr>
+
+            <tr>
                 <td class="label">Address / Location</td>
                 <td class="value">' . $value('address') . '</td>
             </tr>
@@ -1077,6 +1259,48 @@ class ReportController extends Controller
             });
     }
 
+
+    private function sosReportOptions()
+    {
+        if (
+            ! class_exists(MobileEmergencyAlert::class)
+            || ! Schema::hasTable('mobile_emergency_alerts')
+        ) {
+            return collect();
+        }
+
+        return MobileEmergencyAlert::query()
+            ->with('user:id,name,role')
+            ->latest('triggered_at')
+            ->latest('id')
+            ->limit(100)
+            ->get()
+            ->map(function (MobileEmergencyAlert $alert) {
+                $code = $alert->alert_code
+                    ?: 'SOS-' . str_pad((string) $alert->id, 6, '0', STR_PAD_LEFT);
+
+                $reporter = $alert->display_name;
+                $status = ucwords(str_replace(
+                    '_',
+                    ' ',
+                    trim((string) ($alert->status ?: 'active'))
+                ));
+
+                return [
+                    'id' => (int) $alert->id,
+                    'label' => $code
+                        . ' - '
+                        . $reporter
+                        . ' - '
+                        . $status
+                        . ' - '
+                        . $this->formatDateTime(
+                            $alert->triggered_at
+                            ?? $alert->created_at
+                        ),
+                ];
+            });
+    }
     private function incidentCategoryLabel(Incident $incident): string
     {
         $relatedCategory = $incident->category;
@@ -1281,24 +1505,52 @@ class ReportController extends Controller
             return collect();
         }
 
-        $tasks = DB::table('tanod_tasks')
+        return TanodTask::query()
+            ->with([
+                'responses.user:id,name',
+                'responses.employee.user:id,name',
+            ])
             ->where('incident_id', $incident->id)
-            ->orderByDesc(Schema::hasColumn('tanod_tasks', 'created_at') ? 'created_at' : 'id')
-            ->get();
-
-        return $tasks->map(function ($task) {
-            return [
-                'task_id' => $task->id,
-                'title' => $task->title
-                    ?? $task->task_title
-                    ?? 'Tanod Task #' . $task->id,
-                'status' => ucfirst(str_replace('_', ' ', (string) ($task->status ?? '—'))),
-                'created_at' => $this->formatDateTime($task->created_at ?? null),
-                'responses' => collect(),
-            ];
-        });
+            ->latest()
+            ->get()
+            ->map(function (TanodTask $task) {
+                return [
+                    'task_id' => $task->id,
+                    'title' => $task->title
+                        ?: 'Tanod Task #' . $task->id,
+                    'status' => ucfirst(str_replace(
+                        '_',
+                        ' ',
+                        (string) ($task->status ?: '—')
+                    )),
+                    'created_at' => $this->formatDateTime(
+                        $task->created_at
+                    ),
+                    'responses' => $task->responses
+                        ->map(function ($response) {
+                            return [
+                                'responder_name' => $response->user?->name
+                                    ?? $response->employee?->user?->name
+                                    ?? 'Tanod responder',
+                                'response_status' => ucfirst(str_replace(
+                                    '_',
+                                    ' ',
+                                    (string) ($response->response_status ?: 'pending')
+                                )),
+                                'response_note' => trim(
+                                    (string) ($response->response_note ?? '')
+                                ) ?: '—',
+                                'responded_at' => $this->formatDateTime(
+                                    $response->responded_at
+                                    ?? $response->updated_at
+                                    ?? null
+                                ),
+                            ];
+                        })
+                        ->values(),
+                ];
+            });
     }
-
     private function incidentBaseQuery(Carbon $startDate, Carbon $endDate)
     {
         return Incident::query()
@@ -1344,9 +1596,14 @@ class ReportController extends Controller
             foreach ($cases as $case) {
                 $records[] = [
                     'category' => 'Case',
-                    'title' => 'Case No. ' . ($case->case_number ?? $case->id) . ' - ' . ($case->title ?? $case->case_title ?? 'Barangay case record'),
+                    'title' => 'Case No. '
+                        . ($case->case_number ?? $case->id)
+                        . ' - '
+                        . ($case->incident_title
+                            ?? $case->subject_name
+                            ?? 'Barangay case record'),
                     'type' => ucfirst(str_replace('_', ' ', (string) ($case->case_type ?? 'case'))),
-                    'status' => '—',
+                    'status' => ucfirst(str_replace('_', ' ', (string) ($case->status ?? '—'))),
                     'severity' => '—',
                     'barangay' => '—',
                     'datetime' => optional($case->created_at)->format('M d, Y h:i A') ?? '-',
@@ -1376,6 +1633,90 @@ class ReportController extends Controller
             }
         }
 
+        if (
+            class_exists(ResidentComplaint::class)
+            && Schema::hasTable('resident_complaints')
+        ) {
+            $complaintDateColumn = Schema::hasColumn(
+                'resident_complaints',
+                'submitted_at'
+            )
+                ? 'submitted_at'
+                : 'created_at';
+
+            $complaints = ResidentComplaint::query()
+                ->whereBetween(
+                    $complaintDateColumn,
+                    [$startDate, $endDate]
+                )
+                ->latest($complaintDateColumn)
+                ->limit(50)
+                ->get();
+
+            foreach ($complaints as $complaint) {
+                $date = $complaint->{$complaintDateColumn};
+
+                $records[] = [
+                    'category' => 'Resident Complaint',
+                    'title' => 'Complaint #'
+                        . $complaint->id
+                        . ' - '
+                        . ($complaint->complainant_name
+                            ?: 'Unknown complainant'),
+                    'type' => 'Resident Complaint',
+                    'status' => $complaint->statusLabel(),
+                    'severity' => '—',
+                    'barangay' => $complaint->complaint_address
+                        ?: 'Not specified',
+                    'datetime' => $this->formatDateTime($date),
+                    'sort_date' => optional($date)->timestamp ?? 0,
+                ];
+            }
+        }
+
+        if (
+            class_exists(MobileEmergencyAlert::class)
+            && Schema::hasTable('mobile_emergency_alerts')
+        ) {
+            $sosDateColumn = Schema::hasColumn(
+                'mobile_emergency_alerts',
+                'triggered_at'
+            )
+                ? 'triggered_at'
+                : 'created_at';
+
+            $alerts = MobileEmergencyAlert::query()
+                ->with('user:id,name')
+                ->whereBetween(
+                    $sosDateColumn,
+                    [$startDate, $endDate]
+                )
+                ->latest($sosDateColumn)
+                ->limit(50)
+                ->get();
+
+            foreach ($alerts as $alert) {
+                $date = $alert->{$sosDateColumn};
+
+                $records[] = [
+                    'category' => 'SOS / Distress Signal',
+                    'title' => ($alert->alert_code
+                            ?: 'SOS-' . $alert->id)
+                        . ' - '
+                        . $alert->display_name,
+                    'type' => 'Emergency',
+                    'status' => ucfirst(str_replace(
+                        '_',
+                        ' ',
+                        (string) ($alert->status ?: 'active')
+                    )),
+                    'severity' => 'Emergency',
+                    'barangay' => 'GPS-based location',
+                    'datetime' => $this->formatDateTime($date),
+                    'sort_date' => optional($date)->timestamp ?? 0,
+                ];
+            }
+        }
         usort($records, function ($a, $b) {
             return $b['sort_date'] <=> $a['sort_date'];
         });
@@ -1383,6 +1724,46 @@ class ReportController extends Controller
         return array_slice($records, 0, 50);
     }
 
+
+    private function residentComplaintCount(
+        Carbon $startDate,
+        Carbon $endDate
+    ): int {
+        if (! Schema::hasTable('resident_complaints')) {
+            return 0;
+        }
+
+        $column = Schema::hasColumn(
+            'resident_complaints',
+            'submitted_at'
+        )
+            ? 'submitted_at'
+            : 'created_at';
+
+        return ResidentComplaint::query()
+            ->whereBetween($column, [$startDate, $endDate])
+            ->count();
+    }
+
+    private function distressSignalCount(
+        Carbon $startDate,
+        Carbon $endDate
+    ): int {
+        if (! Schema::hasTable('mobile_emergency_alerts')) {
+            return 0;
+        }
+
+        $column = Schema::hasColumn(
+            'mobile_emergency_alerts',
+            'triggered_at'
+        )
+            ? 'triggered_at'
+            : 'created_at';
+
+        return MobileEmergencyAlert::query()
+            ->whereBetween($column, [$startDate, $endDate])
+            ->count();
+    }
     private function statusSummary(Carbon $startDate, Carbon $endDate): array
     {
         return Incident::query()

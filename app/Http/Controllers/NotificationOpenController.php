@@ -31,10 +31,21 @@ class NotificationOpenController extends Controller
             );
         }
 
+        if (in_array($type, [
+            'mobile_emergency_received',
+            'mobile_emergency_acknowledged',
+            'mobile_emergency_resolved',
+        ], true)) {
+            return redirect()->to($this->dashboardUrl($role));
+        }
         if ($type === 'mobile_emergency') {
             return redirect()->to(
                 $this->mobileEmergencyUrl($role, $notification)
             );
+        }
+
+        if (in_array($type, ['case_created', 'case_updated', 'case_deleted'], true)) {
+            return redirect()->to($this->caseManagementUrl($role));
         }
 
         if (in_array($type, ['announcement', 'calamity'], true)) {
@@ -165,6 +176,15 @@ class NotificationOpenController extends Controller
             && Route::has('emergency-alerts.show')
         ) {
             return route('emergency-alerts.show', $sourceId);
+        }
+
+        return $this->dashboardUrl($role);
+    }
+
+    private function caseManagementUrl(string $role): string
+    {
+        if ($role === 'admin' && Route::has('admin.cases.index')) {
+            return route('admin.cases.index');
         }
 
         return $this->dashboardUrl($role);

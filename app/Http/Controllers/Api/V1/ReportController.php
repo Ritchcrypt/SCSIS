@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\ReportController as WebsiteReportController;
 use App\Models\CaseRecord;
 use App\Models\Incident;
+use App\Models\MobileEmergencyAlert;
 use App\Models\ResidentComplaint;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -89,6 +90,20 @@ class ReportController extends Controller
                                 ]
                                 ?? 0
                             ),
+                        'resident_complaints' =>
+                            (int) (
+                                $data[
+                                    'residentComplaints'
+                                ]
+                                ?? 0
+                            ),
+                        'distress_signals' =>
+                            (int) (
+                                $data[
+                                    'distressSignals'
+                                ]
+                                ?? 0
+                            ),
                         'announcements' =>
                             (int) (
                                 $data[
@@ -165,6 +180,14 @@ class ReportController extends Controller
                                 ?? []
                             )
                                 ->values()
+                                ->all(),                        'sos' =>
+                            collect(
+                                $data[
+                                    'sosReportOptions'
+                                ]
+                                ?? []
+                            )
+                                ->values()
                                 ->all(),
                     ],
                 ],
@@ -177,6 +200,7 @@ class ReportController extends Controller
                     'can_download_case_pdf' =>
                         true,
                     'can_download_complaint_pdf' =>
+                        true,                    'can_download_sos_pdf' =>
                         true,
                 ],
 
@@ -257,6 +281,20 @@ class ReportController extends Controller
             );
     }
 
+
+    public function downloadSosPdf(
+        Request $request,
+        MobileEmergencyAlert $mobileEmergencyAlert,
+        WebsiteReportController $websiteReports
+    ): Response {
+        $this->authorizeRequest($request);
+
+        return $websiteReports
+            ->downloadSosPdf(
+                $request,
+                $mobileEmergencyAlert
+            );
+    }
     private function authorizeRequest(
         Request $request
     ): User {

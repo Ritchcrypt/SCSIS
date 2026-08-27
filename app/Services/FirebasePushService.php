@@ -107,6 +107,44 @@ class FirebasePushService
     ): Response {
         $type = strtolower(trim((string) ($notification->type ?? 'notification')));
         $urgent = $type === 'mobile_emergency' || $type === 'emergency';
+
+        $highPriority = $urgent || in_array($type, [
+            'incident',
+            'incident_reported',
+            'incident_update',
+            'incident_message',
+            'incident_updated',
+            'incident_status_update',
+            'status_update',
+            'assigned_incident',
+            'incident_assigned',
+            'new_assigned_incident',
+            'dispatch',
+            'escalation',
+            'resolved',
+            'mobile_emergency',
+            'mobile_emergency_received',
+            'mobile_emergency_acknowledged',
+            'mobile_emergency_resolved',
+            'tanod_alert',
+            'tanod_task',
+            'tanod_task_assigned',
+            'tanod_task_update',
+            'task_assigned',
+            'task_update',
+            'case_created',
+            'case_updated',
+            'case_deleted',
+            'announcement',
+            'calamity',
+            'resident_complaint',
+            'resident_complaint_update',
+            'resident_complaint_status_update',
+            'resident_complaint_proof',
+            'account_activated',
+            'account_deactivated',
+        ], true);
+
         $title = trim((string) ($notification->title ?: 'TabangNow notification'));
         $body = trim((string) ($notification->message ?: $notification->title ?: 'You have a new notification.'));
 
@@ -130,10 +168,11 @@ class FirebasePushService
                                 : '',
                         ],
                         'android' => [
-                            'priority' => $urgent ? 'high' : 'normal',
+                            'priority' => $highPriority ? 'high' : 'normal',
                             'ttl' => $urgent ? '900s' : '86400s',
                             'notification' => [
-                                'sound' => 'default',
+                                'channel_id' => 'tabangnow_notifications_v3',
+                                'sound' => 'tabangnow_notification',
                             ],
                         ],
                     ],
