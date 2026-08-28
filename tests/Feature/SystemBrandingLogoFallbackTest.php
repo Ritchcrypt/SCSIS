@@ -69,36 +69,81 @@ class SystemBrandingLogoFallbackTest extends TestCase
             );
     }
 
-    public function test_public_login_and_signup_use_the_permanent_bundled_shield_logo(): void
+    public function test_public_login_and_signup_follow_the_admin_managed_global_logo(): void
     {
-        $this->assertFileExists(
-            public_path('images/tabangnow-favicon-final.svg')
+        Storage::fake('public');
+
+        $logoBytes = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
         );
 
-        $shieldLogoUrl = asset(
-            'images/tabangnow-favicon-final.svg'
+        Storage::disk('public')->put(
+            'system-branding/login-global-logo.png',
+            $logoBytes
         );
 
-        $this->get('/login')
-            ->assertOk()
-            ->assertSee(
-                $shieldLogoUrl,
-                false
-            )
-            ->assertDontSee(
-                'Secure community access',
-                false
-            );
+        $setting = SystemSetting::query()->firstOrFail();
 
-        $this->get('/register')
-            ->assertOk()
-            ->assertSee(
-                $shieldLogoUrl,
-                false
-            )
-            ->assertDontSee(
-                'Secure community access',
-                false
-            );
+        $setting->update([
+            'system_name' => 'SCSISystem',
+            'system_subtitle' => 'Dao, Capiz',
+            'system_logo_path' =>
+                'system-branding/login-global-logo.png',
+        ]);
+
+        $dynamicLogoUrlPrefix = route(
+            'system-branding.logo'
+        ) . '?v=';
+
+        foreach (['/login', '/register'] as $path) {
+            $this->get($path)
+                ->assertOk()
+                ->assertSee(
+                    $dynamicLogoUrlPrefix,
+                    false
+                )
+                ->assertDontSee(
+                    'images/tabangnow-favicon-final.svg',
+                    false
+                )
+                ->assertDontSee(
+                    'tabangnow-tab-icon-v7.png',
+                    false
+                )
+                ->assertDontSee(
+                    'Secure community access',
+                    false
+                );
+        }
+    }
+
+    public function test_public_auth_pages_do_not_restore_a_legacy_logo_when_admin_has_no_logo(): void
+    {
+        $setting = SystemSetting::query()->firstOrFail();
+
+        $setting->update([
+            'system_logo_path' => null,
+        ]);
+
+        foreach (['/login', '/register'] as $path) {
+            $this->get($path)
+                ->assertOk()
+                ->assertDontSee(
+                    'images/tabangnow-favicon-final.svg',
+                    false
+                )
+                ->assertDontSee(
+                    'tabangnow-tab-icon-v7.png',
+                    false
+                )
+                ->assertDontSee(
+                    route('system-branding.logo') . '?v=',
+                    false
+                )
+                ->assertDontSee(
+                    'Secure community access',
+                    false
+                );
+        }
     }
 }

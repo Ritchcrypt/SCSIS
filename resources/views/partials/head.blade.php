@@ -1,7 +1,7 @@
 @php
     $headBrandingSetting = null;
     $headSystemName = 'TabangNow';
-    $headBrandingLogoUrl = asset('tabangnow-tab-icon-v7.png') . '?v=10';
+    $headBrandingLogoUrl = null;
 
     $headSettingsTable = (new \App\Models\SystemSetting())->getTable();
 
@@ -34,18 +34,20 @@
 
 <title>{{ $title ?? $headSystemName }}</title>
 
-<link
-    rel="icon"
-    type="image/png"
-    sizes="32x32"
-    href="{{ $headBrandingLogoUrl }}"
->
+@if ($headBrandingLogoUrl)
+    <link
+        rel="icon"
+        type="image/png"
+        sizes="32x32"
+        href="{{ $headBrandingLogoUrl }}"
+    >
 
-<link
-    rel="shortcut icon"
-    type="image/png"
-    href="{{ $headBrandingLogoUrl }}"
->
+    <link
+        rel="shortcut icon"
+        type="image/png"
+        href="{{ $headBrandingLogoUrl }}"
+    >
+@endif
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 

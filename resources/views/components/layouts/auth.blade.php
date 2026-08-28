@@ -19,11 +19,22 @@
     |--------------------------------------------------------------------------
     | Public Authentication Branding
     |--------------------------------------------------------------------------
-    | Login/register branding uses the permanent bundled TabangNow shield.
-    | It must not inherit stale administrator-uploaded images such as QR codes.
+    | Authentication pages use the administrator-managed global system logo.
+    | There is deliberately no bundled legacy-logo fallback.
     */
 
-    $logoUrl = asset('images/tabangnow-favicon-final.svg');
+    $logoUrl = null;
+
+    if (
+        $setting?->system_logo_path
+        && \Illuminate\Support\Facades\Storage::disk('public')
+            ->exists($setting->system_logo_path)
+        && \Illuminate\Support\Facades\Route::has('system-branding.logo')
+    ) {
+        $logoUrl = route('system-branding.logo')
+            . '?v='
+            . optional($setting->updated_at)->timestamp;
+    }
 @endphp
 
 <!DOCTYPE html>
