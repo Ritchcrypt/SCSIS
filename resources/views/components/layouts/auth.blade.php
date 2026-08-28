@@ -19,17 +19,11 @@
     |--------------------------------------------------------------------------
     | Public Authentication Branding
     |--------------------------------------------------------------------------
-    | The public branding endpoint serves the configured custom logo and
-    | automatically falls back to the bundled TabangNow logo when needed.
-    | Include the settings timestamp so replacing the logo invalidates the
-    | browser's cached image URL immediately.
+    | Login/register branding uses the permanent bundled TabangNow shield.
+    | It must not inherit stale administrator-uploaded images such as QR codes.
     */
 
-    $logoVersion = optional($setting?->updated_at)->timestamp ?? 0;
-
-    $logoUrl = route('system-branding.logo')
-        . '?v='
-        . $logoVersion;
+    $logoUrl = asset('images/tabangnow-favicon-final.svg');
 @endphp
 
 <!DOCTYPE html>
@@ -54,11 +48,6 @@
                     {{ $slot }}
                 </div>
 
-                <footer class="tn-auth-footer">
-                    <span>Secure community access</span>
-                    <span aria-hidden="true">•</span>
-                    <span>{{ $systemSubtitle }}</span>
-                </footer>
             </div>
         </section>
 

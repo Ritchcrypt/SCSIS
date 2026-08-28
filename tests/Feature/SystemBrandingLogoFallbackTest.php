@@ -69,28 +69,35 @@ class SystemBrandingLogoFallbackTest extends TestCase
             );
     }
 
-    public function test_public_login_and_signup_use_the_shared_dynamic_branding_logo_endpoint(): void
+    public function test_public_login_and_signup_use_the_permanent_bundled_shield_logo(): void
     {
-        SystemSetting::query()->create([
-            'system_name' => 'TabangNow',
-            'system_subtitle' => 'Dao, Capiz',
-            'system_logo_path' => null,
-        ]);
+        $this->assertFileExists(
+            public_path('images/tabangnow-favicon-final.svg')
+        );
 
-        $brandingLogoUrlPrefix = route('system-branding.logo')
-            . '?v=';
+        $shieldLogoUrl = asset(
+            'images/tabangnow-favicon-final.svg'
+        );
 
         $this->get('/login')
             ->assertOk()
             ->assertSee(
-                $brandingLogoUrlPrefix,
+                $shieldLogoUrl,
+                false
+            )
+            ->assertDontSee(
+                'Secure community access',
                 false
             );
 
         $this->get('/register')
             ->assertOk()
             ->assertSee(
-                $brandingLogoUrlPrefix,
+                $shieldLogoUrl,
+                false
+            )
+            ->assertDontSee(
+                'Secure community access',
                 false
             );
     }
