@@ -11,16 +11,14 @@
     $systemName = trim((string) ($setting?->system_name ?: 'TabangNow'));
     $systemSubtitle = trim((string) ($setting?->system_subtitle ?: 'Dao, Capiz'));
 
-    if (
-        $setting?->system_logo_path
-        && \Illuminate\Support\Facades\Storage::disk('public')
-            ->exists($setting->system_logo_path)
-        && \Illuminate\Support\Facades\Route::has('system-branding.logo')
-    ) {
-        $logoUrl = route('system-branding.logo')
-            . '?v='
-            . optional($setting->updated_at)->timestamp;
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Public auth logo
+    |--------------------------------------------------------------------------
+    | Login/register branding uses the permanent bundled TabangNow shield.
+    | It must not inherit stale administrator-uploaded images such as QR codes.
+    */
+    $logoUrl = asset('images/tabangnow-favicon-final.svg');
 @endphp
 
 <!DOCTYPE html>
@@ -45,17 +43,6 @@
                         {{ $slot }}
                     </div>
 
-                    <footer class="tn-auth-footer">
-                        <span>
-                            Secure community access
-                        </span>
-
-                        <span aria-hidden="true">•</span>
-
-                        <span>
-                            {{ $systemSubtitle }}
-                        </span>
-                    </footer>
                 </div>
             </section>
 
