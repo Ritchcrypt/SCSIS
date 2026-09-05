@@ -24,6 +24,27 @@ class ActivityLogDeleteAllTest extends TestCase
         $this->seedLogs(3);
 
         $this->actingAs($admin)
+            ->post('/admin/activity-logs/delete-all')
+            ->assertRedirect('/admin/activity-logs')
+            ->assertSessionHas('success');
+
+        $this->assertSame(
+            0,
+            DB::table((new ActivityLog())->getTable())->count()
+        );
+    }
+
+    public function test_established_website_delete_route_remains_compatible(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+            'status' => true,
+        ]);
+
+        $this->seedLogs(2);
+
+        $this->actingAs($admin)
             ->delete('/admin/activity-logs')
             ->assertRedirect('/admin/activity-logs')
             ->assertSessionHas('success');
@@ -111,7 +132,11 @@ class ActivityLogDeleteAllTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            "route('admin.activity-logs.destroy-all')",
+            "route('admin.activity-logs.destroy-all-action')",
+            $view
+        );
+        $this->assertStringNotContainsString(
+            "@method('DELETE')",
             $view
         );
         $this->assertStringContainsString(
