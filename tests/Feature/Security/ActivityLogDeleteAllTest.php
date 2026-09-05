@@ -132,10 +132,10 @@ class ActivityLogDeleteAllTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            "route('admin.activity-logs.destroy-all-action')",
+            "route('admin.activity-logs.destroy-all')",
             $view
         );
-        $this->assertStringNotContainsString(
+        $this->assertStringContainsString(
             "@method('DELETE')",
             $view
         );
