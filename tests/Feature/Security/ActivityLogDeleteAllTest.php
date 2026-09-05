@@ -140,6 +140,14 @@ class ActivityLogDeleteAllTest extends TestCase
             $view
         );
         $this->assertStringContainsString(
+            'data-confirm="Delete ALL activity logs permanently?',
+            $view
+        );
+        $this->assertStringNotContainsString(
+            'onsubmit="return confirm(',
+            $view
+        );
+        $this->assertStringContainsString(
             'Delete All Permanently',
             $view
         );

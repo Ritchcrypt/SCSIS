@@ -30,12 +30,15 @@
             </div>
 
             <form method="POST"
-                  action="{{ route('admin.activity-logs.destroy-all') }}"
-                  onsubmit="return confirm('Delete ALL activity logs permanently? This removes the complete audit trail, not only the currently filtered records. This cannot be undone.');">
+                  action="{{ route('admin.activity-logs.destroy-all') }}">
                 @csrf
                 @method('DELETE')
 
                 <button type="submit"
+                        data-confirm="Delete ALL activity logs permanently? This removes the complete audit trail, not only the currently filtered records. This cannot be undone."
+                        data-confirm-title="Delete all activity logs"
+                        data-confirm-button="Delete All Permanently"
+                        data-confirm-tone="danger"
                         class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 shadow-sm transition hover:border-red-400 hover:bg-red-100">
                     <svg xmlns="http://www.w3.org/2000/svg"
                          viewBox="0 0 24 24"
