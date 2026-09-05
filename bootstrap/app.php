@@ -141,7 +141,5 @@ return Application::configure(basePath: dirname(__DIR__))
                     'Your session expired. Please sign in again.'
                 );
         });
-
-        //
     })
     ->create();
