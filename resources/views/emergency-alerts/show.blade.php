@@ -150,11 +150,14 @@
                 </form>
             @endif
             <form method="POST"
-                  action="{{ route('emergency-alerts.destroy', $alert) }}"
-                  onsubmit="return confirm('Delete {{ $alert->alert_code }}? This distress signal will be removed from the responder module.');">
+                  action="{{ route('emergency-alerts.destroy', $alert) }}">
                 @csrf
                 @method('DELETE')
                 <button type="submit"
+                        data-confirm="Delete {{ $alert->alert_code }}? This distress signal will be removed from the responder module."
+                        data-confirm-title="Delete distress signal"
+                        data-confirm-button="Delete Distress Signal"
+                        data-confirm-tone="danger"
                         class="rounded-xl border border-red-300 bg-white px-5 py-3 text-sm font-black text-red-700 shadow-sm hover:bg-red-50">
                     Delete Distress Signal
                 </button>
