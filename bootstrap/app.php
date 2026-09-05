@@ -31,6 +31,18 @@ return Application::configure(basePath: dirname(__DIR__))
             |
             */
             require base_path('routes/emergency_web.php');
+
+            /*
+            |--------------------------------------------------------------------------
+            | Activity Log Browser Delete Action
+            |--------------------------------------------------------------------------
+            |
+            | Keep the browser-only POST-backed destructive action separate from
+            | the established REST DELETE route so website and mobile behavior can
+            | stay aligned without changing the ActivityLog model's immutability.
+            |
+            */
+            require base_path('routes/activity_log_web.php');
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
