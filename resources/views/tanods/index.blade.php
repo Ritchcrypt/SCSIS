@@ -240,7 +240,7 @@
                 @empty
                     <tr>
                         <td colspan="{{ $tableColumnCount }}"
-    class="px-5 py-14 text-center"> class="px-5 py-14 text-center">
+                            class="px-5 py-14 text-center">
                             <p class="text-sm font-semibold text-slate-700">
                                 No tanod members found.
                             </p>
