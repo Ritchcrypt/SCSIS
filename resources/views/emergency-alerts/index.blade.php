@@ -21,10 +21,9 @@
 
                 @if ($alerts->total() > 0)
                     <form method="POST"
-                          action="{{ route('emergency-alerts.destroy-all') }}"
+                          action="{{ route('emergency-alerts.destroy-all.post') }}"
                           onsubmit="return confirm('Delete ALL distress signals? This removes active, acknowledged, and resolved reports from the responder module and cannot be undone.');">
                         @csrf
-                        @method('DELETE')
                         <button type="submit"
                                 class="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-black text-red-700 shadow-sm hover:bg-red-50">
                             Delete All
@@ -97,10 +96,9 @@
                                     </a>
 
                                     <form method="POST"
-                                          action="{{ route('emergency-alerts.destroy', $alert) }}"
+                                          action="{{ route('emergency-alerts.destroy.post', $alert) }}"
                                           onsubmit="return confirm('Delete {{ $alert->alert_code }}? This distress signal will be removed from the responder module.');">
                                         @csrf
-                                        @method('DELETE')
                                         <button type="submit"
                                                 class="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-700 shadow-sm hover:bg-red-50">
                                             Delete

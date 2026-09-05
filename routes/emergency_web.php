@@ -31,6 +31,21 @@ Route::middleware(['web', 'auth', 'active.user'])->group(function (): void {
         'resolve',
     ])->name('emergency-alerts.resolve');
 
+    /*
+     * Browser forms use explicit POST action routes for deletion so the
+     * responder UI does not depend on HTTP method spoofing. The existing
+     * DELETE routes remain available for backwards compatibility.
+     */
+    Route::post('/emergency-alerts/delete-all', [
+        MobileEmergencyAlertController::class,
+        'destroyAll',
+    ])->name('emergency-alerts.destroy-all.post');
+
+    Route::post('/emergency-alerts/{emergencyAlert}/delete', [
+        MobileEmergencyAlertController::class,
+        'destroy',
+    ])->name('emergency-alerts.destroy.post');
+
     Route::delete('/emergency-alerts', [
         MobileEmergencyAlertController::class,
         'destroyAll',
