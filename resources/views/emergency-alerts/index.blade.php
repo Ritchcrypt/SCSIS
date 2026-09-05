@@ -21,10 +21,13 @@
 
                 @if ($alerts->total() > 0)
                     <form method="POST"
-                          action="{{ route('emergency-alerts.destroy-all.post') }}"
-                          onsubmit="return confirm('Delete ALL distress signals? This removes active, acknowledged, and resolved reports from the responder module and cannot be undone.');">
+                          action="{{ route('emergency-alerts.destroy-all.post') }}">
                         @csrf
                         <button type="submit"
+                                data-confirm="Delete ALL distress signals? This removes active, acknowledged, and resolved reports from the responder module and cannot be undone."
+                                data-confirm-title="Delete all distress signals"
+                                data-confirm-button="Delete All"
+                                data-confirm-tone="danger"
                                 class="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-black text-red-700 shadow-sm hover:bg-red-50">
                             Delete All
                         </button>
@@ -96,10 +99,13 @@
                                     </a>
 
                                     <form method="POST"
-                                          action="{{ route('emergency-alerts.destroy.post', $alert) }}"
-                                          onsubmit="return confirm('Delete {{ $alert->alert_code }}? This distress signal will be removed from the responder module.');">
+                                          action="{{ route('emergency-alerts.destroy.post', $alert) }}">
                                         @csrf
                                         <button type="submit"
+                                                data-confirm="Delete {{ $alert->alert_code }}? This distress signal will be removed from the responder module."
+                                                data-confirm-title="Delete distress signal"
+                                                data-confirm-button="Delete"
+                                                data-confirm-tone="danger"
                                                 class="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold text-red-700 shadow-sm hover:bg-red-50">
                                             Delete
                                         </button>
