@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\CaseRecord;
 use App\Models\Incident;
 use App\Models\Status;
 use App\Support\SafeDatabaseIdentifier;
@@ -73,8 +74,16 @@ class DashboardController extends Controller
 
         $totalIncidents = Incident::count();
 
-        $activeCases = ! empty($activeStatusIds)
-            ? Incident::whereIn('status_id', $activeStatusIds)->count()
+        // "Active Cases" belongs to Case Management, so count case_records
+        // rather than incident workflow statuses.
+        $activeCases = Schema::hasTable('case_records')
+            ? CaseRecord::query()
+                ->whereIn('status', [
+                    'open',
+                    'under_investigation',
+                    'mediation',
+                ])
+                ->count()
             : 0;
 
         $resolvedCases = ! empty($resolvedStatusIds)

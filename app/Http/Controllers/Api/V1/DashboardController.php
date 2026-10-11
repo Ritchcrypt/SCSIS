@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\CaseRecord;
 use App\Models\Incident;
 use App\Models\Status;
 use App\Models\User;
@@ -115,12 +116,14 @@ class DashboardController extends Controller
 
         $totalIncidents = Incident::count();
 
-        $activeCases = ! empty($activeStatusIds)
-            ? Incident::query()
-                ->whereIn(
-                    'status_id',
-                    $activeStatusIds
-                )
+        // Keep the mobile Admin dashboard aligned with Case Management.
+        $activeCases = Schema::hasTable('case_records')
+            ? CaseRecord::query()
+                ->whereIn('status', [
+                    'open',
+                    'under_investigation',
+                    'mediation',
+                ])
                 ->count()
             : 0;
 

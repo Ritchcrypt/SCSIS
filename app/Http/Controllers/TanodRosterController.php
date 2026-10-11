@@ -7,6 +7,7 @@ use App\Models\Barangay;
 use App\Models\Employee;
 use App\Models\TanodProfile;
 use App\Models\User;
+use App\Services\TanodDutyScheduleService;
 use App\Support\SqlLikePattern;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -27,6 +29,8 @@ class TanodRosterController extends Controller
    public function index(Request $request): View
 {
     Gate::authorize('viewAny', TanodProfile::class);
+
+    app(TanodDutyScheduleService::class)->syncDue();
 
     $search = SqlLikePattern::normalize(
         $request->query('search')
@@ -262,7 +266,7 @@ class TanodRosterController extends Controller
             'is_active' => $validated['status'] !== 'off_duty',
         ]);
 
-        $createdTanodProfile = TanodProfile::create([
+        $profileData = [
             'user_id' => $createdUser->id,
             'employee_id' => $employee->id,
             'contact_number' => $this->nullableText(
@@ -277,7 +281,15 @@ class TanodRosterController extends Controller
             'notes' => $this->nullableText(
                 $validated['notes'] ?? null
             ),
-        ]);
+        ];
+
+        if (Schema::hasColumn('tanod_profiles', 'auto_duty_enabled')) {
+            $profileData['auto_duty_enabled'] = (bool) (
+                $validated['auto_duty_enabled'] ?? false
+            );
+        }
+
+        $createdTanodProfile = TanodProfile::create($profileData);
     });
 
     /*
@@ -295,6 +307,9 @@ class TanodRosterController extends Controller
             'Tanod account creation completed without the required linked records.'
         );
     }
+
+    app(TanodDutyScheduleService::class)->syncProfile($createdTanodProfile);
+    $createdTanodProfile->refresh();
 
     $message = 'Tanod member added successfully.';
 
@@ -407,7 +422,7 @@ class TanodRosterController extends Controller
                 ]);
             }
 
-            $lockedTanod->update([
+            $updateData = [
                 'contact_number' => $this->nullableText(
                     $validated['contact_number'] ?? null
                 ),
@@ -420,9 +435,19 @@ class TanodRosterController extends Controller
                 'notes' => $this->nullableText(
                     $validated['notes'] ?? null
                 ),
-            ]);
+            ];
+
+            if (Schema::hasColumn('tanod_profiles', 'auto_duty_enabled')) {
+                $updateData['auto_duty_enabled'] = (bool) (
+                    $validated['auto_duty_enabled'] ?? false
+                );
+            }
+
+            $lockedTanod->update($updateData);
         });
 
+        $tanod->refresh();
+        app(TanodDutyScheduleService::class)->syncProfile($tanod);
         $tanod->refresh();
 
         $this->recordOperationalActivity(
@@ -540,7 +565,11 @@ class TanodRosterController extends Controller
             'date_appointed' => [
                 'nullable',
                 'date',
-                'before_or_equal:today',
+                'required_if:auto_duty_enabled,1',
+            ],
+            'auto_duty_enabled' => [
+                'sometimes',
+                'boolean',
             ],
             'shift' => [
                 'required',

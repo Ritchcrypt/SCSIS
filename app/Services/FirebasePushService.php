@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Announcement;
+use App\Models\Incident;
 use App\Models\MobilePushToken;
+use App\Models\TanodTask;
 use App\Models\UserNotification;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
@@ -53,13 +56,16 @@ class FirebasePushService
             return;
         }
 
+        $alertTier = $this->resolveAlertTier($notification);
+
         foreach ($tokens as $pushToken) {
             try {
                 $response = $this->sendToToken(
                     $projectId,
                     $accessToken,
                     $pushToken,
-                    $notification
+                    $notification,
+                    $alertTier
                 );
 
                 if ($response->status() === 401) {
@@ -69,7 +75,8 @@ class FirebasePushService
                         $projectId,
                         $accessToken,
                         $pushToken,
-                        $notification
+                        $notification,
+                        $alertTier
                     );
                 }
 
@@ -103,50 +110,20 @@ class FirebasePushService
         string $projectId,
         string $accessToken,
         MobilePushToken $pushToken,
-        UserNotification $notification
+        UserNotification $notification,
+        string $alertTier
     ): Response {
         $type = strtolower(trim((string) ($notification->type ?? 'notification')));
-        $urgent = $type === 'mobile_emergency' || $type === 'emergency';
-
-        $highPriority = $urgent || in_array($type, [
-            'incident',
-            'incident_reported',
-            'incident_update',
-            'incident_message',
-            'incident_updated',
-            'incident_status_update',
-            'status_update',
-            'assigned_incident',
-            'incident_assigned',
-            'new_assigned_incident',
-            'dispatch',
-            'escalation',
-            'resolved',
-            'mobile_emergency',
-            'mobile_emergency_received',
-            'mobile_emergency_acknowledged',
-            'mobile_emergency_resolved',
-            'tanod_alert',
-            'tanod_task',
-            'tanod_task_assigned',
-            'tanod_task_update',
-            'task_assigned',
-            'task_update',
-            'case_created',
-            'case_updated',
-            'case_deleted',
-            'announcement',
-            'calamity',
-            'resident_complaint',
-            'resident_complaint_update',
-            'resident_complaint_status_update',
-            'resident_complaint_proof',
-            'account_activated',
-            'account_deactivated',
-        ], true);
+        $highPriority = in_array($alertTier, ['critical', 'moderate'], true);
 
         $title = trim((string) ($notification->title ?: 'TabangNow notification'));
         $body = trim((string) ($notification->message ?: $notification->title ?: 'You have a new notification.'));
+
+        $ttl = match ($alertTier) {
+            'critical' => '900s',
+            'moderate' => '3600s',
+            default => '86400s',
+        };
 
         return Http::withToken($accessToken)
             ->acceptJson()
@@ -156,28 +133,240 @@ class FirebasePushService
                 [
                     'message' => [
                         'token' => (string) $pushToken->fcm_token,
-                        'notification' => [
-                            'title' => Str::limit($title, 120, ''),
-                            'body' => Str::limit($body, 900, ''),
-                        ],
                         'data' => [
                             'notification_id' => (string) $notification->id,
                             'type' => $type,
                             'source_id' => $notification->source_id !== null
                                 ? (string) $notification->source_id
                                 : '',
+                            'alert_tier' => $alertTier,
+                            'title' => Str::limit($title, 120, ''),
+                            'body' => Str::limit($body, 900, ''),
                         ],
                         'android' => [
                             'priority' => $highPriority ? 'high' : 'normal',
-                            'ttl' => $urgent ? '900s' : '86400s',
-                            'notification' => [
-                                'channel_id' => 'tabangnow_notifications_v3',
-                                'sound' => 'tabangnow_notification',
-                            ],
+                            'ttl' => $ttl,
                         ],
                     ],
                 ]
             );
+    }
+
+    private function resolveAlertTier(UserNotification $notification): string
+    {
+        $type = strtolower(trim((string) ($notification->type ?? 'notification')));
+        $sourceId = $notification->source_id !== null
+            ? (int) $notification->source_id
+            : null;
+
+        if (in_array($type, [
+            'mobile_emergency',
+            'emergency',
+            'calamity',
+        ], true)) {
+            return 'critical';
+        }
+
+        if (in_array($type, [
+            'case_created',
+            'case_updated',
+            'case_deleted',
+            'system',
+        ], true)) {
+            return 'silent';
+        }
+
+        if ($type === 'announcement') {
+            return $this->announcementAlertTier($sourceId);
+        }
+
+        if (in_array($type, [
+            'incident',
+            'incident_reported',
+        ], true)) {
+            return $this->reportedIncidentAlertTier($sourceId);
+        }
+
+        if (in_array($type, [
+            'assigned_incident',
+            'incident_assigned',
+            'new_assigned_incident',
+            'dispatch',
+            'escalation',
+        ], true)) {
+            return $this->incidentActionAlertTier($sourceId);
+        }
+
+        if (in_array($type, [
+            'tanod_task',
+            'tanod_task_assigned',
+            'task_assigned',
+        ], true)) {
+            return $this->tanodTaskAlertTier($sourceId);
+        }
+
+        if (in_array($type, [
+            'user_registration',
+            'resident_complaint',
+            'incident_message',
+            'tanod_alert',
+            'community_problem',
+            'account_deactivated',
+            'mobile_emergency_acknowledged',
+        ], true)) {
+            return 'moderate';
+        }
+
+        if (in_array($type, [
+            'incident_update',
+            'incident_updated',
+            'incident_status_update',
+            'status_update',
+            'resolved',
+            'mobile_emergency_received',
+            'mobile_emergency_resolved',
+            'resident_complaint_update',
+            'resident_complaint_status_update',
+            'resident_complaint_proof',
+            'resident_complaint_deleted',
+            'account_activated',
+            'tanod_task_update',
+            'task_update',
+            'community',
+        ], true)) {
+            return 'low';
+        }
+
+        /*
+         * Unknown future notification types default to LOW instead of CRITICAL.
+         * This prevents a new informational workflow from accidentally
+         * triggering the persistent Code Red alarm.
+         */
+        return 'low';
+    }
+
+    private function reportedIncidentAlertTier(?int $sourceId): string
+    {
+        $priority = $this->incidentPriority($sourceId);
+
+        return match ($priority) {
+            'critical', 'urgent', 'emergency' => 'critical',
+            'low' => 'low',
+            default => 'moderate',
+        };
+    }
+
+    private function incidentActionAlertTier(?int $sourceId): string
+    {
+        $priority = $this->incidentPriority($sourceId);
+
+        return in_array($priority, ['critical', 'urgent', 'emergency'], true)
+            ? 'critical'
+            : 'moderate';
+    }
+
+    private function incidentPriority(?int $sourceId): string
+    {
+        if (! $sourceId) {
+            return '';
+        }
+
+        try {
+            return strtolower(trim((string) Incident::query()
+                ->whereKey($sourceId)
+                ->value('priority')));
+        } catch (Throwable $exception) {
+            Log::debug('Notification incident tier lookup failed.', [
+                'source_id' => $sourceId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return '';
+        }
+    }
+
+    private function tanodTaskAlertTier(?int $sourceId): string
+    {
+        if (! $sourceId) {
+            return 'moderate';
+        }
+
+        try {
+            $task = TanodTask::query()
+                ->whereKey($sourceId)
+                ->first(['priority', 'incident_id']);
+
+            if (! $task) {
+                return 'moderate';
+            }
+
+            if (
+                $task->incident_id
+                && in_array(
+                    $this->incidentPriority((int) $task->incident_id),
+                    ['critical', 'urgent', 'emergency'],
+                    true
+                )
+            ) {
+                return 'critical';
+            }
+
+            return strtolower(trim((string) $task->priority)) === 'low'
+                ? 'low'
+                : 'moderate';
+        } catch (Throwable $exception) {
+            Log::debug('Notification tanod task tier lookup failed.', [
+                'source_id' => $sourceId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return 'moderate';
+        }
+    }
+
+    private function announcementAlertTier(?int $sourceId): string
+    {
+        if (! $sourceId) {
+            return 'low';
+        }
+
+        try {
+            $announcement = Announcement::query()
+                ->whereKey($sourceId)
+                ->first([
+                    'category',
+                    'priority',
+                    'activate_calamity_mode',
+                ]);
+
+            if (! $announcement) {
+                return 'low';
+            }
+
+            $category = strtolower(trim((string) $announcement->category));
+            $priority = strtolower(trim((string) $announcement->priority));
+
+            if (
+                (bool) $announcement->activate_calamity_mode
+                || in_array($category, ['emergency', 'calamity'], true)
+                || $priority === 'emergency'
+            ) {
+                return 'critical';
+            }
+
+            if (in_array($priority, ['important', 'urgent'], true)) {
+                return 'moderate';
+            }
+
+            return 'low';
+        } catch (Throwable $exception) {
+            Log::debug('Notification announcement tier lookup failed.', [
+                'source_id' => $sourceId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return 'low';
+        }
     }
 
     private function isUnregisteredResponse(Response $response): bool

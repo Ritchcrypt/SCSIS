@@ -3,6 +3,7 @@
 
     $layoutThemeMode = 'system';
     $layoutThemeCustomColor = '#2563eb';
+    $layoutThemeCustomForeground = '#ffffff';
     $layoutThemeRole = strtolower(trim($layoutThemeUser?->role ?? 'guest'));
 
     if (
@@ -13,10 +14,6 @@
         $layoutThemeMode = $layoutThemeUser->theme_mode ?: 'system';
     }
 
-    if ($layoutThemeMode === 'custom' && $layoutThemeRole !== 'admin') {
-        $layoutThemeMode = 'system';
-    }
-
     if (
         $layoutThemeUser
         && \Illuminate\Support\Facades\Schema::hasTable('users')
@@ -24,6 +21,15 @@
         && preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $layoutThemeUser->theme_custom_color)
     ) {
         $layoutThemeCustomColor = strtolower($layoutThemeUser->theme_custom_color);
+
+        $themeRed = hexdec(substr($layoutThemeCustomColor, 1, 2));
+        $themeGreen = hexdec(substr($layoutThemeCustomColor, 3, 2));
+        $themeBlue = hexdec(substr($layoutThemeCustomColor, 5, 2));
+        $themeYiq = (($themeRed * 299) + ($themeGreen * 587) + ($themeBlue * 114)) / 1000;
+
+        $layoutThemeCustomForeground = $themeYiq >= 165
+            ? '#0f172a'
+            : '#ffffff';
     }
 @endphp
 
@@ -31,8 +37,8 @@
 <html lang="en"
       data-theme="{{ $layoutThemeMode }}"
       data-theme-role="{{ $layoutThemeRole }}"
-      @if ($layoutThemeMode === 'custom' && $layoutThemeRole === 'admin')
-          style="--tn-accent: {{ $layoutThemeCustomColor }};"
+      @if ($layoutThemeMode === 'custom')
+          style="--tn-accent: {{ $layoutThemeCustomColor }}; --tn-accent-foreground: {{ $layoutThemeCustomForeground }};"
       @endif>
 <head>
     <meta charset="UTF-8">
@@ -393,7 +399,7 @@
                         right: '0.9rem',
                         transform:
                             'translateY(-50%)',
-                        color: '#2563eb',
+                        color: 'var(--tn-accent)',
                         fontSize: '1.1rem',
                         fontWeight: '700',
                         lineHeight: '1',
@@ -481,12 +487,11 @@
 
                     row.style.backgroundColor =
                         selected
-                            ? '#eff6ff'
+                            ? 'var(--tn-accent-soft)'
                             : 'transparent';
 
                     row.style.boxShadow = selected
-                        ? 'inset 0 0 0 1px '
-                            + 'rgba(191, 219, 254, 0.7)'
+                        ? 'inset 0 0 0 1px var(--tn-border-strong)'
                         : 'none';
 
                     const title =
@@ -497,8 +502,8 @@
 
                     if (title) {
                         title.style.color = selected
-                            ? '#1d4ed8'
-                            : '#0f172a';
+                            ? 'var(--tn-accent-text)'
+                            : 'var(--tn-text-main)';
                     }
 
                     hideServerCheckmarks(row);
@@ -543,6 +548,25 @@
                             );
                     }
                 });
+            }
+
+            function getAccentForeground(color) {
+                if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
+                    return '#ffffff';
+                }
+
+                const red = parseInt(color.slice(1, 3), 16);
+                const green = parseInt(color.slice(3, 5), 16);
+                const blue = parseInt(color.slice(5, 7), 16);
+                const yiq = (
+                    (red * 299)
+                    + (green * 587)
+                    + (blue * 114)
+                ) / 1000;
+
+                return yiq >= 165
+                    ? '#0f172a'
+                    : '#ffffff';
             }
 
             function applyTheme(
@@ -607,6 +631,13 @@
                         '--tn-accent',
                         normalizedColor
                     );
+
+                    root.style.setProperty(
+                        '--tn-accent-foreground',
+                        getAccentForeground(
+                            normalizedColor
+                        )
+                    );
                 } else {
                     root.removeAttribute(
                         'data-theme-custom-color'
@@ -614,6 +645,10 @@
 
                     root.style.removeProperty(
                         '--tn-accent'
+                    );
+
+                    root.style.removeProperty(
+                        '--tn-accent-foreground'
                     );
                 }
 

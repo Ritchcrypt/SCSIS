@@ -29,10 +29,6 @@ class ThemePreferenceController extends Controller
             $mode = 'system';
         }
 
-        if ($mode === 'custom' && $user->role !== 'admin') {
-            $mode = 'system';
-        }
-
         $customColor = $this->validColor($user->theme_custom_color)
             ? strtolower((string) $user->theme_custom_color)
             : '#2563eb';
@@ -125,17 +121,12 @@ class ThemePreferenceController extends Controller
 
     private function allowedModesFor(string $role): array
     {
-        $modes = [
+        return [
             'light',
             'dark',
             'system',
+            'custom',
         ];
-
-        if (strtolower(trim($role)) === 'admin') {
-            $modes[] = 'custom';
-        }
-
-        return $modes;
     }
 
     private function ensureThemeColumnsExist(): void

@@ -33,12 +33,22 @@ class PublicDownloadPageTest extends TestCase
             'https://example.test/TabangNow.apk'
         );
 
+        config()->set(
+            'tabangnow.mobile.version',
+            '9.9.9'
+        );
+
+        config()->set(
+            'tabangnow.mobile.apk_sha256',
+            'F58685F2345659AE26ED810AACF24D9FD055A81400D46FB975BD26FEDBF5CFD2'
+        );
+
         $response = $this->get('/download');
 
         $response
             ->assertOk()
             ->assertSee('Download TabangNow')
-            ->assertSee('v1.0.1')
+            ->assertSee('v9.9.9')
             ->assertSee(
                 'F58685F2345659AE26ED810AACF24D9FD055A81400D46FB975BD26FEDBF5CFD2'
             );

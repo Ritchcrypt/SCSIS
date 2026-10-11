@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\TanodDutyScheduleService;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -60,3 +61,28 @@ Schedule::command('backup:production')
         )
     )
     ->withoutOverlapping(180);
+
+/*
+|--------------------------------------------------------------------------
+| Tanod scheduled duty activation
+|--------------------------------------------------------------------------
+|
+| Date Appointed / Duty Start + Shift defines the scheduled start time.
+| A pending schedule activates On Duty once, then disables itself so Admin
+| or Official users can freely change the status afterward.
+|
+*/
+
+Schedule::call(
+    fn (): int => app(TanodDutyScheduleService::class)->syncDue()
+)
+    ->name('tanod-duty-schedule-sync')
+    ->everyMinute()
+    ->timezone(
+        (string) config(
+            'app.timezone',
+            'Asia/Manila'
+        )
+    )
+    ->withoutOverlapping(5);
+

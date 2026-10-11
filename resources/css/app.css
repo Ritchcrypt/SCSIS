@@ -73,7 +73,7 @@ select:focus[data-flux-control] {
 | - light/white: existing interface
 | - dark: dark interface
 | - system: follows device/browser appearance
-| - custom: admin-only accent color
+| - custom: per-user accent color for every authenticated role
 |
 | This layer avoids editing every Blade file.
 */
@@ -94,6 +94,7 @@ html {
     --tn-accent-hover: #1d4ed8;
     --tn-accent-soft: #dbeafe;
     --tn-accent-text: #1d4ed8;
+    --tn-accent-foreground: #ffffff;
 }
 
 html[data-theme='dark'] {
@@ -229,33 +230,119 @@ html[data-theme] .shadow-2xl {
     --tw-shadow-color: rgb(2 6 23 / 0.18);
 }
 
-html[data-theme='custom'][data-theme-role='admin'] .bg-blue-600 {
+html[data-theme='custom'] {
+    --tn-page-bg: color-mix(in srgb, var(--tn-accent), #f8fafc 96%);
+    --tn-surface: color-mix(in srgb, var(--tn-accent), #ffffff 98%);
+    --tn-surface-muted: color-mix(in srgb, var(--tn-accent), #f8fafc 93%);
+    --tn-surface-soft: color-mix(in srgb, var(--tn-accent), #f1f5f9 86%);
+    --tn-border: color-mix(in srgb, var(--tn-accent), #e2e8f0 76%);
+    --tn-border-strong: color-mix(in srgb, var(--tn-accent), #cbd5e1 68%);
+    --tn-ring: color-mix(in srgb, var(--tn-accent), #ffffff 58%);
+    --tn-accent-hover: color-mix(in srgb, var(--tn-accent), #000000 14%);
+    --tn-accent-soft: color-mix(in srgb, var(--tn-accent), #ffffff 86%);
+    --tn-accent-text: color-mix(in srgb, var(--tn-accent), #000000 28%);
+}
+
+/* Custom is an application accent, not a role color. */
+html[data-theme='custom'] .bg-blue-600,
+html[data-theme='custom'] .bg-blue-500 {
     background-color: var(--tn-accent) !important;
 }
 
-html[data-theme='custom'][data-theme-role='admin'] .hover\:bg-blue-700:hover {
-    background-color: color-mix(in srgb, var(--tn-accent), #000 14%) !important;
+html[data-theme='custom'] .bg-blue-700 {
+    background-color: var(--tn-accent-hover) !important;
 }
 
-html[data-theme='custom'][data-theme-role='admin'] .hover\:bg-blue-100:hover,
-html[data-theme='custom'][data-theme-role='admin'] .bg-blue-100,
-html[data-theme='custom'][data-theme-role='admin'] .bg-blue-50 {
-    background-color: color-mix(in srgb, var(--tn-accent), #fff 86%) !important;
+html[data-theme='custom'] .bg-blue-500.text-white,
+html[data-theme='custom'] .bg-blue-600.text-white,
+html[data-theme='custom'] .bg-blue-700.text-white {
+    color: var(--tn-accent-foreground) !important;
 }
 
-html[data-theme='custom'][data-theme-role='admin'] .text-blue-700,
-html[data-theme='custom'][data-theme-role='admin'] .text-blue-600 {
-    color: color-mix(in srgb, var(--tn-accent), #000 14%) !important;
+html[data-theme='custom'] .bg-blue-50,
+html[data-theme='custom'] .bg-blue-100,
+html[data-theme='custom'] .hover\:bg-blue-50:hover,
+html[data-theme='custom'] .hover\:bg-blue-100:hover {
+    background-color: var(--tn-accent-soft) !important;
 }
 
-html[data-theme='custom'][data-theme-role='admin'] .border-blue-200,
-html[data-theme='custom'][data-theme-role='admin'] .border-blue-300 {
-    border-color: color-mix(in srgb, var(--tn-accent), #fff 55%) !important;
+html[data-theme='custom'] .hover\:bg-blue-700:hover,
+html[data-theme='custom'] .hover\:bg-blue-800:hover {
+    background-color: var(--tn-accent-hover) !important;
 }
 
-html[data-theme='custom'][data-theme-role='admin'] .focus\:ring-blue-200:focus,
-html[data-theme='custom'][data-theme-role='admin'] .focus\:ring-blue-200:focus-visible {
-    --tw-ring-color: color-mix(in srgb, var(--tn-accent), #fff 60%) !important;
+html[data-theme='custom'] .text-blue-600,
+html[data-theme='custom'] .text-blue-700,
+html[data-theme='custom'] .text-blue-800,
+html[data-theme='custom'] .text-blue-900,
+html[data-theme='custom'] .text-blue-950,
+html[data-theme='custom'] .hover\:text-blue-700:hover,
+html[data-theme='custom'] .hover\:text-blue-800:hover,
+html[data-theme='custom'] .hover\:text-blue-900:hover,
+html[data-theme='custom'] .hover\:text-blue-950:hover {
+    color: var(--tn-accent-text) !important;
+}
+
+html[data-theme='custom'] .border-blue-100,
+html[data-theme='custom'] .border-blue-200,
+html[data-theme='custom'] .border-blue-300,
+html[data-theme='custom'] .hover\:border-blue-300:hover,
+html[data-theme='custom'] .hover\:border-blue-400:hover,
+html[data-theme='custom'] .hover\:border-blue-500:hover,
+html[data-theme='custom'] .focus\:border-blue-500:focus {
+    border-color: var(--tn-border-strong) !important;
+}
+
+html[data-theme='custom'] .focus\:ring-blue-200:focus,
+html[data-theme='custom'] .focus\:ring-blue-200:focus-visible {
+    --tw-ring-color: var(--tn-ring) !important;
+}
+
+/* Carry the selected accent through the authenticated navigation shell. */
+html[data-theme='custom'] #adminSidebar {
+    background-color: color-mix(in srgb, var(--tn-accent), #0f172a 74%) !important;
+}
+
+html[data-theme='custom'] #adminSidebar .border-blue-800,
+html[data-theme='custom'] #adminSidebar .border-blue-900 {
+    border-color: color-mix(in srgb, var(--tn-accent), #ffffff 72%) !important;
+}
+
+html[data-theme='custom'] #adminSidebar .text-blue-100,
+html[data-theme='custom'] #adminSidebar .text-blue-200 {
+    color: color-mix(in srgb, var(--tn-accent), #ffffff 82%) !important;
+}
+
+html[data-theme='custom'] #adminSidebar .hover\:bg-blue-900:hover {
+    background-color: color-mix(in srgb, var(--tn-accent), #0f172a 60%) !important;
+}
+
+/*
+|--------------------------------------------------------------------------
+| TabangNow Minimal Authenticated Shell
+|--------------------------------------------------------------------------
+| Keep the existing information architecture while reducing decorative depth.
+| No routes, module behavior, notification behavior, or RBAC are changed here.
+*/
+
+html[data-theme] #adminMainContent > header {
+    box-shadow: none !important;
+}
+
+html[data-theme] #adminSidebar {
+    box-shadow: none !important;
+}
+
+html[data-theme] #adminMainContent main .shadow-sm,
+html[data-theme] #adminMainContent main .shadow,
+html[data-theme] #adminMainContent main .shadow-md {
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06) !important;
+}
+
+html[data-theme] #adminMainContent main .shadow-lg,
+html[data-theme] #adminMainContent main .shadow-xl,
+html[data-theme] #adminMainContent main .shadow-2xl {
+    box-shadow: 0 8px 24px rgb(15 23 42 / 0.08) !important;
 }
 
 /*
@@ -1996,5 +2083,154 @@ body.tn-confirm-open {
 @media (prefers-reduced-motion: reduce) {
     .tn-confirm-dialog {
         animation: none;
+    }
+}
+/*
+|--------------------------------------------------------------------------
+| Capstone 15.0 - Minimal Website Sidebar Scrollbar
+|--------------------------------------------------------------------------
+| Hide the native browser/Windows scrollbar inside the authenticated
+| website sidebar while preserving mouse-wheel, trackpad, keyboard,
+| and touch scrolling for every role.
+*/
+#adminSidebar nav {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#adminSidebar nav::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Capstone 15.0 - Dashboard Metric Dark Mode
+|--------------------------------------------------------------------------
+| Dashboard metric cards keep their semantic colors in dark mode while
+| using dark surfaces and high-contrast text.
+*/
+
+/* Explicit dark mode */
+html[data-theme='dark'] main .grid > a.bg-blue-50 {
+    background-color: #0f1f3d !important;
+    border-color: #3b82f6 !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-amber-50,
+html[data-theme='dark'] main .grid > a.bg-yellow-50 {
+    background-color: #2a2110 !important;
+    border-color: #f59e0b !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-red-50 {
+    background-color: #2b1519 !important;
+    border-color: #ef4444 !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-emerald-50,
+html[data-theme='dark'] main .grid > a.bg-green-50 {
+    background-color: #10251f !important;
+    border-color: #10b981 !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-violet-50 {
+    background-color: #201938 !important;
+    border-color: #8b5cf6 !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-orange-50 {
+    background-color: #2b1b10 !important;
+    border-color: #f97316 !important;
+}
+
+/* Main metric values must always remain readable */
+html[data-theme='dark'] main .grid > a.bg-blue-50 .text-slate-900,
+html[data-theme='dark'] main .grid > a.bg-amber-50 .text-slate-900,
+html[data-theme='dark'] main .grid > a.bg-yellow-50 .text-slate-900,
+html[data-theme='dark'] main .grid > a.bg-red-50 .text-slate-900,
+html[data-theme='dark'] main .grid > a.bg-emerald-50 .text-slate-900,
+html[data-theme='dark'] main .grid > a.bg-green-50 .text-slate-900,
+html[data-theme='dark'] main .grid > a.bg-violet-50 .text-slate-900,
+html[data-theme='dark'] main .grid > a.bg-orange-50 .text-slate-900 {
+    color: #f8fafc !important;
+}
+
+/* Stronger readable semantic labels */
+html[data-theme='dark'] main .grid > a.bg-blue-50 .text-blue-700,
+html[data-theme='dark'] main .grid > a.bg-blue-50 .text-blue-800,
+html[data-theme='dark'] main .grid > a.bg-blue-50 .text-blue-900 {
+    color: #93c5fd !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-amber-50 .text-amber-700,
+html[data-theme='dark'] main .grid > a.bg-amber-50 .text-amber-800,
+html[data-theme='dark'] main .grid > a.bg-yellow-50 .text-yellow-700,
+html[data-theme='dark'] main .grid > a.bg-yellow-50 .text-yellow-900 {
+    color: #fcd34d !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-red-50 .text-red-700,
+html[data-theme='dark'] main .grid > a.bg-red-50 .text-red-800,
+html[data-theme='dark'] main .grid > a.bg-red-50 .text-red-900 {
+    color: #fca5a5 !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-emerald-50 .text-emerald-700,
+html[data-theme='dark'] main .grid > a.bg-emerald-50 .text-emerald-800,
+html[data-theme='dark'] main .grid > a.bg-green-50 .text-green-700,
+html[data-theme='dark'] main .grid > a.bg-green-50 .text-green-900 {
+    color: #6ee7b7 !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-violet-50 .text-violet-700,
+html[data-theme='dark'] main .grid > a.bg-violet-50 .text-violet-800 {
+    color: #c4b5fd !important;
+}
+
+html[data-theme='dark'] main .grid > a.bg-orange-50 .text-orange-700,
+html[data-theme='dark'] main .grid > a.bg-orange-50 .text-orange-900 {
+    color: #fdba74 !important;
+}
+
+/*
+| System mode when the operating system/browser is dark.
+*/
+@media (prefers-color-scheme: dark) {
+    html[data-theme='system'] main .grid > a.bg-blue-50 {
+        background-color: #0f1f3d !important;
+        border-color: #3b82f6 !important;
+    }
+
+    html[data-theme='system'] main .grid > a.bg-amber-50,
+    html[data-theme='system'] main .grid > a.bg-yellow-50 {
+        background-color: #2a2110 !important;
+        border-color: #f59e0b !important;
+    }
+
+    html[data-theme='system'] main .grid > a.bg-red-50 {
+        background-color: #2b1519 !important;
+        border-color: #ef4444 !important;
+    }
+
+    html[data-theme='system'] main .grid > a.bg-emerald-50,
+    html[data-theme='system'] main .grid > a.bg-green-50 {
+        background-color: #10251f !important;
+        border-color: #10b981 !important;
+    }
+
+    html[data-theme='system'] main .grid > a.bg-violet-50 {
+        background-color: #201938 !important;
+        border-color: #8b5cf6 !important;
+    }
+
+    html[data-theme='system'] main .grid > a.bg-orange-50 {
+        background-color: #2b1b10 !important;
+        border-color: #f97316 !important;
+    }
+
+    html[data-theme='system'] main .grid > a .text-slate-900 {
+        color: #f8fafc !important;
     }
 }

@@ -212,6 +212,27 @@ class NotificationBellService
     ): string {
         $type = strtolower((string) ($notification->type ?? 'notification'));
         $role = strtolower((string) $user->role);
+        if ($type === 'user_registration') {
+            if ($role !== 'admin') {
+                return $this->dashboardUrl($user);
+            }
+
+            $sourceId = (int) ($notification->source_id ?? 0);
+
+            if (
+                $sourceId > 0
+                && User::query()->whereKey($sourceId)->exists()
+                && Route::has('admin.users.edit')
+            ) {
+                return route('admin.users.edit', $sourceId);
+            }
+
+            if (Route::has('admin.users.index')) {
+                return route('admin.users.index');
+            }
+
+            return $this->dashboardUrl($user);
+        }
 
         if (
             $type === 'mobile_emergency'

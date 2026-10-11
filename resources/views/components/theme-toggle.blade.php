@@ -50,16 +50,6 @@
         );
     }
 
-    $isAdminThemeUser =
-        $themeUser?->role === 'admin';
-
-    if (
-        $themeMode === 'custom'
-        && ! $isAdminThemeUser
-    ) {
-        $themeMode = 'system';
-    }
-
     $themeIcon = match ($themeMode) {
         'light' => '☀️',
         'dark' => '🌙',
@@ -168,7 +158,7 @@
                             aria-checked="{{ $isCurrentThemeOption ? 'true' : 'false' }}"
                             class="relative flex w-full items-start gap-3 rounded-xl px-3 py-3 pr-11 text-left text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
                             @if ($isCurrentThemeOption)
-                                style="background-color: #eff6ff; color: #1d4ed8;"
+                                style="background-color: var(--tn-accent-soft); color: var(--tn-accent-text);"
                             @endif
                         >
                             <span class="mt-0.5 text-base">
@@ -200,8 +190,7 @@
                 @endforeach
             </div>
 
-            @if ($isAdminThemeUser)
-                <div class="border-t border-slate-200 p-4">
+            <div class="border-t border-slate-200 p-4">
                     <form
                         method="POST"
                         action="{{ route('theme-preference.update') }}"
@@ -222,7 +211,7 @@
                                 for="theme_custom_color"
                                 class="block text-xs font-bold uppercase tracking-wide text-slate-500"
                             >
-                                Admin custom color
+                                Custom color
                             </label>
 
                             <div class="mt-2 flex items-center gap-3">
@@ -244,12 +233,11 @@
                             </div>
 
                             <p class="mt-2 text-xs text-slate-500">
-                                Applies only to your admin account view.
+                                Applies only to your account on web and mobile.
                             </p>
                         </div>
                     </form>
-                </div>
-            @endif
+            </div>
         </div>
     </details>
 
@@ -382,12 +370,12 @@
 
                         option.style.backgroundColor =
                             selected
-                                ? '#eff6ff'
+                                ? 'var(--tn-accent-soft)'
                                 : '';
 
                         option.style.color =
                             selected
-                                ? '#1d4ed8'
+                                ? 'var(--tn-accent-text)'
                                 : '';
 
                         const check =

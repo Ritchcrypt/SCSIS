@@ -7,50 +7,35 @@
     </div>
 
     <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
-        <div class="rounded-2xl border border-blue-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-blue-500 hover:shadow-lg">
-            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                📄
-            </div>
-
+        <a href="{{ route('official.incidents.index') }}" class="group block rounded-2xl border border-blue-300 bg-blue-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-blue-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-700">📄</div>
             <p class="text-4xl font-bold text-slate-900">{{ $totalIncidents }}</p>
-            <p class="mt-2 text-sm font-medium text-slate-600">Total Incidents</p>
-        </div>
+            <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-blue-800">Total Incidents</p><span class="text-blue-700 transition group-hover:translate-x-1">→</span></div>
+        </a>
 
-        <div class="rounded-2xl border border-amber-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg">
-            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
-                🕒
-            </div>
-
+        <a href="{{ route('official.incidents.index') }}" class="group block rounded-2xl border border-amber-300 bg-amber-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-300">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-700">🕒</div>
             <p class="text-4xl font-bold text-slate-900">{{ $activeCases }}</p>
-            <p class="mt-2 text-sm font-medium text-slate-600">Active Cases</p>
-        </div>
+            <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-amber-800">Active Cases</p><span class="text-amber-700 transition group-hover:translate-x-1">→</span></div>
+        </a>
 
-        <div class="rounded-2xl border border-emerald-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg">
-            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                ✅
-            </div>
-
-            <p class="text-4xl font-bold text-slate-900">{{ $resolvedCases }}</p>
-            <p class="mt-2 text-sm font-medium text-slate-600">Resolved</p>
-        </div>
-
-        <div class="rounded-2xl border border-red-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg">
-            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                ⚠️
-            </div>
-
+        <a href="{{ route('official.incidents.index') }}" class="group block rounded-2xl border border-red-300 bg-red-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-300">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-red-100 text-red-700">⚠️</div>
             <p class="text-4xl font-bold text-slate-900">{{ $criticalIncidents }}</p>
-            <p class="mt-2 text-sm font-medium text-slate-600">Critical</p>
-        </div>
+            <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-red-800">Critical</p><span class="text-red-700 transition group-hover:translate-x-1">→</span></div>
+        </a>
 
-        <div class="rounded-2xl border border-violet-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg">
-            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-blue-950">
-                👥
-            </div>
+        <a href="{{ route('official.incidents.index') }}" class="group block rounded-2xl border border-emerald-300 bg-emerald-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-300">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">✅</div>
+            <p class="text-4xl font-bold text-slate-900">{{ $resolvedCases }}</p>
+            <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-emerald-800">Resolved</p><span class="text-emerald-700 transition group-hover:translate-x-1">→</span></div>
+        </a>
 
+        <a href="{{ route('official.tanods.index') }}" class="group block rounded-2xl border border-violet-300 bg-violet-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-violet-300">
+            <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-700">👥</div>
             <p class="text-4xl font-bold text-slate-900">{{ $tanodOnDuty }}</p>
-            <p class="mt-2 text-sm font-medium text-slate-600">Tanod On Duty</p>
-        </div>
+            <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-violet-800">Tanod On Duty</p><span class="text-violet-700 transition group-hover:translate-x-1">→</span></div>
+        </a>
     </section>
 
     <section class="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
