@@ -8,6 +8,7 @@ use App\Models\Barangay;
 use App\Models\Employee;
 use App\Models\TanodProfile;
 use App\Models\User;
+use App\Services\TanodDutyScheduleService;
 use App\Support\SqlLikePattern;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,8 @@ class TanodRosterController extends Controller
     public function index(Request $request): JsonResponse
     {
         Gate::authorize('viewAny', TanodProfile::class);
+
+        app(TanodDutyScheduleService::class)->syncDue();
 
         $search = SqlLikePattern::normalize(
             $request->query('search')
@@ -247,7 +250,7 @@ class TanodRosterController extends Controller
                     $validated['status'] !== 'off_duty',
             ]);
 
-            $createdTanodProfile = TanodProfile::create([
+            $profileData = [
                 'user_id' => $createdUser->id,
                 'employee_id' => $employee->id,
                 'contact_number' => $this->nullableText(
@@ -263,7 +266,15 @@ class TanodRosterController extends Controller
                 'notes' => $this->nullableText(
                     $validated['notes'] ?? null
                 ),
-            ]);
+            ];
+
+            if (Schema::hasColumn('tanod_profiles', 'auto_duty_enabled')) {
+                $profileData['auto_duty_enabled'] = (bool) (
+                    $validated['auto_duty_enabled'] ?? false
+                );
+            }
+
+            $createdTanodProfile = TanodProfile::create($profileData);
         });
 
         if (! $createdUser || ! $createdTanodProfile) {
@@ -271,6 +282,9 @@ class TanodRosterController extends Controller
                 'Tanod account creation completed without the required linked records.'
             );
         }
+
+        app(TanodDutyScheduleService::class)->syncProfile($createdTanodProfile);
+        $createdTanodProfile->refresh();
 
         $message = 'Tanod member added successfully.';
 
@@ -420,7 +434,7 @@ class TanodRosterController extends Controller
                 ]);
             }
 
-            $lockedTanod->update([
+            $updateData = [
                 'contact_number' => $this->nullableText(
                     $validated['contact_number'] ?? null
                 ),
@@ -434,9 +448,19 @@ class TanodRosterController extends Controller
                 'notes' => $this->nullableText(
                     $validated['notes'] ?? null
                 ),
-            ]);
+            ];
+
+            if (Schema::hasColumn('tanod_profiles', 'auto_duty_enabled')) {
+                $updateData['auto_duty_enabled'] = (bool) (
+                    $validated['auto_duty_enabled'] ?? false
+                );
+            }
+
+            $lockedTanod->update($updateData);
         });
 
+        $tanod->refresh();
+        app(TanodDutyScheduleService::class)->syncProfile($tanod);
         $tanod->refresh();
         $tanod->load([
             'user',
@@ -666,6 +690,21 @@ class TanodRosterController extends Controller
                 $this->normalizedStatus($tanod->status),
             'status_label' =>
                 $this->displayStatus($tanod->status),
+            'auto_duty_enabled' => (bool) (
+                $tanod->auto_duty_enabled ?? false
+            ),
+            'scheduled_duty_at' => (bool) (
+                $tanod->auto_duty_enabled ?? false
+            )
+                ? app(TanodDutyScheduleService::class)
+                    ->scheduledAt($tanod)?->toIso8601String()
+                : null,
+            'scheduled_duty_label' => (bool) (
+                $tanod->auto_duty_enabled ?? false
+            )
+                ? app(TanodDutyScheduleService::class)
+                    ->scheduledLabel($tanod)
+                : null,
             'notes' => $tanod->notes,
             'employee_active' =>
                 (bool) ($tanod->employee?->is_active ?? false),
@@ -719,7 +758,11 @@ class TanodRosterController extends Controller
             'date_appointed' => [
                 'nullable',
                 'date',
-                'before_or_equal:today',
+                'required_if:auto_duty_enabled,1',
+            ],
+            'auto_duty_enabled' => [
+                'sometimes',
+                'boolean',
             ],
             'shift' => [
                 'required',

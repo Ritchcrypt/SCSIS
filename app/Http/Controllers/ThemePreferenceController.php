@@ -60,11 +60,8 @@ class ThemePreferenceController extends Controller
             'light',
             'dark',
             'system',
+            'custom',
         ];
-
-        if ($user->role === 'admin') {
-            $allowedModes[] = 'custom';
-        }
 
         $validated = $request->validate(
             [

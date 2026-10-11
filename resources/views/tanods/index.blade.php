@@ -167,6 +167,11 @@
                             <span class="rounded-full border px-3 py-1 text-xs font-bold {{ $tanod->status_badge_class }}">
                                 {{ $tanod->display_status }}
                             </span>
+                            @if (($tanod->auto_duty_enabled ?? false) && $tanod->date_appointed)
+                                <p class="mt-2 text-xs font-semibold text-violet-700">
+                                    Auto duty: {{ $tanod->date_appointed->format('M j, Y') }} · {{ $tanod->display_shift }} shift
+                                </p>
+                            @endif
                         </td>
 
                         @if ($canManageRoster)
@@ -185,6 +190,7 @@
                                         data-date-appointed="{{ $tanod->date_appointed ? $tanod->date_appointed->format('Y-m-d') : '' }}"
                                         data-shift="{{ e($tanod->shift) }}"
                                         data-status="{{ e($tanod->status) }}"
+                                        data-auto-duty-enabled="{{ ($tanod->auto_duty_enabled ?? false) ? '1' : '0' }}"
                                         data-notes="{{ e($tanod->notes) }}"
                                         title="Edit tanod"
                                         aria-label="Edit tanod"
@@ -312,9 +318,10 @@
                 </div>
 
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Date Appointed</label>
+                    <label class="mb-2 block text-sm font-semibold text-slate-700">Date Appointed / Duty Start</label>
                     <input type="date" name="date_appointed"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <p class="mt-1 text-xs text-slate-500">Future dates are allowed for planned duty scheduling.</p>
                 </div>
 
                 <div>
@@ -335,6 +342,17 @@
                             <option value="{{ $value }}">{{ $label }}</option>
                         @endforeach
                     </select>
+                </div>
+
+                <div class="md:col-span-2 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input type="checkbox" name="auto_duty_enabled" value="1"
+                               class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-700 focus:ring-violet-300">
+                        <span>
+                            <span class="block text-sm font-bold text-violet-900">Auto activate On Duty</span>
+                            <span class="mt-1 block text-xs leading-5 text-violet-700">At the selected date and shift start, status changes to On Duty once. You can still edit the status, shift, date, or disable this schedule.</span>
+                        </span>
+                    </label>
                 </div>
 
                 <div class="md:col-span-2">
@@ -406,9 +424,10 @@
                 </div>
 
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Date Appointed</label>
+                    <label class="mb-2 block text-sm font-semibold text-slate-700">Date Appointed / Duty Start</label>
                     <input id="edit_date_appointed" type="date" name="date_appointed"
                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <p class="mt-1 text-xs text-slate-500">Future dates are allowed for planned duty scheduling.</p>
                 </div>
 
                 <div>
@@ -429,6 +448,17 @@
                             <option value="{{ $value }}">{{ $label }}</option>
                         @endforeach
                     </select>
+                </div>
+
+                <div class="md:col-span-2 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input id="edit_auto_duty_enabled" type="checkbox" name="auto_duty_enabled" value="1"
+                               class="mt-1 h-4 w-4 rounded border-violet-300 text-violet-700 focus:ring-violet-300">
+                        <span>
+                            <span class="block text-sm font-bold text-violet-900">Auto activate On Duty</span>
+                            <span class="mt-1 block text-xs leading-5 text-violet-700">At the selected date and shift start, status changes to On Duty once. You can still edit the status, shift, date, or disable this schedule.</span>
+                        </span>
+                    </label>
                 </div>
 
                 <div class="md:col-span-2">
@@ -482,6 +512,10 @@
         setFieldValue('edit_date_appointed', button.dataset.dateAppointed);
         setFieldValue('edit_shift', button.dataset.shift);
         setFieldValue('edit_status', button.dataset.status);
+        setCheckboxValue(
+            'edit_auto_duty_enabled',
+            button.dataset.autoDutyEnabled === '1'
+        );
         setFieldValue('edit_notes', button.dataset.notes);
 
         modal.classList.remove('hidden');
@@ -500,6 +534,14 @@
 
         if (field) {
             field.value = value || '';
+        }
+    }
+
+    function setCheckboxValue(id, checked) {
+        const field = document.getElementById(id);
+
+        if (field) {
+            field.checked = Boolean(checked);
         }
     }
 </script>

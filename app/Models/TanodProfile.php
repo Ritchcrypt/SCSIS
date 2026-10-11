@@ -19,6 +19,7 @@ class TanodProfile extends Model
         'date_appointed',
         'shift',
         'status',
+        'auto_duty_enabled',
         'notes',
     ];
 
@@ -26,6 +27,7 @@ class TanodProfile extends Model
     {
         return [
             'date_appointed' => 'date',
+            'auto_duty_enabled' => 'boolean',
         ];
     }
 

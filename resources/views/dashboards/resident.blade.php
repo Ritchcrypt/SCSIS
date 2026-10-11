@@ -30,61 +30,18 @@
     </div>
 
     <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-blue-700">
-                My Reports
-            </p>
-
-            <p class="mt-3 text-3xl font-bold text-blue-900">
-                {{ $myReportsCount }}
-            </p>
-
-            <p class="mt-2 text-xs text-blue-700">
-                Incident reports you submitted
-            </p>
-        </div>
-
-        <div class="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-yellow-700">
-                Pending Reports
-            </p>
-
-            <p class="mt-3 text-3xl font-bold text-yellow-900">
-                {{ $pendingReportsCount }}
-            </p>
-
-            <p class="mt-2 text-xs text-yellow-700">
-                Reports waiting for review
-            </p>
-        </div>
-
-        <div class="rounded-2xl border border-orange-200 bg-orange-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-orange-700">
-                Active Reports
-            </p>
-
-            <p class="mt-3 text-3xl font-bold text-orange-900">
-                {{ $activeReportsCount }}
-            </p>
-
-            <p class="mt-2 text-xs text-orange-700">
-                Reports currently being handled
-            </p>
-        </div>
-
-        <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
-            <p class="text-sm font-semibold text-green-700">
-                Resolved Reports
-            </p>
-
-            <p class="mt-3 text-3xl font-bold text-green-900">
-                {{ $resolvedReportsCount }}
-            </p>
-
-            <p class="mt-2 text-xs text-green-700">
-                Reports already resolved or closed
-            </p>
-        </div>
+        <a href="{{ route('resident.incidents.index') }}" class="block rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <p class="text-sm font-semibold text-blue-700">My Reports</p><p class="mt-3 text-3xl font-bold text-blue-900">{{ $myReportsCount }}</p><p class="mt-2 text-xs text-blue-700">Incident reports you submitted →</p>
+        </a>
+        <a href="{{ route('resident.incidents.index') }}" class="block rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-300">
+            <p class="text-sm font-semibold text-yellow-700">Pending Reports</p><p class="mt-3 text-3xl font-bold text-yellow-900">{{ $pendingReportsCount }}</p><p class="mt-2 text-xs text-yellow-700">Reports waiting for review →</p>
+        </a>
+        <a href="{{ route('resident.incidents.index') }}" class="block rounded-2xl border border-orange-200 bg-orange-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-300">
+            <p class="text-sm font-semibold text-orange-700">Active Reports</p><p class="mt-3 text-3xl font-bold text-orange-900">{{ $activeReportsCount }}</p><p class="mt-2 text-xs text-orange-700">Reports currently being handled →</p>
+        </a>
+        <a href="{{ route('resident.incidents.index') }}" class="block rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-300">
+            <p class="text-sm font-semibold text-green-700">Resolved Reports</p><p class="mt-3 text-3xl font-bold text-green-900">{{ $resolvedReportsCount }}</p><p class="mt-2 text-xs text-green-700">Reports already resolved or closed →</p>
+        </a>
     </div>
 
     <section class="mt-8">

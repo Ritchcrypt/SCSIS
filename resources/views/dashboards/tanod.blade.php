@@ -32,29 +32,26 @@
     </div>
 
     <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
+        <a href="{{ route('tanod.incidents.index') }}" class="block rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-300">
             <p class="text-sm font-semibold text-blue-700">Assigned Incidents</p>
             <p class="mt-3 text-3xl font-bold text-blue-900">{{ $assignedIncidentsCount }}</p>
-            <p class="mt-2 text-xs text-blue-700">Incidents currently assigned to you</p>
-        </div>
-
-        <div class="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
+            <p class="mt-2 text-xs text-blue-700">Incidents currently assigned to you →</p>
+        </a>
+        <a href="{{ route('tanod.tanod-tasks.index') }}" class="block rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-300">
             <p class="text-sm font-semibold text-yellow-700">Pending Tasks</p>
             <p class="mt-3 text-3xl font-bold text-yellow-900">{{ $openTasksCount }}</p>
-            <p class="mt-2 text-xs text-yellow-700">Tasks waiting for your response</p>
-        </div>
-
-        <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
+            <p class="mt-2 text-xs text-yellow-700">Tasks waiting for your response →</p>
+        </a>
+        <a href="{{ route('tanod.tanod-tasks.index') }}" class="block rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-300">
             <p class="text-sm font-semibold text-green-700">Accepted Tasks</p>
             <p class="mt-3 text-3xl font-bold text-green-900">{{ $acceptedTasksCount }}</p>
-            <p class="mt-2 text-xs text-green-700">Tasks you accepted for action</p>
-        </div>
-
-        <div class="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
+            <p class="mt-2 text-xs text-green-700">Tasks you accepted for action →</p>
+        </a>
+        <a href="{{ route('tanod.tanod-tasks.index') }}" class="block rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-300">
             <p class="text-sm font-semibold text-red-700">Declined Tasks</p>
             <p class="mt-3 text-3xl font-bold text-red-900">{{ $declinedTasksCount }}</p>
-            <p class="mt-2 text-xs text-red-700">Tasks you declined or rejected</p>
-        </div>
+            <p class="mt-2 text-xs text-red-700">Tasks you declined or rejected →</p>
+        </a>
     </div>
 
     <section class="mt-8">
