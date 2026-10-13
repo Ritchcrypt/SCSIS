@@ -186,7 +186,7 @@ class Capstone18MobileParityServiceProvider extends ServiceProvider
             $announcement->targetBarangays()->sync($targetIds);
         });
 
-        UserNotification::creating(function (UserNotification $notification): bool {
+        UserNotification::creating(function (UserNotification $notification): ?bool {
             if (
                 ! $this->routeIs('api.v1.announcements.store')
                 || ! in_array(
@@ -195,7 +195,7 @@ class Capstone18MobileParityServiceProvider extends ServiceProvider
                     true
                 )
             ) {
-                return true;
+                return null;
             }
 
             $targetIds = $this->announcementTargetIds();
@@ -208,8 +208,18 @@ class Capstone18MobileParityServiceProvider extends ServiceProvider
                 ->whereKey($notification->user_id)
                 ->value('barangay_id');
 
-            return $recipientBarangayId !== null
-                && in_array((int) $recipientBarangayId, $targetIds, true);
+            if (
+                $recipientBarangayId !== null
+                && in_array(
+                    (int) $recipientBarangayId,
+                    $targetIds,
+                    true
+                )
+            ) {
+                return null;
+            }
+
+            return false;
         });
     }
 
@@ -307,7 +317,7 @@ class Capstone18MobileParityServiceProvider extends ServiceProvider
 
             $request = $this->request();
 
-            if (! $request) {
+            if (! $request || ! $request->filled('barangay_id')) {
                 return;
             }
 
