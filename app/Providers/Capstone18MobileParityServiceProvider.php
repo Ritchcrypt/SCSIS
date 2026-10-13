@@ -116,6 +116,10 @@ class Capstone18MobileParityServiceProvider extends ServiceProvider
                     $incident->severity_assessed_at = now();
                 }
 
+                if (Schema::hasColumn('incidents', 'severity')) {
+                    $incident->severity = $incident->priority;
+                }
+
                 if (Schema::hasColumn('incidents', 'map_severity')) {
                     $incident->map_severity = $incident->priority;
                 }
@@ -125,6 +129,10 @@ class Capstone18MobileParityServiceProvider extends ServiceProvider
 
             if (Schema::hasColumn('incidents', 'priority')) {
                 $incident->priority = 'low';
+            }
+
+            if (Schema::hasColumn('incidents', 'severity')) {
+                $incident->severity = 'low';
             }
 
             if (Schema::hasColumn('incidents', 'map_severity')) {

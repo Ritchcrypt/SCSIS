@@ -217,8 +217,18 @@ class DashboardParityController extends DashboardController
                     'title' => $incident->incident_title,
                     'priority' => $incident->priority,
                     'status' => $incident->currentStatus?->status_name
-                        ?? $incident->status?->status_name,
-                    'category' => $incident->category?->category_name,
+                        ?? $this->relatedValue(
+                            $incident,
+                            'status',
+                            'status_name'
+                        )
+                        ?? $incident->getRawOriginal('status'),
+                    'category' => $this->relatedValue(
+                        $incident,
+                        'category',
+                        'category_name'
+                    )
+                        ?? $incident->getRawOriginal('category'),
                     'reporter_name' => $incident->reporter?->name,
                     'assigned_tanod_name' =>
                         $incident->assignedTanod?->user?->name,
@@ -232,6 +242,22 @@ class DashboardParityController extends DashboardController
             )
             ->values()
             ->all();
+    }
+
+    private function relatedValue(
+        Incident $incident,
+        string $relation,
+        string $attribute
+    ): mixed {
+        if (! $incident->relationLoaded($relation)) {
+            return null;
+        }
+
+        $related = $incident->getRelation($relation);
+
+        return is_object($related)
+            ? data_get($related, $attribute)
+            : null;
     }
 
     private function weatherFeed(): array
