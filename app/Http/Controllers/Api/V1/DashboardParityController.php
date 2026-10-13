@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Models\Announcement;
+use App\Models\Employee;
 use App\Models\Incident;
+use App\Models\User;
 use App\Services\WeatherDisasterFeedService;
 use App\Support\SafeDatabaseIdentifier;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,8 +45,9 @@ class DashboardParityController extends DashboardController
             ? $payload['data']
             : [];
 
+        $user = $request->user();
         $role = strtolower(
-            trim((string) ($data['user']['role'] ?? $request->user()?->role ?? ''))
+            trim((string) ($data['user']['role'] ?? $user?->role ?? ''))
         );
 
         if (in_array($role, ['official', 'dao'], true)) {
@@ -61,6 +66,14 @@ class DashboardParityController extends DashboardController
             $data['summary'] = $summary;
         }
 
+        if ($role === 'tanod' && $user instanceof User) {
+            $data['recent_incidents'] = $this->tanodRecentIncidents($user);
+        }
+
+        if ($role === 'resident' && $user instanceof User) {
+            $this->applyResidentAnnouncementVisibility($data, $user);
+        }
+
         $data['weather_feed'] = $this->weatherFeed();
         $payload['data'] = $data;
 
@@ -68,6 +81,157 @@ class DashboardParityController extends DashboardController
             $payload,
             $response->getStatusCode()
         );
+    }
+
+    private function applyResidentAnnouncementVisibility(
+        array &$data,
+        User $user
+    ): void {
+        $query = $this->visibleAnnouncementQuery($user);
+
+        $summary = is_array($data['summary'] ?? null)
+            ? $data['summary']
+            : [];
+
+        $summary['announcements'] = (clone $query)->count();
+        $data['summary'] = $summary;
+
+        $latestQuery = clone $query;
+
+        if (Schema::hasColumn('announcements', 'published_at')) {
+            $latestQuery->orderByDesc('published_at');
+        }
+
+        $latestQuery->orderByDesc('created_at');
+
+        $data['latest_announcements'] = $latestQuery
+            ->limit(5)
+            ->get()
+            ->map(
+                fn (Announcement $announcement): array => [
+                    'id' => (int) $announcement->id,
+                    'title' => (string) $announcement->title,
+                    'content' => (string) $announcement->content,
+                    'category' => (string) $announcement->category,
+                    'priority' => (string) $announcement->priority,
+                    'audience' => (string) $announcement->audience,
+                    'published_at' => $this->dateValue(
+                        $announcement->published_at
+                    ),
+                ]
+            )
+            ->values()
+            ->all();
+    }
+
+    private function visibleAnnouncementQuery(User $user): Builder
+    {
+        $query = Announcement::query();
+
+        if (Schema::hasColumn('announcements', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        if (Schema::hasColumn('announcements', 'audience')) {
+            $query->whereIn('audience', [
+                'everyone',
+                'public',
+                'all',
+                'residents',
+                'resident',
+            ]);
+        }
+
+        $barangayTargetingReady =
+            Schema::hasTable('announcement_barangay')
+            && Schema::hasColumn('users', 'barangay_id');
+
+        if (! $barangayTargetingReady) {
+            return $query;
+        }
+
+        if (empty($user->barangay_id)) {
+            return $query->whereDoesntHave('targetBarangays');
+        }
+
+        return $query->where(
+            function (Builder $visibilityQuery) use ($user): void {
+                $visibilityQuery
+                    ->whereDoesntHave('targetBarangays')
+                    ->orWhereHas(
+                        'targetBarangays',
+                        function (Builder $barangayQuery) use ($user): void {
+                            $barangayQuery->where(
+                                'barangays.id',
+                                (int) $user->barangay_id
+                            );
+                        }
+                    );
+            }
+        );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function tanodRecentIncidents(User $user): array
+    {
+        if (! Schema::hasTable('incidents')) {
+            return [];
+        }
+
+        $employeeId = Employee::withoutGlobalScopes()
+            ->where('user_id', $user->id)
+            ->where('employee_type', 'tanod')
+            ->value('id');
+
+        if (! $employeeId) {
+            return [];
+        }
+
+        $query = Incident::query()
+            ->with([
+                'currentStatus',
+                'status',
+                'category',
+                'reporter',
+                'assignedTanod.user',
+            ])
+            ->where('assigned_to', (int) $employeeId);
+
+        if (Schema::hasColumn('incidents', 'incident_datetime')) {
+            $query->orderByDesc('incident_datetime');
+        } elseif (Schema::hasColumn('incidents', 'reported_at')) {
+            $query->orderByDesc('reported_at');
+        } else {
+            $query->orderByDesc('created_at');
+        }
+
+        return $query
+            ->limit(6)
+            ->get()
+            ->map(
+                fn (Incident $incident): array => [
+                    'id' => (int) $incident->id,
+                    'incident_code' => $incident->incident_code,
+                    'title' => $incident->incident_title,
+                    'priority' => $incident->priority,
+                    'status' => $incident->currentStatus?->status_name
+                        ?? $incident->status?->status_name,
+                    'category' => $incident->category?->category_name,
+                    'reporter_name' => $incident->reporter?->name,
+                    'assigned_tanod_name' =>
+                        $incident->assignedTanod?->user?->name,
+                    'incident_datetime' =>
+                        $this->dateValue($incident->incident_datetime),
+                    'reported_at' =>
+                        $this->dateValue($incident->reported_at),
+                    'created_at' =>
+                        $this->dateValue($incident->created_at),
+                ]
+            )
+            ->values()
+            ->all();
     }
 
     private function weatherFeed(): array
@@ -240,5 +404,21 @@ class DashboardParityController extends DashboardController
         );
 
         return $query->count();
+    }
+
+    private function dateValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (
+            is_object($value)
+            && method_exists($value, 'toIso8601String')
+        ) {
+            return $value->toIso8601String();
+        }
+
+        return (string) $value;
     }
 }
