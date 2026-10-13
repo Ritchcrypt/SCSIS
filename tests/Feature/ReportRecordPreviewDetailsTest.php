@@ -6,10 +6,12 @@ use Tests\TestCase;
 
 class ReportRecordPreviewDetailsTest extends TestCase
 {
-    public function test_incident_metric_records_expose_full_preview_fields(): void
+    public function test_incident_metric_records_keep_full_internal_preview_metadata(): void
     {
         $source = (string) file_get_contents(
-            app_path('Http/Controllers/ReportController.php')
+            app_path(
+                'Http/Controllers/ReportController.php'
+            )
         );
 
         foreach ([
@@ -30,29 +32,43 @@ class ReportRecordPreviewDetailsTest extends TestCase
         }
     }
 
-    public function test_reports_preview_has_full_fields_and_strong_modal_z_index(): void
+    public function test_reports_preview_shows_only_the_accepted_visible_fields(): void
     {
         $source = (string) file_get_contents(
-            resource_path('views/reports/index.blade.php')
+            resource_path(
+                'views/reports/index.blade.php'
+            )
         );
 
         foreach ([
-            'Reference',
+            'Record Preview',
             'Reporter / Person',
-            'Assigned Responder',
-            'Persons Involved',
-            'Coordinates',
             'Description / Details',
-            'Recorded Date & Time',
+            'Recorded Date &amp; Time',
+            'Last Updated',
             'reportPreviewReporter',
-            'reportPreviewAssignedResponder',
-            'reportPreviewPersons',
-            'reportPreviewCoordinates',
+            'reportPreviewDescription',
+            'reportPreviewDatetime',
+            'reportPreviewUpdatedAt',
             'z-index: 9999',
             'z-index: 10000',
         ] as $marker) {
             $this->assertStringContainsString(
                 $marker,
+                $source
+            );
+        }
+
+        foreach ([
+            '>Assigned Responder<',
+            '>Persons Involved<',
+            '>Coordinates<',
+            'id="reportPreviewAssignedResponder"',
+            'id="reportPreviewPersons"',
+            'id="reportPreviewCoordinates"',
+        ] as $removedMarker) {
+            $this->assertStringNotContainsString(
+                $removedMarker,
                 $source
             );
         }

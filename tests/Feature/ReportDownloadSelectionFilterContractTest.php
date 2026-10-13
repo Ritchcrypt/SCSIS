@@ -2,80 +2,40 @@
 
 namespace Tests\Feature;
 
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 use Tests\TestCase;
 
 class ReportDownloadSelectionFilterContractTest extends TestCase
 {
-    public function test_report_selection_view_contains_record_filters(): void
+    public function test_download_selection_filters_are_scoped_to_total_incidents_only(): void
     {
-        $directory =
+        $source = (string) file_get_contents(
             resource_path(
-                'views/reports'
-            );
-
-        $iterator =
-            new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator(
-                    $directory
-                )
-            );
-
-        $matches = [];
-
-        foreach ($iterator as $file) {
-            if (
-                ! $file->isFile()
-                || ! str_ends_with(
-                    $file->getFilename(),
-                    '.blade.php'
-                )
-            ) {
-                continue;
-            }
-
-            $source =
-                (string) file_get_contents(
-                    $file->getPathname()
-                );
-
-            if (
-                str_contains(
-                    $source,
-                    'CAPSTONE18_REPORT_SELECTION_FILTERS'
-                )
-            ) {
-                $matches[] =
-                    $source;
-            }
-        }
-
-        $this->assertCount(
-            1,
-            $matches
+                'views/reports/download-selection.blade.php'
+            )
         );
 
-        $source =
-            $matches[0];
-
         foreach ([
-            'reportSelectionSearch',
-            'reportSelectionSeverity',
-            'reportSelectionLocation',
-            'reportSelectionStatus',
-            'reportSelectionClearFilters',
-            'reportSelectionVisibleCount',
-            'Pending Assessment',
-            'applyFilters',
-            'inferSeverity',
-            'inferLocation',
-            'inferStatus',
+            'CAPSTONE18_TOTAL_INCIDENTS_SELECTION_FILTERS_V2',
+            'reportTotalIncidentFilters',
+            'reportTotalIncidentSearch',
+            'reportTotalIncidentSeverity',
+            'reportTotalIncidentLocation',
+            'reportTotalIncidentStatus',
+            'reportTotalIncidentClearFilters',
+            'reportTotalIncidentVisibleCount',
+            'isTotalIncidentsSelection',
+            'findIncidentTable',
+            'applyTotalIncidentFilters',
         ] as $marker) {
             $this->assertStringContainsString(
                 $marker,
                 $source
             );
         }
+
+        $this->assertStringNotContainsString(
+            'CAPSTONE18_REPORT_SELECTION_FILTERS',
+            $source
+        );
     }
 }

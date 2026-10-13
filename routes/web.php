@@ -1,16 +1,17 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
-use App\Http\Controllers\Admin\DeletedDataRecoveryController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DeletedDataRecoveryController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\BarangayMapController;
 use App\Http\Controllers\EmergencyModeController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\NotificationOpenController;
+use App\Http\Controllers\NotificationPulseController;
 use App\Http\Controllers\PresenceController;
-use App\Http\Controllers\PublicDownloadController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PublicDownloadController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResidentComplaintController;
 use App\Http\Controllers\RoleDashboardController;
@@ -20,7 +21,6 @@ use App\Http\Controllers\TanodRosterController;
 use App\Http\Controllers\TanodTaskController;
 use App\Http\Controllers\ThemePreferenceController;
 use App\Http\Controllers\UserManagementController;
-use App\Http\Controllers\NotificationPulseController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -77,18 +77,17 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         ->name('incident-evidence.file');
 
     Route::get(
-    '/notifications/pulse',
-    NotificationPulseController::class
-)
-    ->middleware('throttle:20,1')
-    ->name('notifications.pulse');
+        '/notifications/pulse',
+        NotificationPulseController::class
+    )
+        ->middleware('throttle:20,1')
+        ->name('notifications.pulse');
 
-Route::post(
-    '/notifications/{notification}/open',
-    [NotificationOpenController::class, 'open']
-)
-    ->name('notifications.open');
-
+    Route::post(
+        '/notifications/{notification}/open',
+        [NotificationOpenController::class, 'open']
+    )
+        ->name('notifications.open');
 
     Route::get('/resident-complaint-proofs/{proof}/file', [ResidentComplaintController::class, 'proofFile'])
         ->name('resident-complaint-proofs.file');
@@ -136,7 +135,7 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::get('/reports/incidents/{incident}/pdf', [ReportController::class, 'downloadIncidentPdf'])
             ->name('reports.incident-pdf');
-Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
+        Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
             ->name('reports.complaint-pdf');
         Route::get('/reports/sos/{mobileEmergencyAlert}/pdf', [ReportController::class, 'downloadSosPdf'])
             ->name('reports.sos-pdf');
@@ -267,13 +266,13 @@ Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::cla
             ->name('tanod-tasks.destroy');
 
         Route::get('/map', [BarangayMapController::class, 'index'])
-    ->name('map.index');
+            ->name('map.index');
 
-Route::get('/tanods', [TanodRosterController::class, 'index'])
-    ->name('tanods.index');
+        Route::get('/tanods', [TanodRosterController::class, 'index'])
+            ->name('tanods.index');
 
-Route::post('/tanods', [TanodRosterController::class, 'store'])
-    ->name('tanods.store');
+        Route::post('/tanods', [TanodRosterController::class, 'store'])
+            ->name('tanods.store');
 
         Route::patch('/tanods/{tanod}', [TanodRosterController::class, 'update'])
             ->name('tanods.update');
@@ -332,10 +331,6 @@ Route::post('/tanods', [TanodRosterController::class, 'store'])
         Route::delete('/incidents/{incident}', [IncidentController::class, 'destroy'])
             ->name('incidents.destroy');
 
-
-
-
-
     });
 
 /*
@@ -384,6 +379,12 @@ Route::middleware(['auth', 'active.user', 'role:official,dao'])
 
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->name('announcements.index');
+        Route::post('/announcements', [AnnouncementController::class, 'store'])
+            ->name('announcements.store');
+        Route::patch('/announcements/{announcement}/toggle', [AnnouncementController::class, 'toggle'])
+            ->name('announcements.toggle');
+        Route::delete('/announcements/{announcement}', [AnnouncementController::class, 'destroy'])
+            ->name('announcements.destroy');
 
         Route::get('/tanods', [TanodRosterController::class, 'index'])
             ->name('tanods.index');
@@ -455,7 +456,6 @@ Route::middleware(['auth', 'active.user', 'role:tanod'])
 
         Route::patch('/tanod-tasks/responses/{response}', [TanodTaskController::class, 'respond'])
             ->name('tanod-tasks.respond');
-
 
         Route::get('/alerts', [TanodAlertController::class, 'index'])
             ->name('tanod-alerts.index');
@@ -535,14 +535,14 @@ Route::middleware(['auth', 'active.user', 'role:resident'])
             ->name('incidents.messages.store');
     });
 
-if (file_exists(__DIR__ . '/auth.php')) {
-    require __DIR__ . '/auth.php';
+if (file_exists(__DIR__.'/auth.php')) {
+    require __DIR__.'/auth.php';
 }
 
 /*
 | Keep the starter-kit settings routes available until their remaining views
 | are intentionally retired in a separate, tested cleanup.
 */
-if (file_exists(__DIR__ . '/settings.php')) {
-    require __DIR__ . '/settings.php';
+if (file_exists(__DIR__.'/settings.php')) {
+    require __DIR__.'/settings.php';
 }

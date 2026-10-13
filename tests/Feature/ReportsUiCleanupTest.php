@@ -24,9 +24,10 @@ class ReportsUiCleanupTest extends TestCase
             )
             ->assertOk()
             ->assertDontSee('Generate PDF')
+            ->assertSee('Download PDF')
             ->assertSee('Custom / Previous Dates')
-            ->assertSee('reportCustomDatePanel', false)
-            ->assertSee('hidden', false);
+            ->assertSee('reportCustomDateDropdown', false)
+            ->assertSee('display: none', false);
     }
 
     public function test_website_tanod_code_does_not_use_badge_number(): void

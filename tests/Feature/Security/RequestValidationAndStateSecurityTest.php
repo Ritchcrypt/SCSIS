@@ -123,8 +123,10 @@ class RequestValidationAndStateSecurityTest extends TestCase
                     'complainant_name' => 'Resident User',
                     'contact_number' => '<script>alert(1)</script>',
                     'complaint_address' => 'Dao, Capiz',
-                    'complaint_description' =>
-                        'Validation security test complaint.',
+                    'complaint_description' => 'Validation security test complaint.',
+                    'feedback_category' => 'community_concern',
+                    'feedback_type' => 'complaint',
+                    'feedback_subject' => 'Malformed contact validation test',
                 ]
             );
 
@@ -161,8 +163,10 @@ class RequestValidationAndStateSecurityTest extends TestCase
                     'complainant_name' => 'Resident User',
                     'contact_number' => '09123456789',
                     'complaint_address' => 'Dao, Capiz',
-                    'complaint_description' =>
-                        'Ownership security test complaint.',
+                    'complaint_description' => 'Ownership security test complaint.',
+                    'feedback_category' => 'community_concern',
+                    'feedback_type' => 'complaint',
+                    'feedback_subject' => 'Ownership security feedback test',
                     'resident_id' => $otherResident->id,
                     'status' => 'resolved',
                     'submitted_at' => now()->subYear(),

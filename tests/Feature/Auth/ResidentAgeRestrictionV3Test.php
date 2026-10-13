@@ -76,7 +76,7 @@ class ResidentAgeRestrictionV3Test extends TestCase
 
         $this->assertSame(
             $dateOfBirth,
-            (string) $user->date_of_birth
+            $user->date_of_birth->toDateString()
         );
 
         $this->assertNotNull(
@@ -138,8 +138,7 @@ class ResidentAgeRestrictionV3Test extends TestCase
         $this->assertDatabaseMissing(
             'users',
             [
-                'email' =>
-                    'underage.age.gate@example.com',
+                'email' => 'underage.age.gate@example.com',
             ]
         );
     }

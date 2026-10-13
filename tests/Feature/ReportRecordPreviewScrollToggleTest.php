@@ -6,24 +6,32 @@ use Tests\TestCase;
 
 class ReportRecordPreviewScrollToggleTest extends TestCase
 {
-    public function test_reports_preview_modal_has_scroll_toggles_and_compact_size(): void
+    public function test_reports_preview_uses_final_rail_buttons_for_scrolling(): void
     {
         $source = (string) file_get_contents(
-            resource_path('views/reports/index.blade.php')
+            resource_path(
+                'views/reports/index.blade.php'
+            )
         );
 
         foreach ([
-            'max-w-lg',
-            'h-[78vh]',
             'id="reportRecordPreviewScroller"',
-            'scrollReportPreviewContent',
-            '↑ Up',
-            '↓ Down',
+            'id="reportPreviewRailUp"',
+            'id="reportPreviewRailDown"',
+            'scrollReportPreviewBy(-220);',
+            'scrollReportPreviewBy(220);',
+            '▲',
+            '▼',
         ] as $marker) {
             $this->assertStringContainsString(
                 $marker,
                 $source
             );
         }
+
+        $this->assertStringNotContainsString(
+            'scrollReportPreviewContent',
+            $source
+        );
     }
 }

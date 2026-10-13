@@ -15,7 +15,6 @@ class OperationalActivityLogTest extends TestCase
 {
     use RefreshDatabase;
 
-
     public function test_resident_complaint_creation_is_logged_without_complaint_content(): void
     {
         /** @var User $resident */
@@ -32,6 +31,9 @@ class OperationalActivityLogTest extends TestCase
                     'contact_number' => '09987654321',
                     'complaint_address' => 'Private complaint address',
                     'complaint_description' => $description,
+                    'feedback_category' => 'community_concern',
+                    'feedback_type' => 'complaint',
+                    'feedback_subject' => 'Operational feedback audit test',
                 ]
             );
 
