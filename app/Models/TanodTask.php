@@ -10,6 +10,8 @@ class TanodTask extends Model
 {
     protected $fillable = [
         'incident_id',
+        'barangay_id',
+        'fallback_used',
         'created_by',
         'title',
         'description',
@@ -22,12 +24,18 @@ class TanodTask extends Model
 
     protected $casts = [
         'task_datetime' => 'datetime',
+        'fallback_used' => 'boolean',
         'due_at' => 'datetime',
     ];
 
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function barangay(): BelongsTo
+    {
+        return $this->belongsTo(Barangay::class);
     }
 
     public function responses(): HasMany

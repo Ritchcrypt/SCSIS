@@ -77,15 +77,6 @@ $messageUrl = $messageRouteName
     ? route($messageRouteName, $incident)
     : null;
 
-$createCaseUrl = null;
-
-if ($role === 'admin' && Route::has('admin.cases.index')) {
-    $createCaseUrl = route('admin.cases.index', [
-        'incident_id' => data_get($incident, 'id'),
-        'open_create' => 1,
-    ]);
-}
-
 $statuses = $statuses ?? collect();
 $responders = $responders ?? ($tanods ?? collect());
 
@@ -162,7 +153,7 @@ $categoryName = data_get($incident, 'category.category_name')
     ?? data_get($incident, 'type')
     ?? data_get($incident, 'incident_type')
     ?? 'Uncategorized';
-    
+
     $severityLabel = data_get($incident, 'severity_label')
         ?? data_get($incident, 'severity')
         ?? data_get($incident, 'priority')
@@ -281,23 +272,16 @@ $barangayMapUrl = Route::has('admin.map.index')
     $messages = data_get($incident, 'messages')
         ?? data_get($incident, 'incidentMessages')
         ?? collect();
-        
-        $relatedCases = data_get($incident, 'caseRecords') ?? collect();
-
-$createCaseUrl = null;
-
-if ($role === 'admin' && Route::has('admin.cases.index')) {
-    $createCaseUrl = route('admin.cases.index', [
-        'incident_id' => data_get($incident, 'id'),
-        'open_create' => 1,
-    ]);
-}
-
-    $canUpdateIncident = $updateStatusUrl
+$canUpdateIncident = $updateStatusUrl
     && auth()->check()
     && in_array($role, ['admin', 'official', 'tanod'], true);
 
 $canAssignResponder = $role === 'admin';
+$canAssessSeverity = in_array(
+    $role,
+    ['admin', 'official', 'dao'],
+    true
+);
 
 $canEscalateIncident = $escalateUrl
     && auth()->check()
@@ -327,7 +311,7 @@ $agencyOptions = $agencyOptions ?? [
                 </a>
 
                 <div class="mt-4">
-                    
+
 
                     <h1 class="mt-1 text-2xl font-bold text-slate-900">
                         {{ $incidentTitle }}
@@ -688,117 +672,7 @@ $agencyOptions = $agencyOptions ?? [
             </div>
 
             {{-- Status Update --}}
-            {{-- Related Cases --}}
-@if ($role === 'admin')
-    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="border-b border-slate-200 px-6 py-4">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <h2 class="text-base font-bold text-slate-900">
-                        Related Cases
-                    </h2>
-
-                    <p class="mt-1 text-sm text-slate-500">
-                        Barangay case records connected to this incident.
-                    </p>
-                </div>
-
-            </div>
-        </div>
-
-        <div class="space-y-4 p-6">
-            @if (count($relatedCases))
-                @foreach ($relatedCases as $caseRecord)
-                    @php
-                        $caseNumber = data_get($caseRecord, 'case_number') ?? ('Case #' . data_get($caseRecord, 'id'));
-
-                        $caseType = data_get($caseRecord, 'display_type')
-                            ?? ucfirst(str_replace('_', ' ', (string) data_get($caseRecord, 'case_type')));
-
-                        $caseStatus = data_get($caseRecord, 'display_status')
-                            ?? ucfirst(str_replace('_', ' ', (string) data_get($caseRecord, 'status')));
-
-                        $hearingDateRaw = data_get($caseRecord, 'hearing_date');
-
-                        try {
-                            $hearingDate = $hearingDateRaw
-                                ? \Carbon\Carbon::parse($hearingDateRaw)->format('M d, Y')
-                                : 'No hearing date';
-                        } catch (\Throwable $e) {
-                            $hearingDate = 'No hearing date';
-                        }
-
-                        $handledBy = data_get($caseRecord, 'handled_by') ?: 'Not assigned';
-                    @endphp
-
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <p class="text-sm font-bold text-blue-700">
-                            Case No. {{ $caseNumber }}
-                        </p>
-
-                        <div class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                            <div>
-                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                                    Type
-                                </p>
-                                <p class="mt-1 font-semibold text-slate-800">
-                                    {{ $caseType }}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                                    Status
-                                </p>
-                                <p class="mt-1 font-semibold text-slate-800">
-                                    {{ $caseStatus }}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                                    Hearing Date
-                                </p>
-                                <p class="mt-1 font-semibold text-slate-800">
-                                    {{ $hearingDate }}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                                    Handled By
-                                </p>
-                                <p class="mt-1 font-semibold text-slate-800">
-                                    {{ $handledBy }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                @endforeach
-            @else
-                <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-                    <h3 class="text-sm font-bold text-slate-900">
-                        No related case yet
-                    </h3>
-
-                    <p class="mt-1 text-sm text-slate-500">
-                        Create a case record if this incident needs formal barangay handling.
-                    </p>
-
-                    @if ($createCaseUrl)
-                        <a href="{{ $createCaseUrl }}"
-                           class="mt-4 inline-flex rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
-                            + Create Case
-                        </a>
-                    @endif
-
-                </div>
-            @endif
-        </div>
-    </div>
-@endif
-
-            @if ($canUpdateIncident)
+@if ($canUpdateIncident)
                 <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div class="border-b border-slate-200 px-6 py-4">
                         <h2 class="text-base font-bold text-slate-900">
@@ -850,6 +724,57 @@ $agencyOptions = $agencyOptions ?? [
                                 </p>
                             @enderror
                         </div>
+                        @if ($canAssessSeverity)
+                            <div>
+                                <label for="priority" class="mb-2 block text-sm font-semibold text-slate-700">
+                                    Assessed Severity
+                                </label>
+
+                                <select
+                                    id="priority"
+                                    name="priority"
+                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                >
+                                    <option value="">
+                                        Leave current severity / pending assessment
+                                    </option>
+
+                                    @foreach ($severityOptions as $value => $label)
+                                        <option
+                                            value="{{ $value }}"
+                                            @selected(
+                                                (string) old(
+                                                    'priority',
+                                                    (bool) data_get(
+                                                        $incident,
+                                                        'severity_needs_assessment',
+                                                        false
+                                                    )
+                                                        ? ''
+                                                        : data_get(
+                                                            $incident,
+                                                            'priority'
+                                                        )
+                                                ) === (string) $value
+                                            )
+                                        >
+                                            {{ $label }}
+                                        </option>
+                                    @endforeach
+                                </select>
+
+                                <p class="mt-2 text-xs leading-5 text-slate-500">
+                                    Assign severity only after the actual situation has been assessed.
+                                    Saving a severity updates the Map module pin color automatically.
+                                </p>
+
+                                @error('priority')
+                                    <p class="mt-2 text-sm font-medium text-red-600">
+                                        {{ $message }}
+                                    </p>
+                                @enderror
+                            </div>
+                        @endif
 
                         <button
                             type="submit"

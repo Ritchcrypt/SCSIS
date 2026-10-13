@@ -32,6 +32,7 @@
             'high' => 'border-orange-200 bg-orange-100 text-orange-700',
             'medium', 'moderate' => 'border-yellow-200 bg-yellow-100 text-yellow-700',
             'low' => 'border-green-200 bg-green-100 text-green-700',
+            'pending_assessment', 'unassessed' => 'border-slate-300 bg-slate-100 text-slate-700',
             default => 'border-slate-200 bg-slate-100 text-slate-700',
         };
     };
@@ -235,11 +236,29 @@
                                 ?? data_get($incident, 'description')
                                 ?? 'No description provided.';
 
-                            $severity = data_get($incident, 'priority')
-                                ?? data_get($incident, 'severity')
-                                ?? 'low';
+                            $severityNeedsAssessment = (bool) data_get(
+                                $incident,
+                                'severity_needs_assessment',
+                                false
+                            );
 
-                            $severityLabel = ucfirst(str_replace('_', ' ', (string) $severity));
+                            $severity = $severityNeedsAssessment
+                                ? 'pending_assessment'
+                                : (
+                                    data_get($incident, 'priority')
+                                    ?? data_get($incident, 'severity')
+                                    ?? 'low'
+                                );
+
+                            $severityLabel = $severityNeedsAssessment
+                                ? 'Pending Assessment'
+                                : ucfirst(
+                                    str_replace(
+                                        '_',
+                                        ' ',
+                                        (string) $severity
+                                    )
+                                );
 
                             $barangayName = data_get($incident, 'barangay.barangay_name')
                                 ?? data_get($incident, 'barangay.name')

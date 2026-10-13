@@ -44,9 +44,6 @@ class NotificationOpenController extends Controller
             );
         }
 
-        if (in_array($type, ['case_created', 'case_updated', 'case_deleted'], true)) {
-            return redirect()->to($this->caseManagementUrl($role));
-        }
 
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return redirect()->to($this->announcementUrl($role));
@@ -65,6 +62,7 @@ class NotificationOpenController extends Controller
             'tanod_task',
             'tanod_task_assigned',
             'tanod_task_update',
+            'tanod_task_response',
             'task_assigned',
             'task_update',
         ], true)) {
@@ -181,14 +179,6 @@ class NotificationOpenController extends Controller
         return $this->dashboardUrl($role);
     }
 
-    private function caseManagementUrl(string $role): string
-    {
-        if ($role === 'admin' && Route::has('admin.cases.index')) {
-            return route('admin.cases.index');
-        }
-
-        return $this->dashboardUrl($role);
-    }
 
     private function announcementUrl(string $role): string
     {
@@ -332,6 +322,39 @@ class NotificationOpenController extends Controller
             return route('tanod.tanod-tasks.index');
         }
 
+        if (
+            in_array(
+                $role,
+                ['official', 'dao'],
+                true
+            )
+            && $sourceId
+            && Schema::hasTable('tanod_tasks')
+            && Schema::hasColumn(
+                'tanod_tasks',
+                'incident_id'
+            )
+        ) {
+            $incidentId = DB::table('tanod_tasks')
+                ->where('id', $sourceId)
+                ->value('incident_id');
+
+            if (
+                $incidentId
+                && $this->recordExists(
+                    'incidents',
+                    (int) $incidentId
+                )
+                && Route::has(
+                    'official.incidents.show'
+                )
+            ) {
+                return route(
+                    'official.incidents.show',
+                    (int) $incidentId
+                );
+            }
+        }
         return $this->dashboardUrl($role);
     }
 

@@ -1090,12 +1090,6 @@ if ($authUser) {
                             'active' => ['admin.tanod-tasks.*'],
                         ],
                         [
-                            'label' => 'Case Management',
-                            'icon' => '📘',
-                            'route' => 'admin.cases.index',
-                            'active' => ['admin.cases.*'],
-                        ],
-                        [
                             'label' => 'Announcements',
                             'icon' => '📢',
                             'route' => 'admin.announcements.index',
@@ -1108,7 +1102,7 @@ if ($authUser) {
                             'active' => ['admin.emergency-mode.*'],
                         ],
                         [
-    'label' => 'Resident Complaints',
+    'label' => 'Resident Feedback',
     'icon' => '💬',
     'route' => 'admin.resident-complaints.index',
     'active' => ['admin.resident-complaints.*'],
@@ -1172,7 +1166,7 @@ if ($authUser) {
         'active' => ['official.emergency-mode.*'],
     ],
     [
-    'label' => 'Resident Complaints',
+    'label' => 'Resident Feedback',
     'icon' => '💬',
     'route' => 'official.resident-complaints.index',
     'active' => ['official.resident-complaints.*'],
@@ -1248,7 +1242,7 @@ if ($authUser) {
         ],
     ],
     [
-        'label' => 'Complaints Form',
+        'label' => 'Feedback Form',
         'icon' => '📝',
         'route' => 'resident.resident-complaints.create',
         'active' => [

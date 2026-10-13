@@ -21,6 +21,10 @@ public string $contact_number = '';
 
 public string $address = '';
 
+public string $date_of_birth = '';
+
+public bool $age_confirmation = false;
+
 public string $password = '';
 
     public string $password_confirmation = '';
@@ -73,6 +77,8 @@ $this->address = (string) preg_replace(
         | Limits successful account creation from the same IP address.
         |
         */
+
+        $this->validateResidentAge();
 
         $this->ensureIsNotRateLimited();
 
@@ -132,6 +138,8 @@ $this->address = (string) preg_replace(
     'email' => $validated['email'],
     'contact_number' => $validated['contact_number'],
     'address' => $validated['address'],
+    'date_of_birth' => $this->date_of_birth,
+    'age_attested_at' => now(),
     'password' => Hash::make($validated['password']),
     'role' => 'resident',
     'is_active' => false,
@@ -207,6 +215,56 @@ $this->address = (string) preg_replace(
     /**
      * Prevent excessive account creation.
      */
+    /**
+     * Validate the resident-declared legal age independently from the
+     * established registration validation array.
+     */
+    protected function validateResidentAge(): void
+    {
+        validator(
+            [
+                'date_of_birth' =>
+                    $this->date_of_birth,
+
+                'age_confirmation' =>
+                    $this->age_confirmation,
+            ],
+            [
+                'date_of_birth' => [
+                    'required',
+                    'date_format:Y-m-d',
+                    'before_or_equal:'
+                        . now()
+                            ->subYears(18)
+                            ->toDateString(),
+                    'after_or_equal:'
+                        . now()
+                            ->subYears(120)
+                            ->toDateString(),
+                ],
+
+                'age_confirmation' => [
+                    'accepted',
+                ],
+            ],
+            [
+                'date_of_birth.required' =>
+                    'Date of birth is required.',
+
+                'date_of_birth.date_format' =>
+                    'Enter a valid date of birth.',
+
+                'date_of_birth.before_or_equal' =>
+                    'Resident registration is limited to persons 18 years old or older.',
+
+                'date_of_birth.after_or_equal' =>
+                    'Enter a plausible date of birth.',
+
+                'age_confirmation.accepted' =>
+                    'You must confirm that your date of birth is accurate and that you are at least 18 years old.',
+            ]
+        )->validate();
+    }
     protected function ensureIsNotRateLimited(): void
     {
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 3)) {
@@ -368,6 +426,63 @@ $this->address = (string) preg_replace(
     </div>
 </div>
 
+    {{-- Resident Age Restriction --}}
+    <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <div class="grid gap-4">
+            <div>
+                <h3 class="text-sm font-bold text-slate-900">
+                    Resident age requirement
+                </h3>
+
+                <p class="mt-1 text-xs leading-5 text-slate-600">
+                    Website resident registration is limited to persons
+                    18 years old or older. The information you submit is
+                    subject to administrator review before your account
+                    can be activated.
+                </p>
+            </div>
+
+            <flux:input
+                wire:model="date_of_birth"
+                id="date_of_birth"
+                :label="__('Date of birth')"
+                type="date"
+                name="date_of_birth"
+                required
+                autocomplete="bday"
+                min="{{ now()->subYears(120)->toDateString() }}"
+                max="{{ now()->subYears(18)->toDateString() }}"
+            />
+
+            <label
+                for="age_confirmation"
+                class="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-200 bg-white p-3"
+            >
+                <input
+                    wire:model="age_confirmation"
+                    id="age_confirmation"
+                    name="age_confirmation"
+                    type="checkbox"
+                    value="1"
+                    required
+                    class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+                >
+
+                <span class="text-xs leading-5 text-slate-700">
+                    I certify that the date of birth I entered is accurate
+                    and that I am at least 18 years old. I understand that
+                    false registration information may cause the account
+                    to be rejected or deactivated by the administrator.
+                </span>
+            </label>
+
+            @error('age_confirmation')
+                <p class="text-sm text-red-600">
+                    {{ $message }}
+                </p>
+            @enderror
+        </div>
+    </div>
     {{-- Password --}}
     <div class="grid gap-2">
         <flux:input

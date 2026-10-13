@@ -22,6 +22,11 @@
         </div>
 
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <a href="{{ route('admin.activity-logs.deleted-data.index') }}"
+               class="inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-100">
+                Deleted Data Recovery
+            </a>
+
             <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
                 <span class="font-semibold text-slate-900">
                     {{ number_format($activityLogs->total()) }}

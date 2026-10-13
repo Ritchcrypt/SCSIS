@@ -17,184 +17,321 @@
         </div>
 
         <div class="print-hidden flex flex-col gap-3 sm:flex-row sm:items-center">
-            <form method="GET" action="{{ route('admin.reports.index') }}">
-                <select name="period"
-                        onchange="this.form.submit()"
-                        class="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                    <option value="today" @selected($period === 'today')>
-                        Today
-                    </option>
+            <form id="reportTimelineForm"
+      method="GET"
+      action="{{ route('admin.reports.index') }}"
+      class="relative z-40 m-0 p-0"
+      style="width: 330px; height: 64px; flex: 0 0 auto;">
+    <input type="hidden"
+           name="metric"
+           value="{{ $selectedMetric ?? 'total' }}">
 
-                    <option value="week" @selected($period === 'week')>
-                        This Week
-                    </option>
+    <label for="reportTimelineSelect"
+           class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        Timeline
+    </label>
 
-                    <option value="month" @selected($period === 'month')>
-                        This Month
-                    </option>
+    <select id="reportTimelineSelect"
+            name="period"
+            onchange="handleReportsTimelineChange(this)"
+            class="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+        <option value="today" @selected($period === 'today')>Today</option>
+        <option value="week" @selected($period === 'week')>Last 7 Days</option>
+        <option value="month" @selected($period === 'month')>Last 30 Days</option>
+        <option value="year" @selected($period === 'year')>This Year</option>
+        <option value="custom" @selected($period === 'custom')>Custom / Previous Dates</option>
+    </select>
 
-                    <option value="year" @selected($period === 'year')>
-                        This Year
-                    </option>
-                </select>
-            </form>
+    <div id="reportCustomDateDropdown"
+         class="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+         style="display: none; position: absolute; top: 68px; right: 0; width: 330px; z-index: 9999;">
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label for="reportDateFrom"
+                       class="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    From
+                </label>
 
-            <button type="button"
-        onclick="openSpecificIncidentReportModal()"
-        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-    Incident PDF
-</button>
+                <input type="date"
+                       id="reportDateFrom"
+                       name="date_from"
+                       value="{{ request('date_from', ($isCustomPeriod ?? false) ? ($dateFrom ?? '') : '') }}"
+                       class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+            </div>
 
-<button type="button"
-        onclick="openCaseReportModal()"
-        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-    Case PDF
-</button>
+            <div>
+                <label for="reportDateTo"
+                       class="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    To
+                </label>
 
-<button type="button"
-        onclick="openSpecificComplaintReportModal()"
-        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-    Complaint PDF
-</button>
-<button type="button"
-        onclick="openSpecificSosReportModal()"
-        class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-    SOS PDF
-</button>
+                <input type="date"
+                       id="reportDateTo"
+                       name="date_to"
+                       value="{{ request('date_to', ($isCustomPeriod ?? false) ? ($dateTo ?? '') : '') }}"
+                       class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+            </div>
+        </div>
 
-            <a href="{{ route('admin.reports.pdf', ['period' => $period]) }}"
-               class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                Download PDF
-            </a>
+        <div class="mt-3 flex items-center justify-between gap-3">
+            <span class="text-[11px] leading-4 text-slate-500">
+                Select a previous date range.
+            </span>
+
+            <button type="submit"
+                    id="reportCustomDateApply"
+                    class="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-blue-950 px-5 text-xs font-bold text-white shadow-sm hover:bg-blue-900">
+                Apply
+            </button>
+        </div>
+    </div>
+</form>
+@if (! empty($securePdfUrl))
+@endif
         </div>
     </div>
 
     {{-- Summary Cards --}}
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Total Incidents
-            </p>
+    <style>
+        .reports-metric-card {
+            background: #dbeafe !important;
+            border: 1px solid #93c5fd !important;
+            color: #0f172a !important;
+        }
 
-            <p class="tn-report-total-number mt-3 text-3xl font-bold">
-                {{ $totalIncidents }}
-            </p>
-        </div>
+        .reports-metric-card:hover {
+            background: #bfdbfe !important;
+            border-color: #60a5fa !important;
+        }
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Active / Pending
-            </p>
+        .reports-metric-card.is-selected {
+            box-shadow: 0 0 0 3px #2563eb !important;
+        }
 
-            <p class="mt-3 text-3xl font-bold text-orange-600">
-                {{ $activeIncidents }}
-            </p>
-        </div>
+        .reports-metric-label,
+        .reports-metric-arrow {
+            color: #1d4ed8 !important;
+        }
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Resolved
-            </p>
+        .reports-metric-value {
+            color: #0f172a !important;
+        }
 
-            <p class="mt-3 text-3xl font-bold text-green-600">
-                {{ $resolvedIncidents }}
-            </p>
-        </div>
+        .reports-metric-helper {
+            color: #334155 !important;
+        }
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Cases Filed
-            </p>
+        .reports-metric-download {
+            background: #eff6ff !important;
+            border: 1px solid #93c5fd !important;
+            color: #1e3a8a !important;
+        }
 
-            <p class="mt-3 text-3xl font-bold text-indigo-600">
-                {{ $casesFiled }}
-            </p>
-        </div>
+        .reports-metric-download:hover {
+            background: #dbeafe !important;
+        }
+    </style>
+
+    @php
+        $metricBaseQuery = [
+            'period' => $period,
+        ];
+
+        if (($isCustomPeriod ?? false)) {
+            $metricBaseQuery['date_from'] =
+                $dateFrom ?? null;
+
+            $metricBaseQuery['date_to'] =
+                $dateTo ?? null;
+        }
+
+        $metricCards = [
+            [
+                'key' => 'total',
+                'label' => 'Total Incidents',
+                'value' => $totalIncidents ?? 0,
+                'helper' => 'All incident records in the selected timeline',
+            ],
+            [
+                'key' => 'active',
+                'label' => 'Active Incidents',
+                'value' => $activeIncidents ?? 0,
+                'helper' => 'All current non-terminal incident statuses',
+            ],
+            [
+                'key' => 'critical',
+                'label' => 'Critical Incidents',
+                'value' => $criticalIncidents ?? 0,
+                'helper' => 'Unresolved critical-priority incidents',
+            ],
+            [
+                'key' => 'resolved',
+                'label' => 'Resolved Incidents',
+                'value' => $resolvedIncidents ?? 0,
+                'helper' => 'Resolved / completed / closed incidents',
+            ],
+            [
+                'key' => 'distress',
+                'label' => 'Distress Signals / SOS',
+                'value' => $distressSignals ?? 0,
+                'helper' => 'Live emergency SOS records in the selected timeline',
+            ],
+            [
+                'key' => 'tanod',
+                'label' => 'Tanod On Duty',
+                'value' => $tanodOnDuty ?? 0,
+                'helper' => 'Current Tanod roster duty status',
+            ],
+        ];
+    @endphp
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        @foreach ($metricCards as $metricCard)
+            @php
+                $isSelectedMetric =
+                    ($selectedMetric ?? 'total')
+                    === $metricCard['key'];
+
+                $metricUrl = route(
+                    'admin.reports.index',
+                    array_merge(
+                        $metricBaseQuery,
+                        [
+                            'metric' =>
+                                $metricCard['key'],
+                        ]
+                    )
+                ) . '#records-breakdown';
+
+                $metricSelectionUrl =
+                    $metricSelectionUrls[
+                        $metricCard['key']
+                    ]
+                    ?? null;
+            @endphp
+
+            <div class="flex min-w-0 flex-col gap-2">
+                <a href="{{ $metricUrl }}"
+                   class="reports-metric-card {{ $isSelectedMetric ? 'is-selected' : '' }} group block flex-1 rounded-2xl p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="reports-metric-label text-xs font-bold uppercase tracking-wide">
+                            {{ $metricCard['label'] }}
+                        </p>
+
+                        <span class="reports-metric-arrow text-sm">
+                            →
+                        </span>
+                    </div>
+
+                    <p class="reports-metric-value mt-3 text-3xl font-bold">
+                        {{ $metricCard['value'] }}
+                    </p>
+
+                    <p class="reports-metric-helper mt-2 text-xs">
+                        {{ $metricCard['helper'] }}
+                    </p>
+                </a>
+
+                @if ($metricSelectionUrl)
+                    <a href="{{ $metricSelectionUrl }}"
+                       class="reports-metric-download inline-flex h-10 w-full items-center justify-center rounded-xl px-3 text-xs font-bold shadow-sm">
+                        Download PDF
+                    </a>
+                @endif
+            </div>
+        @endforeach
     </div>
 
     {{-- Records Breakdown --}}
-    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
+    <div id="records-breakdown"
+         class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
             <div>
                 <h2 class="text-base font-bold text-slate-900">
-                    {{ $periodLabel }} Records Breakdown
+                    {{ $selectedMetricLabel ?? 'Total Incidents' }} Records Breakdown
                 </h2>
 
                 <p class="mt-1 text-sm text-slate-500">
-                    Incidents, cases, and announcements recorded within the selected period.
+                    {{ $periodLabel }} · Click any record to preview it without leaving Reports.
                 </p>
             </div>
 
-            @if (count($records) > 5)
-                <button type="button"
-                        id="recordsToggleButton"
-                        onclick="toggleRecordsBreakdown()"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-                        title="Show more or less records">
-                    ↓
-                </button>
+            @if (count($records ?? []) > 5)
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            onclick="scrollReportsBreakdown('up')"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                            title="Scroll records up">
+                        ↑
+                    </button>
+
+                    <button type="button"
+                            onclick="scrollReportsBreakdown('down')"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                            title="Scroll records down">
+                        ↓
+                    </button>
+                </div>
             @endif
         </div>
 
-        <div class="overflow-x-auto p-6">
-            @if (count($records))
-                <table class="w-full table-fixed text-sm">
+        <div id="reportsRecordsScroller"
+             class="max-h-[480px] overflow-auto p-6">
+            @if (count($records ?? []))
+                <table class="w-full min-w-[900px] table-fixed text-sm">
                     <colgroup>
                         <col class="w-[13%]">
-                        <col class="w-[25%]">
-                        <col class="w-[12%]">
+                        <col class="w-[26%]">
+                        <col class="w-[13%]">
+                        <col class="w-[16%]">
+                        <col class="w-[14%]">
                         <col class="w-[18%]">
-                        <col class="w-[15%]">
-                        <col class="w-[17%]">
                     </colgroup>
 
-                    <thead>
+                    <thead class="sticky top-0 z-10 bg-white">
                         <tr class="border-b border-slate-200 text-xs font-bold uppercase tracking-wide text-slate-500">
                             <th class="px-3 py-3 text-center">Category</th>
                             <th class="px-3 py-3 text-center">Details</th>
                             <th class="px-3 py-3 text-center">Severity</th>
                             <th class="px-3 py-3 text-center">Barangay Areas</th>
-                            <th class="px-3 py-3 text-center">Incident Status</th>
+                            <th class="px-3 py-3 text-center">Status</th>
                             <th class="px-3 py-3 text-center">Date & Time</th>
                         </tr>
                     </thead>
 
                     <tbody class="divide-y divide-slate-100">
-                        @foreach ($records as $index => $record)
-                            <tr class="{{ $index >= 5 ? 'extra-record-row hidden' : '' }}">
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
-                                    {{ $record['category'] }}
+                        @foreach (($records ?? []) as $index => $record)
+                            <tr onclick="openReportRecordPreview({{ $index }})"
+                                tabindex="0"
+                                onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openReportRecordPreview({{ $index }}); }"
+                                class="cursor-pointer transition hover:bg-blue-50 focus:bg-blue-50 focus:outline-none">
+                                <td class="px-3 py-3 text-center text-slate-900">
+                                    {{ $record['category'] ?? '—' }}
                                 </td>
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
-                                    {{ $record['title'] }}
+                                <td class="px-3 py-3 text-center text-slate-900">
+                                    {{ $record['title'] ?? '—' }}
                                 </td>
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                <td class="px-3 py-3 text-center text-slate-900">
                                     {{ $record['severity'] ?? '—' }}
                                 </td>
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                <td class="px-3 py-3 text-center text-slate-900">
                                     {{ $record['barangay'] ?? '—' }}
                                 </td>
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
+                                <td class="px-3 py-3 text-center text-slate-900">
                                     {{ $record['status'] ?? '—' }}
                                 </td>
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
-                                    {{ $record['datetime'] }}
+                                <td class="px-3 py-3 text-center text-slate-900">
+                                    {{ $record['datetime'] ?? '—' }}
                                 </td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
-
-                @if (count($records) > 5)
-                    <div id="recordsToggleText" class="mt-4 text-center text-xs font-semibold text-slate-500">
-                        Showing 5 of {{ count($records) }} records
-                    </div>
-                @endif
             @else
                 <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                     <h3 class="text-sm font-bold text-slate-900">
@@ -202,90 +339,630 @@
                     </h3>
 
                     <p class="mt-1 text-sm text-slate-500">
-                        There are no recorded activities for {{ strtolower($periodLabel) }}.
+                        No {{ strtolower($selectedMetricLabel ?? 'selected metric') }} records were recorded during {{ strtolower($periodLabel) }}.
                     </p>
                 </div>
             @endif
         </div>
     </div>
 
-    {{-- Tanod Response Summary --}}
-    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="border-b border-slate-200 px-6 py-4">
-            <h2 class="text-base font-bold text-slate-900">
-                Tanod Response Summary
-            </h2>
+        <style id="reports-preview-functional-scroll-style">
+        #reportRecordPreviewPanel {
+            width: min(92vw, 560px);
+            height: min(72vh, 620px);
+            max-height: 72vh;
+        }
 
-            <p class="mt-1 text-sm text-slate-500">
-                Acceptance and decline activity from Tanod Tasks within the selected period.
-            </p>
-        </div>
+        #reportRecordPreviewScroller {
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            min-height: 0;
+        }
 
-        <div class="overflow-x-auto p-6">
-            @if (count($tanodSummary))
-                <table class="min-w-full text-left text-sm">
-                    <thead>
-                        <tr class="border-b border-slate-200 text-xs font-bold uppercase tracking-wide text-slate-500">
-                            <th class="px-3 py-3">Tanod</th>
-                            <th class="px-3 py-3 text-center">Total Tasks</th>
-                            <th class="px-3 py-3 text-center">Accepted</th>
-                            <th class="px-3 py-3 text-center">Declined</th>
-                            <th class="px-3 py-3 text-center">Pending</th>
-                            <th class="px-3 py-3 text-center">Response Rate</th>
-                            <th class="px-3 py-3">Last Response</th>
-                        </tr>
-                    </thead>
+        #reportRecordPreviewScroller::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
 
-                    <tbody class="divide-y divide-slate-100">
-                        @foreach ($tanodSummary as $tanod)
-                            <tr>
-                                <td class="px-3 py-3 font-normal text-slate-900">
-                                    {{ $tanod['name'] }}
-                                </td>
+        #reportPreviewRail {
+            width: 22px;
+            flex: 0 0 22px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #eff6ff;
+            border-left: 1px solid #bfdbfe;
+        }
 
-                                <td class="px-3 py-3 text-center text-slate-900">
-                                    {{ $tanod['total_tasks'] }}
-                                </td>
+        #reportPreviewRailTrack {
+            position: relative;
+            flex: 1 1 auto;
+            width: 10px;
+            min-height: 80px;
+            margin: 6px 0;
+            background: #dbeafe;
+            border-radius: 999px;
+            cursor: pointer;
+        }
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
-                                    {{ $tanod['accepted'] }}
-                                </td>
+        #reportPreviewRailThumb {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 10px;
+            min-height: 42px;
+            background: #2563eb;
+            border-radius: 999px;
+            cursor: grab;
+            touch-action: none;
+        }
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
-                                    {{ $tanod['declined'] }}
-                                </td>
+        #reportPreviewRailThumb:active {
+            cursor: grabbing;
+        }
 
-                                <td class="px-3 py-3 text-center font-normal text-slate-900">
-                                    {{ $tanod['pending'] }}
-                                </td>
+        .report-preview-rail-button {
+            width: 22px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 0;
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-weight: 800;
+            cursor: pointer;
+            user-select: none;
+        }
 
-                                <td class="px-3 py-3 text-center text-slate-900">
-                                    {{ $tanod['response_rate'] }}%
-                                </td>
+        .report-preview-rail-button:hover {
+            background: #bfdbfe;
+        }
+    </style>
 
-                                <td class="px-3 py-3 font-normal text-slate-900">
-                                    {{ $tanod['last_response'] }}
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            @else
-                <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                    <h3 class="text-sm font-bold text-slate-900">
-                        No tanod task responses in this period
+    <div id="reportRecordPreviewModal"
+         class="fixed inset-0 hidden items-center justify-center bg-slate-900/60 p-3"
+         style="z-index: 9999;"
+         onclick="if (event.target === this) closeReportRecordPreview()">
+        <div id="reportRecordPreviewPanel"
+             class="relative flex flex-col overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-2xl"
+             style="z-index: 10000;">
+            <div class="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+                <div class="min-w-0 flex-1">
+                    <p class="text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                        Record Preview
+                    </p>
+
+                    <h3 id="reportPreviewTitle"
+                        class="mt-1 break-words text-base font-bold leading-tight text-slate-900">
+                        —
                     </h3>
 
-                    <p class="mt-1 text-sm text-slate-500">
-                        Response data will appear when tanods accept or decline tasks.
+                    <p id="reportPreviewReference"
+                       class="mt-1 break-words text-[11px] font-semibold text-slate-500">
+                        —
                     </p>
                 </div>
-            @endif
+
+                <button type="button"
+                        onclick="closeReportRecordPreview()"
+                        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-xl leading-none text-slate-700">
+                    ×
+                </button>
+            </div>
+
+            <div class="flex min-h-0 flex-1 overflow-hidden">
+                <div id="reportRecordPreviewScroller"
+                     class="min-h-0 flex-1 px-4 py-3">
+                    <dl class="grid gap-3 sm:grid-cols-2">
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Category</dt>
+                            <dd id="reportPreviewCategory" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Type / Shift</dt>
+                            <dd id="reportPreviewType" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Severity</dt>
+                            <dd id="reportPreviewSeverity" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Status</dt>
+                            <dd id="reportPreviewStatus" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Barangay</dt>
+                            <dd id="reportPreviewBarangay" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Location</dt>
+                            <dd id="reportPreviewLocation" class="mt-1 break-words text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Reporter / Person</dt>
+                            <dd id="reportPreviewReporter" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3 sm:col-span-2">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Description / Details</dt>
+                            <dd id="reportPreviewDescription" class="mt-1 whitespace-pre-line break-words text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Reported At</dt>
+                            <dd id="reportPreviewReportedAt" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Recorded Date &amp; Time</dt>
+                            <dd id="reportPreviewDatetime" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+
+                        <div class="rounded-xl bg-blue-50 p-3 sm:col-span-2">
+                            <dt class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Last Updated</dt>
+                            <dd id="reportPreviewUpdatedAt" class="mt-1 text-sm text-slate-900">—</dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <div id="reportPreviewRail">
+                    <button type="button"
+                            id="reportPreviewRailUp"
+                            class="report-preview-rail-button"
+                            title="Scroll preview up"
+                            aria-label="Scroll preview up">
+                        ▲
+                    </button>
+
+                    <div id="reportPreviewRailTrack"
+                         title="Drag the blue bar to scroll">
+                        <div id="reportPreviewRailThumb"></div>
+                    </div>
+
+                    <button type="button"
+                            id="reportPreviewRailDown"
+                            class="report-preview-rail-button"
+                            title="Scroll preview down"
+                            aria-label="Scroll preview down">
+                        ▼
+                    </button>
+                </div>
+            </div>
+
+            <div class="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button"
+                            onclick="closeReportRecordPreview()"
+                            class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-xs font-bold text-slate-700">
+                        Close
+                    </button>
+
+                    @if (($metricSelectionUrls[$selectedMetric ?? 'total'] ?? null))
+                        <a href="{{ $metricSelectionUrls[$selectedMetric ?? 'total'] }}"
+                           class="inline-flex h-10 items-center justify-center rounded-xl bg-blue-950 px-4 text-xs font-bold text-white">
+                            Choose Records for PDF
+                        </a>
+                    @endif
+                </div>
+            </div>
         </div>
     </div>
-</div>
 
-{{-- Incident Report Modal --}}
+    <script>
+        window.tabangNowReportRecords = @json(array_values($records ?? []));
+
+        let reportPreviewDragging = false;
+        let reportPreviewDragStartY = 0;
+        let reportPreviewDragStartTop = 0;
+
+        function reportPreviewText(value, fallback = '—') {
+            if (
+                value === null
+                || value === undefined
+                || String(value).trim() === ''
+            ) {
+                return fallback;
+            }
+
+            return String(value);
+        }
+
+        function setReportPreviewText(id, value, fallback = '—') {
+            const element = document.getElementById(id);
+
+            if (!element) {
+                return;
+            }
+
+            element.textContent =
+                reportPreviewText(
+                    value,
+                    fallback
+                );
+        }
+
+        function updateReportPreviewRail() {
+            const scroller =
+                document.getElementById('reportRecordPreviewScroller');
+
+            const track =
+                document.getElementById('reportPreviewRailTrack');
+
+            const thumb =
+                document.getElementById('reportPreviewRailThumb');
+
+            if (!scroller || !track || !thumb) {
+                return;
+            }
+
+            const visible =
+                scroller.clientHeight;
+
+            const total =
+                scroller.scrollHeight;
+
+            const trackHeight =
+                track.clientHeight;
+
+            if (total <= visible || trackHeight <= 0) {
+                thumb.style.height =
+                    Math.max(42, trackHeight) + 'px';
+
+                thumb.style.top =
+                    '0px';
+
+                thumb.style.opacity =
+                    '0.35';
+
+                return;
+            }
+
+            const thumbHeight =
+                Math.max(
+                    42,
+                    Math.round(
+                        trackHeight
+                        * visible
+                        / total
+                    )
+                );
+
+            const maxThumbTop =
+                Math.max(
+                    0,
+                    trackHeight - thumbHeight
+                );
+
+            const maxScroll =
+                total - visible;
+
+            const thumbTop =
+                maxScroll > 0
+                    ? Math.round(
+                        maxThumbTop
+                        * scroller.scrollTop
+                        / maxScroll
+                    )
+                    : 0;
+
+            thumb.style.height =
+                thumbHeight + 'px';
+
+            thumb.style.top =
+                thumbTop + 'px';
+
+            thumb.style.opacity =
+                '1';
+        }
+
+        function scrollReportPreviewBy(amount) {
+            const scroller =
+                document.getElementById('reportRecordPreviewScroller');
+
+            if (!scroller) {
+                return;
+            }
+
+            scroller.scrollBy({
+                top: amount,
+                behavior: 'smooth',
+            });
+        }
+
+        function openReportRecordPreview(index) {
+            const records =
+                window.tabangNowReportRecords || [];
+
+            const record =
+                records[index];
+
+            if (!record) {
+                return;
+            }
+
+            setReportPreviewText('reportPreviewTitle', record.title);
+            setReportPreviewText('reportPreviewReference', record.preview_reference, record.record_key || '—');
+            setReportPreviewText('reportPreviewCategory', record.preview_category || record.category);
+            setReportPreviewText('reportPreviewType', record.type);
+            setReportPreviewText('reportPreviewSeverity', record.severity);
+            setReportPreviewText('reportPreviewStatus', record.preview_status || record.status);
+            setReportPreviewText('reportPreviewBarangay', record.preview_barangay || record.barangay);
+            setReportPreviewText('reportPreviewLocation', record.preview_location || record.barangay);
+            setReportPreviewText('reportPreviewReporter', record.preview_reporter, 'Not identified');
+setReportPreviewText('reportPreviewDescription', record.preview_description || record.title, 'No description provided.');
+setReportPreviewText('reportPreviewReportedAt', record.preview_reported_at || record.datetime);
+            setReportPreviewText('reportPreviewDatetime', record.preview_incident_at || record.datetime);
+            setReportPreviewText('reportPreviewUpdatedAt', record.preview_updated_at, '—');
+
+            const modal =
+                document.getElementById('reportRecordPreviewModal');
+
+            const scroller =
+                document.getElementById('reportRecordPreviewScroller');
+
+            if (scroller) {
+                scroller.scrollTop = 0;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            document.documentElement.style.overflow =
+                'hidden';
+
+            document.body.style.overflow =
+                'hidden';
+
+            window.requestAnimationFrame(
+                updateReportPreviewRail
+            );
+        }
+
+        function closeReportRecordPreview() {
+            const modal =
+                document.getElementById('reportRecordPreviewModal');
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+
+            document.documentElement.style.overflow =
+                '';
+
+            document.body.style.overflow =
+                '';
+        }
+
+        function scrollReportsBreakdown(direction) {
+            const scroller =
+                document.getElementById('reportsRecordsScroller');
+
+            if (!scroller) {
+                return;
+            }
+
+            scroller.scrollBy({
+                top:
+                    direction === 'up'
+                        ? -280
+                        : 280,
+                behavior: 'smooth',
+            });
+        }
+
+        document.addEventListener(
+            'DOMContentLoaded',
+            function () {
+                const scroller =
+                    document.getElementById('reportRecordPreviewScroller');
+
+                const track =
+                    document.getElementById('reportPreviewRailTrack');
+
+                const thumb =
+                    document.getElementById('reportPreviewRailThumb');
+
+                const up =
+                    document.getElementById('reportPreviewRailUp');
+
+                const down =
+                    document.getElementById('reportPreviewRailDown');
+
+                scroller?.addEventListener(
+                    'scroll',
+                    updateReportPreviewRail,
+                    { passive: true }
+                );
+
+                up?.addEventListener(
+                    'click',
+                    function () {
+                        scrollReportPreviewBy(-220);
+                    }
+                );
+
+                down?.addEventListener(
+                    'click',
+                    function () {
+                        scrollReportPreviewBy(220);
+                    }
+                );
+
+                track?.addEventListener(
+                    'click',
+                    function (event) {
+                        if (
+                            !scroller
+                            || !thumb
+                            || event.target === thumb
+                        ) {
+                            return;
+                        }
+
+                        const trackRect =
+                            track.getBoundingClientRect();
+
+                        const targetRatio =
+                            Math.max(
+                                0,
+                                Math.min(
+                                    1,
+                                    (
+                                        event.clientY
+                                        - trackRect.top
+                                    )
+                                    / trackRect.height
+                                )
+                            );
+
+                        scroller.scrollTo({
+                            top:
+                                (
+                                    scroller.scrollHeight
+                                    - scroller.clientHeight
+                                )
+                                * targetRatio,
+                            behavior: 'smooth',
+                        });
+                    }
+                );
+
+                thumb?.addEventListener(
+                    'pointerdown',
+                    function (event) {
+                        if (!track || !scroller) {
+                            return;
+                        }
+
+                        reportPreviewDragging =
+                            true;
+
+                        reportPreviewDragStartY =
+                            event.clientY;
+
+                        reportPreviewDragStartTop =
+                            parseFloat(
+                                thumb.style.top
+                                || '0'
+                            );
+
+                        thumb.setPointerCapture(
+                            event.pointerId
+                        );
+
+                        event.preventDefault();
+                    }
+                );
+
+                thumb?.addEventListener(
+                    'pointermove',
+                    function (event) {
+                        if (
+                            !reportPreviewDragging
+                            || !track
+                            || !scroller
+                        ) {
+                            return;
+                        }
+
+                        const trackHeight =
+                            track.clientHeight;
+
+                        const thumbHeight =
+                            thumb.offsetHeight;
+
+                        const maxThumbTop =
+                            Math.max(
+                                0,
+                                trackHeight - thumbHeight
+                            );
+
+                        const nextTop =
+                            Math.max(
+                                0,
+                                Math.min(
+                                    maxThumbTop,
+                                    reportPreviewDragStartTop
+                                    + (
+                                        event.clientY
+                                        - reportPreviewDragStartY
+                                    )
+                                )
+                            );
+
+                        const ratio =
+                            maxThumbTop > 0
+                                ? nextTop
+                                    / maxThumbTop
+                                : 0;
+
+                        scroller.scrollTop =
+                            (
+                                scroller.scrollHeight
+                                - scroller.clientHeight
+                            )
+                            * ratio;
+                    }
+                );
+
+                function stopDragging(event) {
+                    if (!reportPreviewDragging) {
+                        return;
+                    }
+
+                    reportPreviewDragging =
+                        false;
+
+                    if (
+                        thumb
+                        && event.pointerId !== undefined
+                        && thumb.hasPointerCapture(
+                            event.pointerId
+                        )
+                    ) {
+                        thumb.releasePointerCapture(
+                            event.pointerId
+                        );
+                    }
+                }
+
+                thumb?.addEventListener(
+                    'pointerup',
+                    stopDragging
+                );
+
+                thumb?.addEventListener(
+                    'pointercancel',
+                    stopDragging
+                );
+
+                window.addEventListener(
+                    'resize',
+                    updateReportPreviewRail
+                );
+            }
+        );
+
+        document.addEventListener(
+            'keydown',
+            function (event) {
+                if (event.key === 'Escape') {
+                    closeReportRecordPreview();
+                }
+            }
+        );
+    </script>
+
+    {{-- Incident Report Modal --}}
 <div id="specificIncidentReportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
     <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <div class="mb-5 flex items-start justify-between gap-4">
@@ -368,7 +1045,7 @@
 
                     <button type="submit"
                             class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                        Generate PDF
+                        Download PDF
                     </button>
                 </div>
             </form>
@@ -382,113 +1059,17 @@
     </div>
 </div>
 
-{{-- Case Report Modal --}}
-<div id="caseReportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
-    <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-        <div class="mb-5 flex items-start justify-between gap-4">
-            <div>
-                <h2 class="text-xl font-bold text-slate-900">
-                    Case Report
-                </h2>
-
-                <p class="mt-1 text-sm leading-6 text-slate-500">
-                    Generate a separate PDF report for one selected case management record only.
-                </p>
-            </div>
-
-            <button type="button"
-                    onclick="closeCaseReportModal()"
-                    class="text-2xl leading-none text-slate-500 hover:text-slate-900">
-                &times;
-            </button>
-        </div>
-
-        @if (($caseReportOptions ?? collect())->count())
-            <form id="caseReportForm"
-                  data-report-url-template="{{ url('/admin/reports/cases/__CASE_ID__/pdf') }}"
-                  class="space-y-5">
-                <input type="hidden" id="case_report_id">
-
-                <div>
-                    <div class="mb-2 flex items-center justify-between gap-3">
-                        <label class="block text-sm font-semibold text-slate-700">
-                            Select Case
-                        </label>
-
-                        <div class="flex items-center gap-2">
-                            <button type="button"
-                                    onclick="scrollSpecificReportList('caseReportList', 'up')"
-                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">
-                                ↑
-                            </button>
-
-                            <button type="button"
-                                    onclick="scrollSpecificReportList('caseReportList', 'down')"
-                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50">
-                                ↓
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="caseReportSelectedLabel"
-                         class="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                        No case selected
-                    </div>
-
-                    <div id="caseReportList"
-                         data-specific-report-list
-                         class="max-h-64 overflow-y-auto rounded-xl border border-slate-300 bg-white p-2">
-                        @foreach ($caseReportOptions as $caseOption)
-                            <button type="button"
-                                    data-specific-report-option
-                                    data-value="{{ $caseOption['id'] }}"
-                                    onclick="selectSpecificReportOption(this, 'case_report_id', 'caseReportSelectedLabel')"
-                                    class="mb-2 block w-full rounded-lg px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800">
-                                {{ $caseOption['label'] }}
-                            </button>
-                        @endforeach
-                    </div>
-                </div>
-
-                <div id="caseReportWarning"
-                     class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                    Select one case first.
-                </div>
-
-                <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
-                    <button type="button"
-                            onclick="closeCaseReportModal()"
-                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                        Cancel
-                    </button>
-
-                    <button type="submit"
-                            class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                        Generate PDF
-                    </button>
-                </div>
-            </form>
-        @else
-            <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                <h3 class="text-sm font-bold text-slate-900">
-                    No cases available
-                </h3>
-            </div>
-        @endif
-    </div>
-</div>
-
-{{-- Complaint Report Modal --}}
+{{-- Resident Feedback Report Modal --}}
 <div id="specificComplaintReportModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
     <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <div class="mb-5 flex items-start justify-between gap-4">
             <div>
                 <h2 class="text-xl font-bold text-slate-900">
-                    Complaint Report
+                    Resident Feedback Report
                 </h2>
 
                 <p class="mt-1 text-sm leading-6 text-slate-500">
-                    Generate a separate PDF report for one selected resident complaint only.
+                    Generate a separate PDF report for one selected resident feedback only.
                 </p>
             </div>
 
@@ -508,7 +1089,7 @@
                 <div>
                     <div class="mb-2 flex items-center justify-between gap-3">
                         <label class="block text-sm font-semibold text-slate-700">
-                            Select Complaint
+                            Select Feedback
                         </label>
 
                         <div class="flex items-center gap-2">
@@ -528,7 +1109,7 @@
 
                     <div id="specificComplaintSelectedLabel"
                          class="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                        No complaint selected
+                        No feedback selected
                     </div>
 
                     <div id="specificComplaintReportList"
@@ -548,7 +1129,7 @@
 
                 <div id="specificComplaintWarning"
                      class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                    Select one complaint first.
+                    Select one feedback record first.
                 </div>
 
                 <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
@@ -560,14 +1141,14 @@
 
                     <button type="submit"
                             class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                        Generate PDF
+                        Download PDF
                     </button>
                 </div>
             </form>
         @else
             <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                 <h3 class="text-sm font-bold text-slate-900">
-                    No complaints available
+                    No feedback records available
                 </h3>
             </div>
         @endif
@@ -657,7 +1238,7 @@
 
                     <button type="submit"
                             class="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                        Generate PDF
+                        Download PDF
                     </button>
                 </div>
             </form>
@@ -728,16 +1309,7 @@
     function closeSpecificIncidentReportModal() {
         closeSpecificReportModal('specificIncidentReportModal');
     }
-
-    function openCaseReportModal() {
-        openSpecificReportModal('caseReportModal');
-    }
-
-    function closeCaseReportModal() {
-        closeSpecificReportModal('caseReportModal');
-    }
-
-    function openSpecificComplaintReportModal() {
+function openSpecificComplaintReportModal() {
         openSpecificReportModal('specificComplaintReportModal');
     }
 
@@ -799,8 +1371,7 @@
 
         [
             'specificIncidentWarning',
-            'caseReportWarning',
-            'specificComplaintWarning',
+'specificComplaintWarning',
             'specificSosWarning',
         ].forEach(function (warningId) {
             const warning = document.getElementById(warningId);
@@ -856,15 +1427,7 @@
             'specificIncidentWarning',
             '__INCIDENT_ID__'
         );
-
-        bindSpecificReportForm(
-            'caseReportForm',
-            'case_report_id',
-            'caseReportWarning',
-            '__CASE_ID__'
-        );
-
-        bindSpecificReportForm(
+bindSpecificReportForm(
             'specificComplaintReportForm',
             'specific_complaint_id',
             'specificComplaintWarning',
@@ -898,4 +1461,98 @@
         }
     }
 </style>
+
+
+
+<script>
+    function setReportsCustomDateDropdown(open) {
+        const dropdown = document.getElementById('reportCustomDateDropdown');
+
+        if (!dropdown) {
+            return;
+        }
+
+        dropdown.style.display = open ? 'block' : 'none';
+    }
+
+    function handleReportsTimelineChange(select) {
+        const form = document.getElementById('reportTimelineForm');
+        const from = document.getElementById('reportDateFrom');
+        const to = document.getElementById('reportDateTo');
+
+        if (select.value === 'custom') {
+            setReportsCustomDateDropdown(true);
+
+            window.setTimeout(() => {
+                if (from) {
+                    from.focus();
+                }
+            }, 0);
+
+            return;
+        }
+
+        setReportsCustomDateDropdown(false);
+
+        if (from) {
+            from.value = '';
+        }
+
+        if (to) {
+            to.value = '';
+        }
+
+        if (form) {
+            form.requestSubmit();
+        }
+    }
+
+    document.addEventListener('click', function (event) {
+        const form = document.getElementById('reportTimelineForm');
+        const select = document.getElementById('reportTimelineSelect');
+
+        if (!form || !select) {
+            return;
+        }
+
+        if (
+            select.value === 'custom'
+            && !form.contains(event.target)
+        ) {
+            setReportsCustomDateDropdown(false);
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            setReportsCustomDateDropdown(false);
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const select = document.getElementById('reportTimelineSelect');
+
+        /*
+         * Do not automatically open the dropdown after a page load.
+         * It behaves like the notification bell: the user explicitly opens it.
+         */
+        setReportsCustomDateDropdown(false);
+
+        if (
+            select
+            && select.value !== 'custom'
+        ) {
+            const from = document.getElementById('reportDateFrom');
+            const to = document.getElementById('reportDateTo');
+
+            if (from) {
+                from.value = '';
+            }
+
+            if (to) {
+                to.value = '';
+            }
+        }
+    });
+</script>
 @endsection

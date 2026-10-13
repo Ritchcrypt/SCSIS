@@ -1,10 +1,10 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\DeletedDataRecoveryController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\BarangayMapController;
-use App\Http\Controllers\CaseManagementController;
 use App\Http\Controllers\EmergencyModeController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\NotificationOpenController;
@@ -124,17 +124,19 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::get('/reports', [ReportController::class, 'index'])
             ->name('reports.index');
+        Route::get('/reports/download', [ReportController::class, 'downloadSelection'])
+            ->name('reports.download.select');
+
+        Route::post('/reports/download/pdf', [ReportController::class, 'downloadSelectedPdf'])
+            ->name('reports.download.pdf');
 
         Route::get('/reports/pdf', [ReportController::class, 'downloadPdf'])
+            ->middleware('signed')
             ->name('reports.pdf');
 
         Route::get('/reports/incidents/{incident}/pdf', [ReportController::class, 'downloadIncidentPdf'])
             ->name('reports.incident-pdf');
-
-        Route::get('/reports/cases/{caseRecord}/pdf', [ReportController::class, 'downloadCasePdf'])
-            ->name('reports.case-pdf');
-
-        Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
+Route::get('/reports/complaints/{residentComplaint}/pdf', [ReportController::class, 'downloadComplaintPdf'])
             ->name('reports.complaint-pdf');
         Route::get('/reports/sos/{mobileEmergencyAlert}/pdf', [ReportController::class, 'downloadSosPdf'])
             ->name('reports.sos-pdf');
@@ -178,6 +180,12 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::delete('/barangays/{barangayId}/quick-delete', [IncidentController::class, 'quickDeleteBarangay'])
             ->name('barangays.quick-delete');
+
+        Route::post('/incident-categories/quick-store', [IncidentController::class, 'quickStoreCategory'])
+            ->name('incident-categories.quick-store');
+
+        Route::delete('/incident-categories/{categoryId}/quick-delete', [IncidentController::class, 'quickDeleteCategory'])
+            ->name('incident-categories.quick-delete');
 
         Route::get('/system-branding', [SystemBrandingController::class, 'edit'])
             ->name('system-branding.edit');
@@ -224,6 +232,12 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
          */
         Route::get('/activity-logs', [ActivityLogController::class, 'index'])
             ->name('activity-logs.index');
+
+        Route::get('/activity-logs/deleted-data', [DeletedDataRecoveryController::class, 'index'])
+            ->name('activity-logs.deleted-data.index');
+
+        Route::patch('/activity-logs/deleted-data/{deletedDataArchive}/restore', [DeletedDataRecoveryController::class, 'restore'])
+            ->name('activity-logs.deleted-data.restore');
 
         Route::delete('/activity-logs', [ActivityLogController::class, 'destroyAll'])
             ->name('activity-logs.destroy-all');
@@ -318,17 +332,10 @@ Route::post('/tanods', [TanodRosterController::class, 'store'])
         Route::delete('/incidents/{incident}', [IncidentController::class, 'destroy'])
             ->name('incidents.destroy');
 
-        Route::get('/cases', [CaseManagementController::class, 'index'])
-            ->name('cases.index');
 
-        Route::post('/cases', [CaseManagementController::class, 'store'])
-            ->name('cases.store');
 
-        Route::patch('/cases/{caseRecord}', [CaseManagementController::class, 'update'])
-            ->name('cases.update');
 
-        Route::delete('/cases/{caseRecord}', [CaseManagementController::class, 'destroy'])
-            ->name('cases.destroy');
+
     });
 
 /*
@@ -395,6 +402,12 @@ Route::middleware(['auth', 'active.user', 'role:official,dao'])
 
         Route::delete('/barangays/{barangayId}/quick-delete', [IncidentController::class, 'quickDeleteBarangay'])
             ->name('barangays.quick-delete');
+
+        Route::post('/incident-categories/quick-store', [IncidentController::class, 'quickStoreCategory'])
+            ->name('incident-categories.quick-store');
+
+        Route::delete('/incident-categories/{categoryId}/quick-delete', [IncidentController::class, 'quickDeleteCategory'])
+            ->name('incident-categories.quick-delete');
 
         Route::get('/incidents', [IncidentController::class, 'index'])
             ->name('incidents.index');

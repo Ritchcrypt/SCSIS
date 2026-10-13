@@ -163,4 +163,19 @@ new #[Layout('components.layouts.auth')] class extends Component {
             {{ __('Sign up') }}
         </x-text-link>
     </div>
+
+    @if (Route::has('distress-signal.create'))
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center">
+            <p class="text-xs font-semibold text-red-800">
+                Need emergency assistance?
+            </p>
+
+            <a
+                href="{{ route('distress-signal.create') }}"
+                class="mt-1 inline-flex text-sm font-black text-red-700 underline decoration-red-300 underline-offset-4 hover:text-red-900"
+            >
+                Send a distress signal
+            </a>
+        </div>
+    @endif
 </div>

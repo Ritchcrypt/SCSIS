@@ -1165,7 +1165,11 @@ class IncidentController extends Controller
 
         $message->load('user');
 
-        $this->recordOperationalActivity(
+                $this->notifyIncidentMessageRecipients(
+            incident: $incident,
+            sender: $request->user()
+        );
+$this->recordOperationalActivity(
             event: 'incident.message_added',
             category: 'incident',
             description:
@@ -2106,31 +2110,46 @@ class IncidentController extends Controller
         }
     }
 
-    private function createTanodTaskFromIncident(
-        Incident $incident,
-        Request $request
-    ): void {
+    private function createTanodTaskFromIncident(Incident $incident, Request $request): void
+    {
         if (
             ! Schema::hasTable('tanod_tasks')
             || ! Schema::hasTable('tanod_task_responses')
-            || ! Schema::hasColumn(
-                'tanod_tasks',
-                'incident_id'
-            )
+            || ! Schema::hasColumn('tanod_tasks', 'incident_id')
         ) {
             return;
         }
 
+        $incident->loadMissing([
+            'category',
+            'barangay',
+        ]);
+
         $task = TanodTask::query()->create([
             'incident_id' => $incident->id,
-            'created_by' => $request->user()->id,
-            'title' => $incident->display_title,
-            'description' => $incident->display_description,
+            'barangay_id' =>
+                $incident->barangay_id,
+            'fallback_used' => false,
+            'created_by' =>
+                $request->user()->id,
+            'title' =>
+                $incident->incident_title
+                ?? $incident->title
+                ?? 'Incident Response Task',
+            'description' =>
+                $incident->incident_description
+                ?? $incident->description
+                ?? null,
             'location' =>
-                $this->incidentLocationAddress($incident),
+                $incident->location_address
+                ?? $incident->location
+                ?? null,
             'task_datetime' => now(),
             'due_at' => null,
-            'priority' => match ($incident->priority ?? 'normal') {
+            'priority' => match (
+                $incident->priority
+                ?? 'normal'
+            ) {
                 'critical' => 'urgent',
                 'high' => 'high',
                 'moderate' => 'normal',
@@ -2140,22 +2159,14 @@ class IncidentController extends Controller
             'status' => 'open',
         ]);
 
-        $tanods = Employee::query()
-            ->with('user')
-            ->tanods()
-            ->active()
-            ->get();
+        $assignment = app(
+            \App\Services\TanodTaskAssignmentService::class
+        )->assignInitialResponses($task);
 
-        foreach ($tanods as $tanod) {
-            TanodTaskResponse::query()->create([
-                'tanod_task_id' => $task->id,
-                'employee_id' => $tanod->id,
-                'user_id' => $tanod->user_id,
-                'response_status' => 'pending',
-                'response_note' => null,
-                'responded_at' => null,
-            ]);
-
+        foreach (
+            $assignment['tanods']
+            as $tanod
+        ) {
             if ($tanod->user_id) {
                 $this->notifyTanodAboutIncidentTask(
                     $task,
@@ -2165,7 +2176,6 @@ class IncidentController extends Controller
             }
         }
     }
-
     private function notifyTanodAboutIncidentTask(
         TanodTask $task,
         Incident $incident,
@@ -2422,7 +2432,6 @@ class IncidentController extends Controller
             'incident_status_histories',
             'incident_status_history',
             'incident_escalations',
-            'case_records',
         ];
 
         foreach ($relatedTables as $table) {
@@ -2603,5 +2612,86 @@ class IncidentController extends Controller
         }
 
         return null;
+    }
+
+    private function notifyIncidentMessageRecipients(
+        Incident $incident,
+        User $sender
+    ): void {
+        if (! Schema::hasTable('notifications')) {
+            return;
+        }
+
+        $incident->loadMissing([
+            'reporter',
+            'assignedTanod.user',
+        ]);
+
+        $managementIds = User::query()
+            ->whereIn(
+                'role',
+                ['admin', 'official', 'dao']
+            )
+            ->when(
+                Schema::hasColumn('users', 'is_active'),
+                fn ($query) => $query->where(
+                    'is_active',
+                    true
+                )
+            )
+            ->pluck('id');
+
+        $recipientIds = collect()
+            ->merge($managementIds)
+            ->push($incident->reporter_id)
+            ->push($incident->assignedTanod?->user_id)
+            ->filter()
+            ->map(
+                fn ($id): int => (int) $id
+            )
+            ->reject(
+                fn (int $id): bool =>
+                    $id === (int) $sender->id
+            )
+            ->unique()
+            ->values();
+
+        foreach ($recipientIds as $userId) {
+            $data = [
+                'user_id' => $userId,
+                'type' => 'incident_message',
+                'source_id' => $incident->id,
+                'title' => 'New incident message',
+                'message' =>
+                    $sender->name
+                    . ' added a message to '
+                    . $incident->display_title
+                    . '.',
+                'is_read' => false,
+                'read_at' => null,
+            ];
+
+            if (
+                Schema::hasColumn(
+                    'notifications',
+                    'acknowledged_by'
+                )
+            ) {
+                $data['acknowledged_by'] = null;
+            }
+
+            if (
+                Schema::hasColumn(
+                    'notifications',
+                    'acknowledged_at'
+                )
+            ) {
+                $data['acknowledged_at'] = null;
+            }
+
+            UserNotification::query()->create(
+                $data
+            );
+        }
     }
 }

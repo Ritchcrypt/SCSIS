@@ -114,6 +114,12 @@ class AppServiceProvider extends ServiceProvider
                 && ($user->isAdmin() || $user->isOfficial())
         );
 
+        Gate::define(
+            'manageIncidentCategories',
+            fn (User $user): bool => $user->isActive()
+                && ($user->isAdmin() || $user->isOfficial())
+        );
+
         Password::defaults(function (): Password {
             return Password::min(12)
                 ->mixedCase()

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Support\DaoBarangays;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -17,15 +18,14 @@ class FoundationSeeder extends Seeder
         |--------------------------------------------------------------------------
         */
 
-        $barangays = [
-            ['barangay_name' => 'Poblacion', 'location' => 'Dao, Capiz'],
-            ['barangay_name' => 'Agtambi', 'location' => 'Dao, Capiz'],
-            ['barangay_name' => 'Balucuan', 'location' => 'Dao, Capiz'],
-            ['barangay_name' => 'Duyoc', 'location' => 'Dao, Capiz'],
-            ['barangay_name' => 'Lacaron', 'location' => 'Dao, Capiz'],
-            ['barangay_name' => 'Ilas Sur', 'location' => 'Dao, Capiz'],
-            ['barangay_name' => 'Ilas Norte', 'location' => 'Dao, Capiz'],
-        ];
+        $barangays = collect(DaoBarangays::records())
+            ->map(
+                fn (array $barangay): array => [
+                    'barangay_name' => $barangay['name'],
+                    'location' => 'Dao, Capiz',
+                ]
+            )
+            ->all();
 
         foreach ($barangays as $barangay) {
             DB::table('barangays')->updateOrInsert(

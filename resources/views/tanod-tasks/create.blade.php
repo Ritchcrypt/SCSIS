@@ -15,7 +15,7 @@
         </h1>
 
         <p class="mt-2 text-sm text-slate-600">
-            This task will be assigned to all active tanods. Each tanod can accept or decline it.
+            Tanods assigned to the selected barangay receive the task first. If none are available, active tanods from other Dao barangays can respond.
         </p>
     </div>
 
@@ -80,6 +80,27 @@
                         <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
+                <div>
+                    <label for="barangay_id" class="mb-2 block text-sm font-semibold text-slate-700">
+                        Response Barangay *
+                    </label>
+
+                    <select id="barangay_id"
+                            name="barangay_id"
+                            required
+                            class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                        <option value="">Select barangay</option>
+                        @foreach ($barangays as $barangay)
+                            <option value="{{ $barangay->id }}" @selected((string) old('barangay_id') === (string) $barangay->id)>
+                                {{ $barangay->barangay_name }}
+                            </option>
+                        @endforeach
+                    </select>
+
+                    @error('barangay_id')
+                        <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
 
                 <div>
                     <label for="priority" class="mb-2 block text-sm font-semibold text-slate-700">
@@ -137,7 +158,7 @@
             </div>
 
             <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
-                Active tanods who will receive this task: {{ $tanods->count() }}
+                Active tanods available across Dao: {{ $tanods->count() }}. The selected barangay is prioritized first.
             </div>
 
             <div class="flex justify-end gap-3">

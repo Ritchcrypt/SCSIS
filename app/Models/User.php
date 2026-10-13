@@ -24,6 +24,8 @@ class User extends Authenticatable
         'contact_number',
         'barangay_id',
         'address',
+        'date_of_birth',
+        'age_attested_at',
         'is_active',
         'theme_mode',
         'theme_custom_color',
@@ -71,9 +73,23 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'status' => 'boolean',
+            'date_of_birth' => 'date',
+            'age_attested_at' => 'datetime',
         ];
     }
 
+    public function getResidentAgeAttribute(): ?int
+    {
+        if (! $this->date_of_birth) {
+            return null;
+        }
+
+        try {
+            return (int) $this->date_of_birth->age;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
     public function initials(): string
     {
         $name = trim((string) $this->name);

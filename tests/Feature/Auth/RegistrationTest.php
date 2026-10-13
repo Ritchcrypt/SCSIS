@@ -29,6 +29,8 @@ class RegistrationTest extends TestCase
             ->set('email', $email)
             ->set('contact_number', '09123456789')
             ->set('address', 'Poblacion, Dao, Capiz')
+            ->set('date_of_birth', now()->subYears(20)->subDay()->toDateString())
+            ->set('age_confirmation', true)
             ->set('password', $password)
             ->set('password_confirmation', $password)
             ->call('register')
@@ -43,6 +45,8 @@ class RegistrationTest extends TestCase
         $this->assertSame('resident', $user->role);
         $this->assertSame('09123456789', $user->contact_number);
         $this->assertSame('Poblacion, Dao, Capiz', $user->address);
+        $this->assertSame(20, $user->resident_age);
+        $this->assertNotNull($user->age_attested_at);
         $this->assertFalse((bool) $user->is_active);
         $this->assertTrue(Hash::check($password, $user->password));
 

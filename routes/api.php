@@ -496,7 +496,7 @@ Route::prefix('v1')
 
         /*
         |--------------------------------------------------------------------------
-        | Resident Complaints
+        | Resident Feedback
         |--------------------------------------------------------------------------
         | Admin + Official/DAO process. Resident owns/submits only their records.
         | Laravel ResidentComplaintPolicy is the final security boundary.

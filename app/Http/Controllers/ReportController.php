@@ -52,11 +52,28 @@ class ReportController extends Controller
     {
         Gate::authorize('viewReports');
 
+        $data =
+            $this->websiteReportData(
+                $request
+            );
+
+        $data[
+            'metricSelectionUrls'
+        ] =
+            $this->metricSelectionUrls(
+                $data
+            );
+
         return view(
             'reports.index',
-            $this->reportData($request)
+            $data
         );
     }
+
+
+
+
+
 
 
     /**
@@ -73,28 +90,357 @@ class ReportController extends Controller
         return $this->reportData($request);
     }
 
-    public function downloadPdf(Request $request)
-    {
-        Gate::authorize('viewReports');
 
-        $data = $this->reportData($request);
+    private function websiteReportData(
+        Request $request
+    ): array {
+        $data =
+            $this->reportData(
+                $request
+            );
 
-        $fileName = 'barangay-report-'
-            . $this->safeFileToken(
-                $data['periodLabel'] ?? 'report',
-                'report'
-            )
-            . '-'
-            . now()->format('Ymd-His')
-            . '.pdf';
+        unset(
+            $data['casesFiled'],
+            $data['caseReportOptions']
+        );
 
-        return Pdf::loadView('reports.pdf', $data)
-            ->setPaper('a4', 'portrait')
-            ->download($fileName);
+        return $data;
     }
 
 
-    public function downloadIncidentPdf(
+
+    public function downloadSelection(
+        Request $request
+    ): View {
+        Gate::authorize('viewReports');
+
+        $data =
+            $this->websiteReportData(
+                $request
+            );
+
+        $data['records'] =
+            $this->recordsWithSelectionKeys(
+                $data['records']
+                    ?? []
+            );
+
+        $data[
+            'selectedMetricCount'
+        ] = count(
+            $data['records']
+        );
+
+        $data[
+            'backUrl'
+        ] =
+            route(
+                'admin.reports.index',
+                $this->reportNavigationParameters(
+                    $data
+                )
+            )
+            . '#records-breakdown';
+
+        return view(
+            'reports.download-selection',
+            $data
+        );
+    }
+
+
+
+    public function downloadSelectedPdf(
+        Request $request
+    ) {
+        Gate::authorize('viewReports');
+
+        $validated =
+            $request->validate([
+                'period' => [
+                    'required',
+                    'in:today,week,month,year,custom',
+                ],
+                'metric' => [
+                    'required',
+                    'in:total,active,critical,resolved,distress,tanod',
+                ],
+                'selection_mode' => [
+                    'required',
+                    'in:selected,all',
+                ],
+                'date_from' => [
+                    'nullable',
+                    'required_if:period,custom',
+                    'date_format:Y-m-d',
+                ],
+                'date_to' => [
+                    'nullable',
+                    'required_if:period,custom',
+                    'date_format:Y-m-d',
+                ],
+                'records' => [
+                    'nullable',
+                    'array',
+                ],
+                'records.*' => [
+                    'string',
+                    'max:160',
+                ],
+            ]);
+
+        $reportQuery = [
+            'period' =>
+                $validated[
+                    'period'
+                ],
+            'metric' =>
+                $validated[
+                    'metric'
+                ],
+        ];
+
+        if (
+            $validated[
+                'period'
+            ] === 'custom'
+        ) {
+            $reportQuery[
+                'date_from'
+            ] =
+                $validated[
+                    'date_from'
+                ];
+
+            $reportQuery[
+                'date_to'
+            ] =
+                $validated[
+                    'date_to'
+                ];
+        }
+
+        /*
+         * The Reports engine uses query parameters for all normal page
+         * requests. Bridge the validated POST controls into that same source
+         * so PDF results are identical to the live Reports screen.
+         */
+        $request
+            ->query
+            ->replace(
+                $reportQuery
+            );
+
+        $data =
+            $this->websiteReportData(
+                $request
+            );
+
+        $available =
+            collect(
+                $this->recordsWithSelectionKeys(
+                    $data[
+                        'records'
+                    ]
+                    ?? []
+                )
+            )
+                ->keyBy(
+                    'record_key'
+                );
+
+        if (
+            $available->isEmpty()
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'records' =>
+                    'There are no records to download for this metric and timeline.',
+            ]);
+        }
+
+        if (
+            $validated[
+                'selection_mode'
+            ] === 'all'
+        ) {
+            $records =
+                $available
+                    ->values()
+                    ->all();
+
+            $selectionLabel =
+                'All Records';
+        } else {
+            $selectedKeys =
+                array_values(
+                    array_unique(
+                        $validated[
+                            'records'
+                        ]
+                        ?? []
+                    )
+                );
+
+            if (
+                $selectedKeys === []
+            ) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'records' =>
+                        'Select at least one record to download.',
+                ]);
+            }
+
+            $selected =
+                $available
+                    ->only(
+                        $selectedKeys
+                    )
+                    ->values();
+
+            if (
+                $selected->count()
+                !== count(
+                    $selectedKeys
+                )
+            ) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'records' =>
+                        'One or more selected records do not belong to this metric and timeline.',
+                ]);
+            }
+
+            $records =
+                $selected->all();
+
+            $selectionLabel =
+                'Selected Records';
+        }
+
+        $data[
+            'records'
+        ] = $records;
+
+        $data[
+            'selectedMetric'
+        ] =
+            $validated[
+                'metric'
+            ];
+
+        $data[
+            'selectedMetricLabel'
+        ] =
+            $this->reportMetricLabel(
+                $validated[
+                    'metric'
+                ]
+            );
+
+        $data[
+            'selectedMetricCount'
+        ] =
+            count(
+                $records
+            );
+
+        $data[
+            'selectionLabel'
+        ] =
+            $selectionLabel;
+
+        $fileName =
+            'report-'
+            . $this->safeFileToken(
+                $data[
+                    'selectedMetricLabel'
+                ],
+                $validated[
+                    'metric'
+                ]
+            )
+            . '-'
+            . (
+                $validated[
+                    'selection_mode'
+                ] === 'all'
+                    ? 'all'
+                    : 'selected'
+            )
+            . '-'
+            . now()->format(
+                'Ymd-His'
+            )
+            . '.pdf';
+
+        return Pdf::loadView(
+            'reports.pdf',
+            $data
+        )
+            ->setPaper(
+                'a4',
+                'portrait'
+            )
+            ->download(
+                $fileName
+            );
+    }
+
+
+
+    public function downloadPdf(
+        Request $request
+    ) {
+        Gate::authorize('viewReports');
+
+        $data =
+            $this->websiteReportData(
+                $request
+            );
+
+        $metric =
+            $this->validReportMetric(
+                (string) (
+                    $data[
+                        'selectedMetric'
+                    ]
+                    ?? $request->query(
+                        'metric',
+                        'total'
+                    )
+                )
+            );
+
+        $metricLabel =
+            $this->reportMetricLabel(
+                $metric
+            );
+
+        $fileName =
+            'report-'
+            . $this->safeFileToken(
+                $metricLabel,
+                $metric
+            )
+            . '-'
+            . now()->format(
+                'Ymd-His'
+            )
+            . '.pdf';
+
+        return Pdf::loadView(
+            'reports.pdf',
+            $data
+        )
+            ->setPaper(
+                'a4',
+                'portrait'
+            )
+            ->download(
+                $fileName
+            );
+    }
+
+public function downloadIncidentPdf(
         Request $request,
         Incident $incident
     ) {
@@ -102,6 +448,9 @@ class ReportController extends Controller
         Gate::authorize('view', $incident);
 
         $data = $this->specificIncidentReportData($incident);
+
+        $data['showCaseRecords'] =
+            $request->is('api/*');
 
         $fileName = 'incident-report-'
             . $this->safeFileToken(
@@ -160,7 +509,7 @@ class ReportController extends Controller
         $code = $data['complaintReport']['code']
             ?? ('complaint-' . $residentComplaint->id);
 
-        $fileName = 'complaint-report-'
+        $fileName = 'resident-feedback-report-'
             . $this->safeFileToken(
                 $code,
                 'complaint-' . $residentComplaint->id
@@ -356,7 +705,7 @@ class ReportController extends Controller
     </div>
 
     <div class="notice">
-        This report contains only the selected case management record. Other cases, complaints, or incidents are excluded.
+        This report contains only the selected case management record. Other cases, resident feedback records, or incidents are excluded.
     </div>
 
     <div class="section">
@@ -464,38 +813,64 @@ class ReportController extends Controller
 
     private function reportData(Request $request): array
     {
-        $period = $this->validPeriod($request->query('period', 'week'));
-        [$startDate, $endDate, $periodLabel] = $this->periodRange($period);
+        [
+            $period,
+            $startDate,
+            $endDate,
+            $periodLabel,
+            $isCustomPeriod,
+        ] = $this->resolveReportRange(
+            $request
+        );
 
-        $incidentBase = $this->incidentBaseQuery($startDate, $endDate);
+        $selectedMetric =
+            $this->validReportMetric(
+                (string) $request->query(
+                    'metric',
+                    'total'
+                )
+            );
 
-        $totalIncidents = (clone $incidentBase)->count();
+        $metricRecordSets = [
+            'total' =>
+                $this->incidentMetricRecords(
+                    $startDate,
+                    $endDate,
+                    'total'
+                ),
+            'active' =>
+                $this->incidentMetricRecords(
+                    $startDate,
+                    $endDate,
+                    'active'
+                ),
+            'critical' =>
+                $this->incidentMetricRecords(
+                    $startDate,
+                    $endDate,
+                    'critical'
+                ),
+            'resolved' =>
+                $this->incidentMetricRecords(
+                    $startDate,
+                    $endDate,
+                    'resolved'
+                ),
+            'distress' =>
+                $this->distressMetricRecords(
+                    $startDate,
+                    $endDate
+                ),
+            'tanod' =>
+                $this->tanodDutyMetricRecords(
+                    $endDate
+                ),
+        ];
 
-        $activeIncidents = (clone $incidentBase)
-            ->where(function ($query) {
-                $query->whereDoesntHave('currentStatus')
-                    ->orWhereHas('currentStatus', function ($statusQuery) {
-                        $statusQuery->whereNotIn(DB::raw('LOWER(status_name)'), [
-                            'resolved',
-                            'closed',
-                            'completed',
-                            'cancelled',
-                            'canceled',
-                            'rejected',
-                        ]);
-                    });
-            })
-            ->count();
-
-        $resolvedIncidents = (clone $incidentBase)
-            ->whereHas('currentStatus', function ($query) {
-                $query->whereIn(DB::raw('LOWER(status_name)'), [
-                    'resolved',
-                    'closed',
-                    'completed',
-                ]);
-            })
-            ->count();
+        $tanodDuty =
+            app(
+                \App\Services\TanodDutyCounter::class
+            )->countAt($endDate);
 
         $currentUser = Auth::user();
 
@@ -504,29 +879,131 @@ class ReportController extends Controller
             'periodLabel' => $periodLabel,
             'startDate' => $startDate,
             'endDate' => $endDate,
+            'dateFrom' =>
+                $startDate->toDateString(),
+            'dateTo' =>
+                $endDate->toDateString(),
+            'isCustomPeriod' =>
+                $isCustomPeriod,
+            'isHistoricalRange' =>
+                $endDate->lt(
+                    now()->startOfDay()
+                ),
             'generatedAt' => now(),
-            'generatedBy' => $currentUser ? $currentUser->name : 'System',
+            'generatedBy' =>
+                $currentUser
+                    ? $currentUser->name
+                    : 'System',
 
-            'totalIncidents' => $totalIncidents,
-            'activeIncidents' => $activeIncidents,
-            'resolvedIncidents' => $resolvedIncidents,
-            'casesFiled' => $this->countTableByDate('case_records', $startDate, $endDate),
-            'residentComplaints' => $this->residentComplaintCount($startDate, $endDate),
-            'distressSignals' => $this->distressSignalCount($startDate, $endDate),
-            'announcements' => $this->countTableByDate('announcements', $startDate, $endDate),
+            'selectedMetric' =>
+                $selectedMetric,
+            'selectedMetricLabel' =>
+                $this->reportMetricLabel(
+                    $selectedMetric
+                ),
+            'selectedMetricCount' =>
+                count(
+                    $metricRecordSets[
+                        $selectedMetric
+                    ]
+                ),
+            'metricRecordSets' =>
+                $metricRecordSets,
 
-            'records' => $this->recordsBreakdown($startDate, $endDate),
-            'statusSummary' => $this->statusSummary($startDate, $endDate),
-            'severitySummary' => $this->severitySummary($startDate, $endDate),
-            'barangaySummary' => $this->barangaySummary($startDate, $endDate),
-            'tanodSummary' => $this->tanodResponseSummary($startDate, $endDate),
+            'totalIncidents' =>
+                count(
+                    $metricRecordSets[
+                        'total'
+                    ]
+                ),
+            'activeIncidents' =>
+                count(
+                    $metricRecordSets[
+                        'active'
+                    ]
+                ),
+            'criticalIncidents' =>
+                count(
+                    $metricRecordSets[
+                        'critical'
+                    ]
+                ),
+            'resolvedIncidents' =>
+                count(
+                    $metricRecordSets[
+                        'resolved'
+                    ]
+                ),
+            'distressSignals' =>
+                count(
+                    $metricRecordSets[
+                        'distress'
+                    ]
+                ),
+            'tanodOnDuty' =>
+                count(
+                    $metricRecordSets[
+                        'tanod'
+                    ]
+                ),
+            'tanodDutyBasis' =>
+                (string) (
+                    $tanodDuty['basis']
+                    ?? 'unavailable'
+                ),
 
-            'incidentReportOptions' => $this->incidentReportOptions(),
-'caseReportOptions' => $this->caseReportOptions(),
-'complaintReportOptions' => $this->complaintReportOptions(),
-'sosReportOptions' => $this->sosReportOptions(),
+            'residentComplaints' =>
+                $this->residentComplaintCount(
+                    $startDate,
+                    $endDate
+                ),
+            'announcements' =>
+                $this->countTableByDate(
+                    'announcements',
+                    $startDate,
+                    $endDate
+                ),
+
+            'records' =>
+                $metricRecordSets[
+                    $selectedMetric
+                ],
+            'statusSummary' =>
+                $this->statusSummary(
+                    $startDate,
+                    $endDate
+                ),
+            'severitySummary' =>
+                $this->severitySummary(
+                    $startDate,
+                    $endDate
+                ),
+            'barangaySummary' =>
+                $this->barangaySummary(
+                    $startDate,
+                    $endDate
+                ),
+
+            /*
+             * Keep backend/API compatibility even though the website Tanod
+             * Response Summary is removed.
+             */
+            'tanodSummary' =>
+                $this->tanodResponseSummary(
+                    $startDate,
+                    $endDate
+                ),
+
+            'incidentReportOptions' =>
+                $this->incidentReportOptions(),
+            'complaintReportOptions' =>
+                $this->complaintReportOptions(),
+            'sosReportOptions' =>
+                $this->sosReportOptions(),
         ];
     }
+
+
 
     private function specificIncidentReportData(Incident $incident): array
     {
@@ -784,7 +1261,7 @@ class ReportController extends Controller
                     'title',
                     'complaint_title',
                     'concern',
-                ], 'Resident Complaint'),
+                ], 'Resident Feedback'),
 
                 'complainant' => $this->firstTextValue($complaint, [
                     'complainant_name',
@@ -873,7 +1350,7 @@ class ReportController extends Controller
             foreach ($proofRecords as $proof) {
                 $proofRows .= '
                     <tr>
-                        <td>' . e($proof['file_name'] ?? 'Proof file') . '</td>
+                        <td>' . e($proof['file_name'] ?? 'Evidence file') . '</td>
                         <td>' . e($proof['file_type'] ?? '—') . '</td>
                         <td>' . e($proof['file_size'] ?? '—') . '</td>
                         <td>' . e($proof['uploaded_at'] ?? '—') . '</td>
@@ -898,7 +1375,7 @@ class ReportController extends Controller
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Complaint Report</title>
+    <title>Resident Feedback Report</title>
 
     <style>
         body {
@@ -1023,10 +1500,10 @@ class ReportController extends Controller
     <div class="header">
         <p class="system-title">TabangNow System</p>
 
-        <p class="title">Complaint Report</p>
+        <p class="title">Resident Feedback Report</p>
 
         <p class="subtitle">
-            Resident Complaint Documentation — Dao, Capiz
+            Resident Feedback Documentation — Dao, Capiz
         </p>
 
         <div class="meta">
@@ -1036,15 +1513,15 @@ class ReportController extends Controller
     </div>
 
     <div class="notice">
-        This report contains only the selected resident complaint and its directly related records. Other complaints or incidents are excluded.
+        This report contains only the selected resident feedback and its directly related records. Other complaints or incidents are excluded.
     </div>
 
     <div class="section">
-        <p class="section-title">Complaint Details</p>
+        <p class="section-title">Feedback Details</p>
 
         <table>
             <tr>
-                <td class="label">Complaint Code</td>
+                <td class="label">Feedback Reference</td>
                 <td class="value">' . $value('code') . '</td>
             </tr>
 
@@ -1054,7 +1531,7 @@ class ReportController extends Controller
             </tr>
 
             <tr>
-                <td class="label">Complainant</td>
+                <td class="label">Resident</td>
                 <td class="value">' . $value('complainant') . '</td>
             </tr>
 
@@ -1074,7 +1551,7 @@ class ReportController extends Controller
             </tr>
 
             <tr>
-                <td class="label">Complaint Date & Time</td>
+                <td class="label">Feedback Date & Time</td>
                 <td class="value">' . $value('date_time') . '</td>
             </tr>
 
@@ -1091,7 +1568,7 @@ class ReportController extends Controller
     </div>
 
     <div class="section">
-        <p class="section-title">Complaint Narrative / Details</p>
+        <p class="section-title">Feedback Narrative / Details</p>
 
         <table>
             <tr>
@@ -1101,12 +1578,12 @@ class ReportController extends Controller
     </div>
 
     <div class="section">
-        <p class="section-title">Proofs / Attachments</p>
+        <p class="section-title">Supporting / Action Evidence</p>
         ' . $proofSection . '
     </div>
 
     <div class="footer">
-        This report is generated from TabangNow system records. It is intended for barangay complaint documentation and monitoring.
+        This report is generated from TabangNow system records. It is intended for barangay resident feedback documentation and service monitoring.
     </div>
 </body>
 </html>';
@@ -1244,7 +1721,7 @@ class ReportController extends Controller
                     'title',
                     'complaint_title',
                     'concern',
-                ], 'Resident Complaint');
+                ], 'Resident Feedback');
 
                 return [
                     'id' => $complaint->id,
@@ -1478,7 +1955,7 @@ class ReportController extends Controller
                         return [
                             'file_name' => $record->file_name
                                 ?? $record->name
-                                ?? basename((string) ($record->file_path ?? $record->path ?? 'Proof file')),
+                                ?? basename((string) ($record->file_path ?? $record->path ?? 'Evidence file')),
                             'file_type' => $record->file_type
                                 ?? $record->mime_type
                                 ?? '—',
@@ -1551,20 +2028,40 @@ class ReportController extends Controller
                 ];
             });
     }
-    private function incidentBaseQuery(Carbon $startDate, Carbon $endDate)
-    {
+    private function incidentBaseQuery(
+        Carbon $startDate,
+        Carbon $endDate
+    ) {
         return Incident::query()
-            ->with(['barangay', 'category', 'currentStatus'])
-            ->whereBetween('created_at', [$startDate, $endDate]);
+            ->with([
+                'barangay',
+                'category',
+                'currentStatus',
+                'reporter:id,name',
+                'resident.user:id,name',
+                'assignedResponder.user:id,name',
+                'location',
+            ])
+            ->whereRaw(
+                'COALESCE(incident_datetime, reported_at, created_at) BETWEEN ? AND ?',
+                [
+                    $startDate,
+                    $endDate,
+                ]
+            );
     }
+
+
+
 
     private function recordsBreakdown(Carbon $startDate, Carbon $endDate): array
     {
         $records = [];
 
-        $incidents = Incident::query()
-            ->with(['category', 'barangay', 'currentStatus'])
-            ->whereBetween('created_at', [$startDate, $endDate])
+        $incidents = $this->incidentBaseQuery(
+            $startDate,
+            $endDate
+        )
             ->latest()
             ->limit(50)
             ->get();
@@ -1657,13 +2154,13 @@ class ReportController extends Controller
                 $date = $complaint->{$complaintDateColumn};
 
                 $records[] = [
-                    'category' => 'Resident Complaint',
+                    'category' => 'Resident Feedback',
                     'title' => 'Complaint #'
                         . $complaint->id
                         . ' - '
                         . ($complaint->complainant_name
                             ?: 'Unknown complainant'),
-                    'type' => 'Resident Complaint',
+                    'type' => 'Resident Feedback',
                     'status' => $complaint->statusLabel(),
                     'severity' => '—',
                     'barangay' => $complaint->complaint_address
@@ -2042,36 +2539,1058 @@ class ReportController extends Controller
         );
     }
 
-    private function validPeriod(?string $period): string
+
+    private function reportNavigationParameters(
+        array $data
+    ): array {
+        $parameters = [
+            'period' =>
+                $data['period']
+                ?? 'week',
+            'metric' =>
+                $this->validReportMetric(
+                    (string) (
+                        $data[
+                            'selectedMetric'
+                        ]
+                        ?? 'total'
+                    )
+                ),
+        ];
+
+        if (
+            $data[
+                'isCustomPeriod'
+            ]
+            ?? false
+        ) {
+            $parameters[
+                'date_from'
+            ] =
+                $data['dateFrom'];
+
+            $parameters[
+                'date_to'
+            ] =
+                $data['dateTo'];
+        }
+
+        return $parameters;
+    }
+
+
+    private function recordsWithSelectionKeys(
+        array $records
+    ): array {
+        return collect(
+            $records
+        )
+            ->values()
+            ->map(
+                function (
+                    array $record,
+                    int $index
+                ): array {
+                    if (
+                        ! empty(
+                            $record[
+                                'record_key'
+                            ]
+                        )
+                    ) {
+                        return $record;
+                    }
+
+                    $fingerprint =
+                        json_encode(
+                            $record,
+                            JSON_UNESCAPED_UNICODE
+                            | JSON_UNESCAPED_SLASHES
+                        );
+
+                    $record[
+                        'record_key'
+                    ] =
+                        'legacy:'
+                        . hash(
+                            'sha256',
+                            (string) $fingerprint
+                            . '|'
+                            . $index
+                        );
+
+                    return $record;
+                }
+            )
+            ->all();
+    }
+
+    private function validReportMetric(
+        ?string $metric
+    ): string {
+        $metric = strtolower(
+            trim(
+                (string) $metric
+            )
+        );
+
+        return in_array(
+            $metric,
+            [
+                'total',
+                'active',
+                'critical',
+                'resolved',
+                'distress',
+                'tanod',
+            ],
+            true
+        )
+            ? $metric
+            : 'total';
+    }
+
+
+    private function reportMetricLabel(
+        string $metric
+    ): string {
+        return match (
+            $this->validReportMetric(
+                $metric
+            )
+        ) {
+            'active' =>
+                'Active Incidents',
+            'critical' =>
+                'Critical Incidents',
+            'resolved' =>
+                'Resolved Incidents',
+            'distress' =>
+                'Distress Signals / SOS',
+            'tanod' =>
+                'Tanod On Duty',
+            default =>
+                'Total Incidents',
+        };
+    }
+
+
+    private function incidentMetricRecords(
+        Carbon $startDate,
+        Carbon $endDate,
+        string $metric
+    ): array {
+        $metric =
+            $this->validReportMetric(
+                $metric
+            );
+
+        $query =
+            $this->incidentBaseQuery(
+                $startDate,
+                $endDate
+            );
+
+        $terminal = [
+            'resolved',
+            'closed',
+            'completed',
+        ];
+
+        $inactive = [
+            ...$terminal,
+            'cancelled',
+            'canceled',
+            'rejected',
+        ];
+
+        if ($metric === 'active') {
+            $query->where(
+                function ($query) use ($inactive): void {
+                    $query
+                        ->whereDoesntHave('currentStatus')
+                        ->orWhereHas(
+                            'currentStatus',
+                            function ($statusQuery) use ($inactive): void {
+                                $statusQuery->whereNotIn(
+                                    DB::raw('LOWER(status_name)'),
+                                    $inactive
+                                );
+                            }
+                        );
+                }
+            );
+        }
+
+        if ($metric === 'critical') {
+            $query
+                ->whereRaw(
+                    "LOWER(COALESCE(priority, '')) = ?",
+                    ['critical']
+                )
+                ->where(
+                    function ($query) use ($inactive): void {
+                        $query
+                            ->whereDoesntHave('currentStatus')
+                            ->orWhereHas(
+                                'currentStatus',
+                                function ($statusQuery) use ($inactive): void {
+                                    $statusQuery->whereNotIn(
+                                        DB::raw('LOWER(status_name)'),
+                                        $inactive
+                                    );
+                                }
+                            );
+                    }
+                );
+        }
+
+        if ($metric === 'resolved') {
+            $query->whereHas(
+                'currentStatus',
+                function ($statusQuery) use ($terminal): void {
+                    $statusQuery->whereIn(
+                        DB::raw('LOWER(status_name)'),
+                        $terminal
+                    );
+                }
+            );
+        }
+
+        return $query
+            ->orderByRaw(
+                'COALESCE(incident_datetime, reported_at, created_at) DESC'
+            )
+            ->orderByDesc('id')
+            ->get()
+            ->map(
+                function (Incident $incident): array {
+                    $incidentAt =
+                        $incident->incident_datetime
+                        ?? $incident->reported_at
+                        ?? $incident->created_at;
+
+                    $reportedAt =
+                        $incident->reported_at
+                        ?? $incident->created_at
+                        ?? $incidentAt;
+
+                    $reference =
+                        $incident->incident_code
+                        ?: 'INC-'
+                            . str_pad(
+                                (string) $incident->id,
+                                6,
+                                '0',
+                                STR_PAD_LEFT
+                            );
+
+                    $title =
+                        $incident->display_title
+                        ?? $incident->incident_title
+                        ?? $incident->title
+                        ?? 'Untitled Incident';
+
+                    $barangay =
+                        $incident
+                            ->barangay
+                            ?->barangay_name
+                        ?? $incident
+                            ->barangay
+                            ?->name
+                        ?? '—';
+
+                    $mapLocation =
+                        trim(
+                            (string) (
+                                $incident->map_location_name
+                                ?? ''
+                            )
+                        );
+
+                    if (
+                        $mapLocation === ''
+                        && $incident->location
+                    ) {
+                        $mapLocation =
+                            trim(
+                                (string) (
+                                    $incident
+                                        ->location
+                                        ->location_address
+                                    ?? $incident
+                                        ->location
+                                        ->address
+                                    ?? ''
+                                )
+                            );
+                    }
+
+                    if ($mapLocation === '') {
+                        $mapLocation =
+                            $barangay;
+                    }
+
+                    $reporter =
+                        $incident
+                            ->reporter
+                            ?->name
+                        ?? $incident
+                            ->resident
+                            ?->user
+                            ?->name
+                        ?? 'Not identified';
+
+                    $assignedResponder =
+                        $incident
+                            ->assignedResponder
+                            ?->user
+                            ?->name
+                        ?? 'Not assigned';
+
+                    $coordinates =
+                        $incident->latitude !== null
+                        && $incident->longitude !== null
+                            ? number_format(
+                                (float) $incident->latitude,
+                                6,
+                                '.',
+                                ''
+                            )
+                                . ', '
+                                . number_format(
+                                    (float) $incident->longitude,
+                                    6,
+                                    '.',
+                                    ''
+                                )
+                            : 'Unavailable';
+
+                    $status =
+                        $incident
+                            ->currentStatus
+                            ?->status_name
+                        ?? 'Reported';
+
+                    $type =
+                        $this
+                            ->incidentCategoryLabel(
+                                $incident
+                            );
+
+                    $description =
+                        trim(
+                            (string) (
+                                $incident->incident_description
+                                ?? $incident->description
+                                ?? ''
+                            )
+                        );
+
+                    return [
+                        'record_key' =>
+                            'incident:'
+                            . $incident->id,
+
+                        'category' =>
+                            'Incident',
+
+                        'title' =>
+                            $reference
+                            . ' - '
+                            . $title,
+
+                        'type' =>
+                            $type,
+
+                        'severity' =>
+                            ucfirst(
+                                (string) (
+                                    $incident->priority
+                                    ?? 'low'
+                                )
+                            ),
+
+                        'barangay' =>
+                            $barangay,
+
+                        'status' =>
+                            $status,
+
+                        'datetime' =>
+                            $incidentAt
+                                ? Carbon::parse(
+                                    $incidentAt
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+
+                        'preview_reference' =>
+                            $reference,
+
+                        'preview_category' =>
+                            $type,
+
+                        'preview_description' =>
+                            $description !== ''
+                                ? $description
+                                : 'No description provided.',
+
+                        'preview_persons_involved' =>
+                            trim(
+                                (string) (
+                                    $incident
+                                        ->persons_involved
+                                    ?? ''
+                                )
+                            ) ?: 'Not specified',
+
+                        'preview_reporter' =>
+                            $reporter,
+
+                        'preview_assigned_responder' =>
+                            $assignedResponder,
+
+                        'preview_barangay' =>
+                            $barangay,
+
+                        'preview_location' =>
+                            $mapLocation,
+
+                        'preview_coordinates' =>
+                            $coordinates,
+
+                        'preview_status' =>
+                            $status,
+
+                        'preview_reported_at' =>
+                            $reportedAt
+                                ? Carbon::parse(
+                                    $reportedAt
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+
+                        'preview_incident_at' =>
+                            $incidentAt
+                                ? Carbon::parse(
+                                    $incidentAt
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+
+                        'preview_updated_at' =>
+                            $incident->updated_at
+                                ? Carbon::parse(
+                                    $incident->updated_at
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+                    ];
+                }
+            )
+            ->values()
+            ->all();
+    }
+
+
+
+
+    private function distressMetricRecords(
+        Carbon $startDate,
+        Carbon $endDate
+    ): array {
+        if (
+            ! class_exists(
+                MobileEmergencyAlert::class
+            )
+            || ! Schema::hasTable(
+                'mobile_emergency_alerts'
+            )
+        ) {
+            return [];
+        }
+
+        $hasTriggeredAt =
+            Schema::hasColumn(
+                'mobile_emergency_alerts',
+                'triggered_at'
+            );
+
+        $dateExpression =
+            $hasTriggeredAt
+                ? 'COALESCE(triggered_at, created_at)'
+                : 'created_at';
+
+        return MobileEmergencyAlert::query()
+            ->with('user:id,name')
+            ->whereRaw(
+                "{$dateExpression} BETWEEN ? AND ?",
+                [
+                    $startDate,
+                    $endDate,
+                ]
+            )
+            ->orderByRaw(
+                "{$dateExpression} DESC"
+            )
+            ->orderByDesc('id')
+            ->get()
+            ->map(
+                function (
+                    MobileEmergencyAlert $alert
+                ) use (
+                    $hasTriggeredAt
+                ): array {
+                    $date =
+                        (
+                            $hasTriggeredAt
+                                ? $alert->triggered_at
+                                : null
+                        )
+                        ?? $alert->created_at;
+
+                    $reference =
+                        $alert->alert_code
+                        ?: 'SOS-'
+                            . str_pad(
+                                (string) $alert->id,
+                                6,
+                                '0',
+                                STR_PAD_LEFT
+                            );
+
+                    $coordinates =
+                        $alert->latitude !== null
+                        && $alert->longitude !== null
+                            ? number_format(
+                                (float) $alert->latitude,
+                                6,
+                                '.',
+                                ''
+                            )
+                                . ', '
+                                . number_format(
+                                    (float) $alert->longitude,
+                                    6,
+                                    '.',
+                                    ''
+                                )
+                            : 'Unavailable';
+
+                    $person =
+                        $alert->user?->name
+                        ?? $alert->display_name
+                        ?? 'Not identified';
+
+                    $status =
+                        ucfirst(
+                            str_replace(
+                                '_',
+                                ' ',
+                                (string) (
+                                    $alert->status
+                                    ?: 'active'
+                                )
+                            )
+                        );
+
+                    return [
+                        'record_key' =>
+                            'distress:'
+                            . $alert->id,
+
+                        'category' =>
+                            'SOS / Distress Signal',
+
+                        'title' =>
+                            $reference
+                            . ' - '
+                            . $person,
+
+                        'type' =>
+                            'Emergency',
+
+                        'severity' =>
+                            'Critical',
+
+                        'barangay' =>
+                            $coordinates,
+
+                        'status' =>
+                            $status,
+
+                        'datetime' =>
+                            $date
+                                ? Carbon::parse(
+                                    $date
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+
+                        'preview_reference' =>
+                            $reference,
+
+                        'preview_category' =>
+                            'Emergency SOS',
+
+                        'preview_description' =>
+                            'Emergency distress signal submitted through TabangNow.',
+
+                        'preview_persons_involved' =>
+                            $person,
+
+                        'preview_reporter' =>
+                            $person,
+
+                        'preview_assigned_responder' =>
+                            'Not assigned',
+
+                        'preview_barangay' =>
+                            '—',
+
+                        'preview_location' =>
+                            $coordinates,
+
+                        'preview_coordinates' =>
+                            $coordinates,
+
+                        'preview_status' =>
+                            $status,
+
+                        'preview_reported_at' =>
+                            $date
+                                ? Carbon::parse(
+                                    $date
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+
+                        'preview_incident_at' =>
+                            $date
+                                ? Carbon::parse(
+                                    $date
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+
+                        'preview_updated_at' =>
+                            $alert->updated_at
+                                ? Carbon::parse(
+                                    $alert->updated_at
+                                )->format(
+                                    'M d, Y h:i A'
+                                )
+                                : '—',
+                    ];
+                }
+            )
+            ->values()
+            ->all();
+    }
+
+
+
+
+    private function tanodDutyMetricRecords(
+        Carbon $endDate
+    ): array {
+        $duty =
+            app(
+                \App\Services\TanodDutyCounter::class
+            )->recordsAt(
+                $endDate
+            );
+
+        return collect(
+            $duty['records']
+            ?? []
+        )
+            ->map(
+                function (
+                    array $tanod
+                ) use (
+                    $endDate
+                ): array {
+                    $name =
+                        $tanod['name']
+                        ?? 'Tanod';
+
+                    $shift =
+                        trim(
+                            (string) (
+                                $tanod['shift']
+                                ?? ''
+                            )
+                        );
+
+                    $barangay =
+                        trim(
+                            (string) (
+                                $tanod['barangay']
+                                ?? ''
+                            )
+                        );
+
+                    $status =
+                        $tanod['status']
+                        ?? 'On Duty';
+
+                    $asOf =
+                        'As of '
+                        . $endDate->format(
+                            'M d, Y h:i A'
+                        );
+
+                    return [
+                        'record_key' =>
+                            'tanod:'
+                            . (
+                                $tanod['id']
+                                ?? md5($name)
+                            ),
+
+                        'category' =>
+                            'Tanod On Duty',
+
+                        'title' =>
+                            $name,
+
+                        'type' =>
+                            $shift !== ''
+                                ? $shift
+                                : '—',
+
+                        'severity' =>
+                            '—',
+
+                        'barangay' =>
+                            $barangay !== ''
+                                ? $barangay
+                                : '—',
+
+                        'status' =>
+                            $status,
+
+                        'datetime' =>
+                            $asOf,
+
+                        'preview_reference' =>
+                            'Tanod roster record',
+
+                        'preview_category' =>
+                            'Tanod Duty',
+
+                        'preview_description' =>
+                            'Current Tanod roster duty status recorded by TabangNow.',
+
+                        'preview_persons_involved' =>
+                            $name,
+
+                        'preview_reporter' =>
+                            $name,
+
+                        'preview_assigned_responder' =>
+                            'Not applicable',
+
+                        'preview_barangay' =>
+                            $barangay !== ''
+                                ? $barangay
+                                : '—',
+
+                        'preview_location' =>
+                            $barangay !== ''
+                                ? $barangay
+                                : '—',
+
+                        'preview_coordinates' =>
+                            'Not applicable',
+
+                        'preview_status' =>
+                            $status,
+
+                        'preview_reported_at' =>
+                            $asOf,
+
+                        'preview_incident_at' =>
+                            $asOf,
+
+                        'preview_updated_at' =>
+                            $asOf,
+                    ];
+                }
+            )
+            ->values()
+            ->all();
+    }
+
+
+
+
+    private function resolveReportRange(
+        Request $request
+    ): array {
+        $period = strtolower(
+            trim(
+                (string) $request->query(
+                    'period',
+                    'week'
+                )
+            )
+        );
+
+        $dateFrom = trim(
+            (string) $request->query(
+                'date_from',
+                ''
+            )
+        );
+
+        $dateTo = trim(
+            (string) $request->query(
+                'date_to',
+                ''
+            )
+        );
+
+        $customRequested =
+            $period === 'custom'
+            || $dateFrom !== ''
+            || $dateTo !== '';
+
+        if (! $customRequested) {
+            $period =
+                $this->validPeriod(
+                    $period
+                );
+
+            [
+                $startDate,
+                $endDate,
+                $periodLabel,
+            ] = $this->periodRange(
+                $period
+            );
+
+            return [
+                $period,
+                $startDate,
+                $endDate,
+                $periodLabel,
+                false,
+            ];
+        }
+
+        if (
+            $dateFrom === ''
+            || $dateTo === ''
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_from' =>
+                    'Both start and end dates are required for a custom report.',
+                'date_to' =>
+                    'Both start and end dates are required for a custom report.',
+            ]);
+        }
+
+        try {
+            $startDate =
+                Carbon::createFromFormat(
+                    'Y-m-d',
+                    $dateFrom
+                )
+                    ->startOfDay();
+
+            $endDate =
+                Carbon::createFromFormat(
+                    'Y-m-d',
+                    $dateTo
+                )
+                    ->endOfDay();
+        } catch (\Throwable) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_from' =>
+                    'Use a valid report start date.',
+                'date_to' =>
+                    'Use a valid report end date.',
+            ]);
+        }
+
+        if (
+            $startDate->toDateString()
+                !== $dateFrom
+            || $endDate->toDateString()
+                !== $dateTo
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_from' =>
+                    'Use dates in YYYY-MM-DD format.',
+                'date_to' =>
+                    'Use dates in YYYY-MM-DD format.',
+            ]);
+        }
+
+        if ($startDate->gt($endDate)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_to' =>
+                    'The report end date must be on or after the start date.',
+            ]);
+        }
+
+        if (
+            $startDate->diffInDays(
+                $endDate
+            ) > 366
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_to' =>
+                    'A custom report can cover at most 366 days.',
+            ]);
+        }
+
+        if (
+            $endDate->gt(
+                now()->endOfDay()
+            )
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'date_to' =>
+                    'A report cannot end in the future.',
+            ]);
+        }
+
+        $periodLabel =
+            $startDate->format(
+                'M d, Y'
+            )
+            . ' – '
+            . $endDate->format(
+                'M d, Y'
+            );
+
+        return [
+            'custom',
+            $startDate,
+            $endDate,
+            $periodLabel,
+            true,
+        ];
+    }
+
+private function metricSelectionUrls(
+        array $data
+    ): array {
+        $urls = [];
+
+        foreach ([
+            'total',
+            'active',
+            'critical',
+            'resolved',
+            'distress',
+            'tanod',
+        ] as $metric) {
+            $parameters =
+                $this->reportNavigationParameters(
+                    array_merge(
+                        $data,
+                        [
+                            'selectedMetric' =>
+                                $metric,
+                        ]
+                    )
+                );
+
+            $urls[$metric] =
+                route(
+                    'admin.reports.download.select',
+                    $parameters
+                );
+        }
+
+        return $urls;
+    }
+
+private function validPeriod(?string $period): string
     {
         return in_array($period, ['today', 'week', 'month', 'year'], true)
             ? $period
             : 'week';
     }
 
-    private function periodRange(string $period): array
-    {
-        return match ($period) {
+    private function periodRange(
+        string $period
+    ): array {
+        $now = now();
+
+        return match (
+            $period
+        ) {
             'today' => [
-                now()->startOfDay(),
-                now()->endOfDay(),
+                $now
+                    ->copy()
+                    ->startOfDay(),
+                $now
+                    ->copy()
+                    ->endOfDay(),
                 'Today',
             ],
-            'month' => [
-                now()->startOfMonth(),
-                now()->endOfMonth(),
-                'This Month',
+
+            /*
+             * Rolling windows avoid calendar-boundary gaps. A Sunday record
+             * remains visible on Monday/Tuesday instead of disappearing just
+             * because startOfWeek() moved forward.
+             */
+            'week' => [
+                $now
+                    ->copy()
+                    ->subDays(6)
+                    ->startOfDay(),
+                $now
+                    ->copy()
+                    ->endOfDay(),
+                'Last 7 Days',
             ],
+
+            'month' => [
+                $now
+                    ->copy()
+                    ->subDays(29)
+                    ->startOfDay(),
+                $now
+                    ->copy()
+                    ->endOfDay(),
+                'Last 30 Days',
+            ],
+
             'year' => [
-                now()->startOfYear(),
-                now()->endOfYear(),
+                $now
+                    ->copy()
+                    ->startOfYear(),
+                $now
+                    ->copy()
+                    ->endOfDay(),
                 'This Year',
             ],
+
             default => [
-                now()->startOfWeek(),
-                now()->endOfWeek(),
-                'This Week',
+                $now
+                    ->copy()
+                    ->subDays(6)
+                    ->startOfDay(),
+                $now
+                    ->copy()
+                    ->endOfDay(),
+                'Last 7 Days',
             ],
         };
     }
+
 }

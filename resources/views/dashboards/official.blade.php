@@ -9,9 +9,9 @@
 
     $pendingIncidents = (int) data_get($summary, 'pending_incidents', 0);
     $activeIncidents = (int) data_get($summary, 'active_incidents', 0);
-    $activeCases = (int) data_get($summary, 'active_cases', $pendingIncidents + $activeIncidents);
+    $ongoingIncidents = $pendingIncidents + $activeIncidents;
 
-    $resolvedCases = (int) data_get($summary, 'resolved_cases', data_get($summary, 'resolved_incidents', 0));
+    $resolvedIncidents = (int) data_get($summary, 'resolved_incidents', 0);
 
     $criticalIncidents = data_get($summary, 'critical_incidents');
 
@@ -88,11 +88,11 @@
         </div>
 
         <p class="text-4xl font-bold text-slate-900">
-            {{ $activeCases }}
+            {{ $ongoingIncidents }}
         </p>
 
         <p class="mt-2 text-sm font-medium text-slate-600">
-            Active Cases
+            Active Incidents
         </p>
     </div>
 
@@ -116,7 +116,7 @@
         </div>
 
         <p class="text-4xl font-bold text-slate-900">
-            {{ $resolvedCases }}
+            {{ $resolvedIncidents }}
         </p>
 
         <p class="mt-2 text-sm font-medium text-slate-600">

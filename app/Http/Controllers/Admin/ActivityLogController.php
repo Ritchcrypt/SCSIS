@@ -105,6 +105,20 @@ class ActivityLogController extends Controller
             : null;
 
         $query = ActivityLog::query()
+            ->where(
+                function (Builder $query): void {
+                    $query
+                        ->whereNull('category')
+                        ->orWhereNotIn(
+                            'category',
+                            [
+                                'case',
+                                'case_management',
+                                'case_record',
+                            ]
+                        );
+                }
+            )
             ->when(
                 $searchPattern !== null,
                 function (
@@ -200,6 +214,14 @@ class ActivityLogController extends Controller
 
         $categories = ActivityLog::query()
             ->whereNotNull('category')
+            ->whereNotIn(
+                'category',
+                [
+                    'case',
+                    'case_management',
+                    'case_record',
+                ]
+            )
             ->where('category', '<>', '')
             ->select('category')
             ->distinct()
@@ -209,6 +231,8 @@ class ActivityLogController extends Controller
 
         $events = ActivityLog::query()
             ->whereNotNull('event')
+            ->where('event', 'not like', 'case.%')
+            ->where('event', 'not like', 'case\_%')
             ->where('event', '<>', '')
             ->select('event')
             ->distinct()
