@@ -1192,12 +1192,7 @@ class UserManagementController extends Controller
     if (Schema::hasColumn('tanod_profiles', 'employee_id')) {
         $profileData['employee_id'] = $employee->id;
     }
-
-    if (Schema::hasColumn('tanod_profiles', 'badge_number')) {
-        $profileData['badge_number'] = 'TND-' . str_pad((string) $user->id, 4, '0', STR_PAD_LEFT);
-    }
-
-    if (Schema::hasColumn('tanod_profiles', 'duty_status')) {
+if (Schema::hasColumn('tanod_profiles', 'duty_status')) {
         $profileData['duty_status'] = 'off_duty';
     }
 

@@ -135,4 +135,90 @@
         </div>
     </div>
 </div>
+
+    @if (strtolower((string) $userRecord->role) === 'resident')
+        @php
+            $residentAge = $userRecord->resident_age;
+            $hasDob = (bool) $userRecord->date_of_birth;
+            $ageGatePassed = $hasDob
+                && $residentAge !== null
+                && $residentAge >= 18
+                && (bool) $userRecord->age_attested_at;
+        @endphp
+
+        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-200 px-6 py-4">
+                <h2 class="text-base font-bold text-slate-900">
+                    Resident Age Verification
+                </h2>
+
+                <p class="mt-1 text-sm text-slate-500">
+                    Age is calculated automatically from the date of birth submitted during resident registration.
+                </p>
+            </div>
+
+            <div class="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Date of Birth
+                    </p>
+
+                    <p class="mt-2 text-sm font-semibold text-slate-900">
+                        {{ $hasDob
+                            ? $userRecord->date_of_birth->format('F d, Y')
+                            : 'Not provided' }}
+                    </p>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Current Age
+                    </p>
+
+                    <p class="mt-2 text-sm font-semibold text-slate-900">
+                        {{ $residentAge !== null
+                            ? $residentAge . ' years old'
+                            : 'Unavailable' }}
+                    </p>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Signup Age Gate
+                    </p>
+
+                    @if ($ageGatePassed)
+                        <span class="mt-2 inline-flex rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
+                            Passed 18+ signup gate
+                        </span>
+                    @elseif ($residentAge !== null && $residentAge < 18)
+                        <span class="mt-2 inline-flex rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
+                            Under 18 — review required
+                        </span>
+                    @else
+                        <span class="mt-2 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                            Legacy / no age record
+                        </span>
+                    @endif
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Age Attestation
+                    </p>
+
+                    <p class="mt-2 text-sm font-semibold text-slate-900">
+                        {{ $userRecord->age_attested_at
+                            ? $userRecord->age_attested_at->format('M d, Y g:i A')
+                            : 'Not recorded' }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="border-t border-blue-100 bg-blue-50 px-6 py-4 text-xs leading-5 text-blue-900">
+                This confirms the resident passed TabangNow's declared-age signup control.
+                It is not government-ID identity verification.
+            </div>
+        </div>
+    @endif
 @endsection

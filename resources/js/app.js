@@ -8,7 +8,7 @@ import './presence-heartbeat';
 | - system logo
 | - profile photo
 | - incident evidence
-| - resident complaint proof
+| - resident feedback proof
 | - future image attachment fields
 |
 | This script is defensive:

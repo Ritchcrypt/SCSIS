@@ -3,19 +3,15 @@
 @section('content')
     <div class="mx-auto max-w-3xl space-y-6">
         <div>
-            <h1 class="text-2xl font-black text-slate-900">
-                Submit Complaint
-            </h1>
-
+            <h1 class="text-2xl font-black text-slate-900">Send Resident Feedback</h1>
             <p class="mt-1 text-sm text-slate-600">
-                Report a non-emergency community concern to the barangay office.
+                Share feedback about TabangNow, barangay services, staff response and actions, community concerns, or suggestions.
             </p>
         </div>
 
         @if ($errors->any())
             <div class="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
                 <p class="font-black">Please fix the following:</p>
-
                 <ul class="mt-2 list-inside list-disc space-y-1">
                     @foreach ($errors->all() as $error)
                         <li>{{ $error }}</li>
@@ -32,90 +28,139 @@
 
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
-                    <label for="complainant_name" class="mb-2 block text-sm font-bold text-slate-700">
-                        Complainant Full Name
-                    </label>
-
+                    <label for="complainant_name" class="mb-2 block text-sm font-bold text-slate-700">Resident Name</label>
                     <input id="complainant_name"
                            name="complainant_name"
                            type="text"
                            value="{{ old('complainant_name', $user->name ?? auth()->user()->name ?? '') }}"
                            required
-                           placeholder="Enter complainant full name"
                            class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-
                     @error('complainant_name')
                         <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
 
                 <div>
-                    <label for="contact_number" class="mb-2 block text-sm font-bold text-slate-700">
-                        Contact Number
-                    </label>
-
+                    <label for="contact_number" class="mb-2 block text-sm font-bold text-slate-700">Contact Number</label>
                     <input id="contact_number"
                            name="contact_number"
                            type="text"
                            value="{{ old('contact_number') }}"
                            placeholder="Optional"
                            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
-
                     @error('contact_number')
                         <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
                     @enderror
                 </div>
             </div>
 
-            <div>
-                <label for="complaint_address" class="mb-2 block text-sm font-bold text-slate-700">
-                    Address / Location of Complaint
-                </label>
+            <div class="grid gap-5 md:grid-cols-2">
+                <div>
+                    <label for="feedback_category" class="mb-2 block text-sm font-bold text-slate-700">What is this feedback about?</label>
+                    <select id="feedback_category"
+                            name="feedback_category"
+                            required
+                            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                        <option value="">Select a category</option>
+                        <option value="system_experience" @selected(old('feedback_category') === 'system_experience')>TabangNow System Experience</option>
+                        <option value="staff_response" @selected(old('feedback_category') === 'staff_response')>Staff Response & Action</option>
+                        <option value="barangay_service" @selected(old('feedback_category') === 'barangay_service')>Barangay Service</option>
+                        <option value="community_concern" @selected(old('feedback_category') === 'community_concern')>Community Concern</option>
+                        <option value="suggestion" @selected(old('feedback_category') === 'suggestion')>Suggestion / Improvement</option>
+                    </select>
+                    @error('feedback_category')
+                        <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
 
+                <div>
+                    <label for="feedback_type" class="mb-2 block text-sm font-bold text-slate-700">Feedback Type</label>
+                    <select id="feedback_type"
+                            name="feedback_type"
+                            required
+                            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                        <option value="">Select a type</option>
+                        <option value="concern" @selected(old('feedback_type') === 'concern')>Concern</option>
+                        <option value="complaint" @selected(old('feedback_type') === 'complaint')>Complaint</option>
+                        <option value="suggestion" @selected(old('feedback_type') === 'suggestion')>Suggestion</option>
+                        <option value="compliment" @selected(old('feedback_type') === 'compliment')>Compliment</option>
+                    </select>
+                    @error('feedback_type')
+                        <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
+
+            <div>
+                <label for="feedback_subject" class="mb-2 block text-sm font-bold text-slate-700">Subject</label>
+                <input id="feedback_subject"
+                       name="feedback_subject"
+                       type="text"
+                       maxlength="255"
+                       value="{{ old('feedback_subject') }}"
+                       required
+                       placeholder="Short summary of your feedback"
+                       class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                @error('feedback_subject')
+                    <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div>
+                <label for="service_rating" class="mb-2 block text-sm font-bold text-slate-700">Service / Experience Rating</label>
+                <select id="service_rating"
+                        name="service_rating"
+                        class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                    <option value="">Not applicable / Prefer not to rate</option>
+                    @for ($rating = 5; $rating >= 1; $rating--)
+                        <option value="{{ $rating }}" @selected((string) old('service_rating') === (string) $rating)>
+                            {{ $rating }} / 5
+                        </option>
+                    @endfor
+                </select>
+                <p class="mt-2 text-xs text-slate-500">
+                    Optional. Use this when reviewing the system, a service, or how personnel responded.
+                </p>
+                @error('service_rating')
+                    <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div>
+                <label for="complaint_address" class="mb-2 block text-sm font-bold text-slate-700">Location / Service Area</label>
                 <textarea id="complaint_address"
                           name="complaint_address"
                           rows="3"
-                          required
-                          placeholder="Example: Purok 2, near covered court, Dao, Capiz"
+                          placeholder="Optional. Add a location, office, service area, or place if relevant."
                           class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">{{ old('complaint_address') }}</textarea>
-
                 @error('complaint_address')
                     <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
                 @enderror
             </div>
 
             <div>
-                <label for="complaint_description" class="mb-2 block text-sm font-bold text-slate-700">
-                    Complaint Description
-                </label>
-
+                <label for="complaint_description" class="mb-2 block text-sm font-bold text-slate-700">Feedback Details</label>
                 <textarea id="complaint_description"
                           name="complaint_description"
-                          rows="6"
+                          rows="7"
                           required
-                          placeholder="Describe the complaint clearly."
+                          placeholder="Describe what happened, what worked well or poorly, how staff responded, what action was taken, or what you suggest should improve."
                           class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">{{ old('complaint_description') }}</textarea>
-
                 @error('complaint_description')
                     <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
                 @enderror
             </div>
 
             <div>
-                <label for="evidence" class="mb-2 block text-sm font-bold text-slate-700">
-                    Evidence Picture
-                </label>
-
+                <label for="evidence" class="mb-2 block text-sm font-bold text-slate-700">Supporting Picture</label>
                 <input id="evidence"
                        name="evidence"
                        type="file"
                        accept="image/jpeg,image/jpg,image/png,image/webp"
                        class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100">
-
                 <p class="mt-2 text-xs text-slate-500">
-                    Accepted: JPG, JPEG, PNG, WEBP. Maximum size: 50MB.
+                    Optional. Accepted: JPG, JPEG, PNG, WEBP.
                 </p>
-
                 @error('evidence')
                     <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>
                 @enderror
@@ -126,10 +171,9 @@
                    class="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
                     Cancel
                 </a>
-
                 <button type="submit"
                         class="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">
-                    Submit Complaint
+                    Send Feedback
                 </button>
             </div>
         </form>

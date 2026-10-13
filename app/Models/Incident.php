@@ -28,6 +28,9 @@ class Incident extends Model
         'incident_datetime',
         'reported_at',
         'priority',
+        'severity_needs_assessment',
+        'severity_assessed_by',
+        'severity_assessed_at',
         'latitude',
         'longitude',
         'map_location_name',
@@ -39,6 +42,8 @@ class Incident extends Model
         return [
             'incident_datetime' => 'datetime',
             'reported_at' => 'datetime',
+            'severity_needs_assessment' => 'boolean',
+            'severity_assessed_at' => 'datetime',
             'latitude' => 'float',
             'longitude' => 'float',
             'latitude' => 'float',
@@ -174,10 +179,22 @@ class Incident extends Model
 
     public function getSeverityLabelAttribute(): string
     {
-        return match ($this->priority) {
+        if (
+            (bool) (
+                $this->severity_needs_assessment
+                ?? false
+            )
+        ) {
+            return 'Pending Assessment';
+        }
+
+        return match (
+            strtolower(
+                (string) $this->priority
+            )
+        ) {
             'low' => 'Low',
-            'moderate' => 'Moderate',
-            'medium' => 'Medium',
+            'moderate', 'medium' => 'Moderate',
             'high' => 'High',
             'critical' => 'Critical',
             default => 'Low',
@@ -209,6 +226,15 @@ class Incident extends Model
 
 public function getMapSeverityValueAttribute(): string
 {
+    if (
+        (bool) (
+            $this->severity_needs_assessment
+            ?? false
+        )
+    ) {
+        return 'unassessed';
+    }
+
     $severity = $this->map_severity;
 
     if (! $severity && isset($this->severity)) {
@@ -219,7 +245,9 @@ public function getMapSeverityValueAttribute(): string
         $severity = $this->priority;
     }
 
-    $severity = strtolower((string) $severity);
+    $severity = strtolower(
+        (string) $severity
+    );
 
     return match ($severity) {
         'low' => 'low',
@@ -233,6 +261,7 @@ public function getMapSeverityValueAttribute(): string
 public function getMapSeverityLabelAttribute(): string
 {
     return match ($this->map_severity_value) {
+        'unassessed' => 'Pending Assessment',
         'low' => 'Low',
         'moderate' => 'Moderate',
         'high' => 'High',
@@ -244,6 +273,7 @@ public function getMapSeverityLabelAttribute(): string
 public function getMapPinColorAttribute(): string
 {
     return match ($this->map_severity_value) {
+        'unassessed' => '#64748b',
         'low' => '#22c55e',
         'moderate' => '#eab308',
         'high' => '#f97316',
@@ -255,6 +285,7 @@ public function getMapPinColorAttribute(): string
 public function getMapHeatIntensityAttribute(): float
 {
     return match ($this->map_severity_value) {
+        'unassessed' => 0.0,
         'low' => 0.35,
         'moderate' => 0.55,
         'high' => 0.75,

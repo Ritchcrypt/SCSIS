@@ -74,7 +74,7 @@
             <input type="text"
                    name="search"
                    value="{{ request('search') }}"
-                   placeholder="Search by name, contact, purok, shift, or status..."
+                   placeholder="Search by name, contact, barangay, shift, or status..."
                    class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
         </div>
     </form>
@@ -94,7 +94,7 @@
                     </th>
 
                     <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-                        Purok
+                        Assigned Barangay
                     </th>
 
                     <th class="px-5 py-4 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -119,6 +119,7 @@
                 @forelse ($tanods as $tanod)
                     @php
     $user = $tanod->user;
+    $assignedBarangay = $tanod->employee?->barangay;
 @endphp
 
                     <tr>
@@ -147,7 +148,7 @@
                         </td>
 
                         <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                            {{ $tanod->purok_assignment ?: '—' }}
+                            {{ $assignedBarangay?->barangay_name ?: 'Unassigned' }}
                         </td>
 
                         <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
@@ -186,7 +187,7 @@
                                         data-full-name="{{ e($user?->name) }}"
                                         data-contact-number="{{ e($tanod->contact_number) }}"
                                         data-email="{{ e($user?->email) }}"
-                                        data-purok-assignment="{{ e($tanod->purok_assignment) }}"
+                                        data-barangay-id="{{ e($tanod->employee?->barangay_id) }}"
                                         data-date-appointed="{{ $tanod->date_appointed ? $tanod->date_appointed->format('Y-m-d') : '' }}"
                                         data-shift="{{ e($tanod->shift) }}"
                                         data-status="{{ e($tanod->status) }}"
@@ -312,9 +313,20 @@
                 </div>
 
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Purok Assignment</label>
-                    <input type="text" name="purok_assignment" placeholder="Purok 1"
-                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <label class="mb-2 block text-sm font-semibold text-slate-700">Assigned Barangay *</label>
+                    <select name="barangay_id"
+                            required
+                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                        <option value="">Select barangay</option>
+                        @foreach ($barangays as $barangay)
+                            <option value="{{ $barangay->id }}" @selected((string) old('barangay_id') === (string) $barangay->id)>
+                                {{ $barangay->barangay_name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Incident tasks in this barangay will be offered to this tanod first.
+                    </p>
                 </div>
 
                 <div>
@@ -418,9 +430,18 @@
                 </div>
 
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-slate-700">Purok Assignment</label>
-                    <input id="edit_purok_assignment" type="text" name="purok_assignment"
-                           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                    <label class="mb-2 block text-sm font-semibold text-slate-700">Assigned Barangay *</label>
+                    <select id="edit_barangay_id"
+                            name="barangay_id"
+                            required
+                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                        <option value="">Select barangay</option>
+                        @foreach ($barangays as $barangay)
+                            <option value="{{ $barangay->id }}">
+                                {{ $barangay->barangay_name }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
 
                 <div>
@@ -508,7 +529,7 @@
         setFieldValue('edit_full_name', button.dataset.fullName);
         setFieldValue('edit_contact_number', button.dataset.contactNumber);
         setFieldValue('edit_email', button.dataset.email);
-        setFieldValue('edit_purok_assignment', button.dataset.purokAssignment);
+        setFieldValue('edit_barangay_id', button.dataset.barangayId);
         setFieldValue('edit_date_appointed', button.dataset.dateAppointed);
         setFieldValue('edit_shift', button.dataset.shift);
         setFieldValue('edit_status', button.dataset.status);

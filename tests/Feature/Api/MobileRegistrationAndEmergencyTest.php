@@ -30,6 +30,8 @@ class MobileRegistrationAndEmergencyTest extends TestCase
             'email' => 'mobile.resident@example.com',
             'contact_number' => '+63 912 345 6789',
             'address' => 'Poblacion, Dao, Capiz',
+            'date_of_birth' => now()->subYears(20)->toDateString(),
+            'age_confirmation' => true,
             'password' => 'TabangNow#2026Secure',
             'password_confirmation' => 'TabangNow#2026Secure',
         ]);
@@ -46,6 +48,8 @@ class MobileRegistrationAndEmergencyTest extends TestCase
         $this->assertFalse((bool) $resident->is_active);
         $this->assertFalse((bool) $resident->status);
         $this->assertSame('09123456789', $resident->contact_number);
+        $this->assertNotNull($resident->date_of_birth);
+        $this->assertNotNull($resident->age_attested_at);
 
         $this->assertTrue(
             UserNotification::query()

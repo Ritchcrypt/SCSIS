@@ -71,7 +71,6 @@ class RbacAndRouteSecurityTest extends TestCase
     {
         foreach ([
             'admin.reports.index',
-            'admin.cases.index',
             'admin.users.index',
             'admin.system-branding.edit',
             'admin.users.presence',

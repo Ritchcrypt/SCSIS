@@ -1,8 +1,23 @@
 <?php
 
 use App\Http\Controllers\MobileEmergencyAlertController;
+use App\Http\Controllers\WebsiteDistressSignalController;
 use Illuminate\Support\Facades\Route;
 
+
+Route::middleware(['web'])->group(function (): void {
+    Route::get('/distress-signal', [
+        WebsiteDistressSignalController::class,
+        'create',
+    ])->name('distress-signal.create');
+
+    Route::post('/distress-signal', [
+        WebsiteDistressSignalController::class,
+        'store',
+    ])
+        ->middleware('throttle:12,1')
+        ->name('distress-signal.store');
+});
 Route::middleware(['web', 'auth', 'active.user'])->group(function (): void {
     Route::get('/admin/mobile-sos', [
         MobileEmergencyAlertController::class,

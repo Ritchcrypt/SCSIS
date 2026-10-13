@@ -11,6 +11,7 @@ use App\Models\TanodTask;
 use App\Models\TanodTaskResponse;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Services\TanodTaskAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -286,6 +287,28 @@ class TanodTaskController extends Controller
             );
         });
 
+        if ($validated['response_status'] === 'declined') {
+            $fallbackTask = TanodTask::query()
+                ->find($response->tanod_task_id);
+
+            if ($fallbackTask) {
+                $fallbackTanods = app(
+                    TanodTaskAssignmentService::class
+                )->expandFallbackIfNeeded(
+                    $fallbackTask
+                );
+
+                foreach ($fallbackTanods as $fallbackTanod) {
+                    if ($fallbackTanod->user_id) {
+                        $this->notifyTanodAboutNewTask(
+                            $fallbackTask,
+                            (int) $fallbackTanod->user_id
+                        );
+                    }
+                }
+            }
+        }
+
         $response->refresh()->load('task.createdBy');
 
         $this->recordOperationalActivity(
@@ -526,8 +549,8 @@ class TanodTaskController extends Controller
         ) {
             UserNotification::create([
                 'user_id' => $userId,
-                'type' => 'dispatch',
-                'source_id' => $incident?->id,
+                'type' => 'tanod_task_response',
+                'source_id' => $task->id,
                 'title' => $accepted ? 'Tanod task accepted' : 'Tanod task declined',
                 'message' => $tanodName
                     . ($accepted ? ' accepted' : ' declined')

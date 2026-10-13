@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Announcement extends Model
 {
@@ -35,6 +36,14 @@ class Announcement extends Model
     public function poster(): BelongsTo
     {
         return $this->belongsTo(User::class, 'posted_by');
+    }
+
+    public function targetBarangays(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Barangay::class,
+            'announcement_barangay'
+        )->withTimestamps();
     }
 
     public function getDisplayCategoryAttribute(): string

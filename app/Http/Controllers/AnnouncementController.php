@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Models\Announcement;
+use App\Models\Barangay;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Support\DaoBarangays;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class AnnouncementController extends Controller
@@ -25,42 +28,90 @@ class AnnouncementController extends Controller
         Gate::authorize('viewAny', Announcement::class);
 
         $user = $request->user();
+
         $canManageAnnouncements = Gate::allows(
             'create',
             Announcement::class
         );
 
-        $announcements = Announcement::query()
-            ->with('poster')
-            ->when(
-                ! $canManageAnnouncements,
-                function ($query) use ($user): void {
-                    $allowedAudiences = $this->allowedAudiencesForUser(
-                        $user
+        $barangayTargetingReady = Schema::hasTable(
+            'announcement_barangay'
+        )
+            && Schema::hasTable('barangays')
+            && Schema::hasColumn('users', 'barangay_id');
+
+        $query = Announcement::query()
+            ->with('poster');
+
+        if ($barangayTargetingReady) {
+            $query->with([
+                'targetBarangays:id,barangay_name',
+            ]);
+        }
+
+        $query->when(
+            ! $canManageAnnouncements,
+            function ($query) use (
+                $user,
+                $barangayTargetingReady
+            ): void {
+                $allowedAudiences =
+                    $this->allowedAudiencesForUser($user);
+
+                if (
+                    Schema::hasColumn(
+                        'announcements',
+                        'is_active'
+                    )
+                ) {
+                    $query->where('is_active', true);
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'announcements',
+                        'audience'
+                    )
+                ) {
+                    $query->whereIn(
+                        'audience',
+                        $allowedAudiences
+                    );
+                }
+
+                if (! $barangayTargetingReady) {
+                    return;
+                }
+
+                if (empty($user->barangay_id)) {
+                    $query->whereDoesntHave(
+                        'targetBarangays'
                     );
 
-                    if (
-                        Schema::hasColumn(
-                            'announcements',
-                            'is_active'
-                        )
-                    ) {
-                        $query->where('is_active', true);
-                    }
-
-                    if (
-                        Schema::hasColumn(
-                            'announcements',
-                            'audience'
-                        )
-                    ) {
-                        $query->whereIn(
-                            'audience',
-                            $allowedAudiences
-                        );
-                    }
+                    return;
                 }
-            )
+
+                $query->where(
+                    function ($visibilityQuery) use ($user): void {
+                        $visibilityQuery
+                            ->whereDoesntHave(
+                                'targetBarangays'
+                            )
+                            ->orWhereHas(
+                                'targetBarangays',
+                                function ($barangayQuery) use ($user): void {
+                                    $barangayQuery->where(
+                                        'barangays.id',
+                                        (int) $user->barangay_id
+                                    );
+                                }
+                            );
+                    }
+                );
+            }
+        );
+
+        $announcements = $query
             ->latest('published_at')
             ->latest()
             ->paginate(10)
@@ -71,13 +122,27 @@ class AnnouncementController extends Controller
             'categories' => $this->categories(),
             'priorities' => $this->priorities(),
             'audiences' => $this->audiences(),
-            'canManageAnnouncements' => $canManageAnnouncements,
+            'barangays' => $this->officialBarangays(),
+            'barangayTargetingReady' =>
+                $barangayTargetingReady,
+            'canManageAnnouncements' =>
+                $canManageAnnouncements,
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         Gate::authorize('create', Announcement::class);
+
+        if (
+            ! Schema::hasTable('announcement_barangay')
+            || ! Schema::hasColumn('users', 'barangay_id')
+        ) {
+            throw ValidationException::withMessages([
+                'barangay_ids' =>
+                    'Barangay targeting is not ready. Run the announcement barangay-targeting migration first.',
+            ]);
+        }
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -94,6 +159,18 @@ class AnnouncementController extends Controller
                 'required',
                 Rule::in($this->allowedAudienceValues()),
             ],
+            'barangay_ids' => [
+                'required',
+                'array',
+                'min:1',
+                'max:' . count(DaoBarangays::records()),
+            ],
+            'barangay_ids.*' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::exists('barangays', 'id'),
+            ],
             'activate_calamity_mode' => [
                 'nullable',
                 'boolean',
@@ -102,7 +179,17 @@ class AnnouncementController extends Controller
                 'nullable',
                 'boolean',
             ],
+        ], [
+            'barangay_ids.required' =>
+                'Select at least one Dao barangay.',
+            'barangay_ids.min' =>
+                'Select at least one Dao barangay.',
         ]);
+
+        $targetBarangayIds =
+            $this->validatedTargetBarangayIds(
+                $validated['barangay_ids']
+            );
 
         $audience = $this->normalizeAudience(
             $validated['audience']
@@ -145,8 +232,25 @@ class AnnouncementController extends Controller
                 $showInWeatherFeed;
         }
 
-        $announcement = Announcement::create(
-            $announcementData
+        $announcement = DB::transaction(
+            function () use (
+                $announcementData,
+                $targetBarangayIds
+            ): Announcement {
+                $announcement = Announcement::create(
+                    $announcementData
+                );
+
+                $announcement
+                    ->targetBarangays()
+                    ->sync($targetBarangayIds);
+
+                return $announcement;
+            }
+        );
+
+        $announcement->load(
+            'targetBarangays:id,barangay_name'
         );
 
         $this->notifyTargetUsers($announcement);
@@ -154,23 +258,40 @@ class AnnouncementController extends Controller
         $this->recordOperationalActivity(
             event: 'announcement.created',
             category: 'announcement',
-            description: 'An announcement was created.',
+            description:
+                'A barangay-targeted announcement was created.',
             metadata: [
-                'announcement_id' => (int) $announcement->id,
+                'announcement_id' =>
+                    (int) $announcement->id,
                 'category' => $announcement->category,
                 'priority' => $announcement->priority,
                 'audience' => $announcement->audience,
-                'is_active' => (bool) $announcement->is_active,
-                'calamity_mode' => (bool) $announcement->activate_calamity_mode,
+                'target_barangay_ids' =>
+                    $targetBarangayIds,
+                'target_barangays' =>
+                    $announcement
+                        ->targetBarangays
+                        ->pluck('barangay_name')
+                        ->values()
+                        ->all(),
+                'is_active' =>
+                    (bool) $announcement->is_active,
+                'calamity_mode' =>
+                    (bool) $announcement
+                        ->activate_calamity_mode,
             ],
             request: $request,
         );
 
         return redirect()
-            ->to($this->announcementIndexUrl($request->user()))
+            ->to(
+                $this->announcementIndexUrl(
+                    $request->user()
+                )
+            )
             ->with(
                 'success',
-                'Announcement posted successfully and users were notified.'
+                'Announcement posted to the selected barangays and matching users were notified.'
             );
     }
 
@@ -264,7 +385,25 @@ class AnnouncementController extends Controller
         Announcement $announcement
     ): void {
         try {
-            if (! Schema::hasTable('notifications')) {
+            if (
+                ! Schema::hasTable('notifications')
+                || ! Schema::hasTable('announcement_barangay')
+                || ! Schema::hasColumn('users', 'barangay_id')
+            ) {
+                return;
+            }
+
+            $targetBarangayIds = $announcement
+                ->targetBarangays()
+                ->pluck('barangays.id')
+                ->map(
+                    fn ($id): int => (int) $id
+                )
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($targetBarangayIds === []) {
                 return;
             }
 
@@ -272,48 +411,85 @@ class AnnouncementController extends Controller
                 trim((string) $announcement->audience)
             );
 
-            $usersQuery = User::query()->select([
-                'id',
-                'role',
-            ]);
+            if (
+                ! in_array(
+                    $audience,
+                    $this->allowedAudienceValues(),
+                    true
+                )
+            ) {
+                return;
+            }
 
-            if (Schema::hasColumn('users', 'is_active')) {
+            $usersQuery = User::query()
+                ->select([
+                    'id',
+                    'role',
+                    'barangay_id',
+                ])
+                ->whereIn(
+                    'barangay_id',
+                    $targetBarangayIds
+                );
+
+            if (
+                Schema::hasColumn(
+                    'users',
+                    'is_active'
+                )
+            ) {
                 $usersQuery->where('is_active', true);
             }
 
             match ($audience) {
-                'tanod' => $usersQuery->where('role', 'tanod'),
+                'tanod' =>
+                    $usersQuery->where(
+                        'role',
+                        'tanod'
+                    ),
+
                 'residents',
-                'resident' => $usersQuery->where(
-                    'role',
-                    'resident'
-                ),
+                'resident' =>
+                    $usersQuery->where(
+                        'role',
+                        'resident'
+                    ),
+
                 'official',
                 'officials',
-                'dao' => $usersQuery->whereIn(
-                    'role',
-                    ['official', 'dao']
-                ),
-                'admin' => $usersQuery->where('role', 'admin'),
+                'dao' =>
+                    $usersQuery->whereIn(
+                        'role',
+                        ['official', 'dao']
+                    ),
+
+                'admin' =>
+                    $usersQuery->where(
+                        'role',
+                        'admin'
+                    ),
+
                 'everyone',
                 'public',
-                'all' => $usersQuery->whereIn('role', [
-                    'admin',
-                    'official',
-                    'dao',
-                    'tanod',
-                    'resident',
-                ]),
+                'all' =>
+                    $usersQuery->whereIn(
+                        'role',
+                        [
+                            'admin',
+                            'official',
+                            'dao',
+                            'tanod',
+                            'resident',
+                        ]
+                    ),
+
                 default => null,
             };
 
-            if (! in_array($audience, $this->allowedAudienceValues(), true)) {
-                return;
-            }
-
             $notificationType = (
                 $announcement->category === 'calamity'
-                || (bool) $announcement->activate_calamity_mode
+                || (bool) $announcement
+                    ->activate_calamity_mode
             )
                 ? 'calamity'
                 : 'announcement';
@@ -328,13 +504,15 @@ class AnnouncementController extends Controller
                         $notificationData = [
                             'user_id' => $user->id,
                             'type' => $notificationType,
-                            'source_id' => $announcement->id,
+                            'source_id' =>
+                                $announcement->id,
                             'title' => mb_substr(
                                 (string) $announcement->title,
                                 0,
                                 150
                             ),
-                            'message' => (string) $announcement->content,
+                            'message' =>
+                                (string) $announcement->content,
                             'is_read' => false,
                             'read_at' => null,
                         ];
@@ -345,7 +523,9 @@ class AnnouncementController extends Controller
                                 'acknowledged_by'
                             )
                         ) {
-                            $notificationData['acknowledged_by'] = null;
+                            $notificationData[
+                                'acknowledged_by'
+                            ] = null;
                         }
 
                         if (
@@ -354,14 +534,17 @@ class AnnouncementController extends Controller
                                 'acknowledged_at'
                             )
                         ) {
-                            $notificationData['acknowledged_at'] = null;
+                            $notificationData[
+                                'acknowledged_at'
+                            ] = null;
                         }
 
                         UserNotification::updateOrCreate(
                             [
                                 'user_id' => $user->id,
                                 'type' => $notificationType,
-                                'source_id' => $announcement->id,
+                                'source_id' =>
+                                    $announcement->id,
                             ],
                             $notificationData
                         );
@@ -372,8 +555,10 @@ class AnnouncementController extends Controller
             Log::warning(
                 'Announcement notification creation failed.',
                 [
-                    'announcement_id' => $announcement->id,
-                    'error' => $exception->getMessage(),
+                    'announcement_id' =>
+                        $announcement->id,
+                    'error' =>
+                        $exception->getMessage(),
                 ]
             );
         }
@@ -395,8 +580,68 @@ class AnnouncementController extends Controller
             ->delete();
     }
 
-    private function allowedAudiencesForUser(User $user): array
+    private function officialBarangays()
     {
+        if (! Schema::hasTable('barangays')) {
+            return collect();
+        }
+
+        return Barangay::query()
+            ->whereIn(
+                'barangay_name',
+                DaoBarangays::names()
+            )
+            ->orderBy('barangay_name')
+            ->get([
+                'id',
+                'barangay_name',
+            ]);
+    }
+
+    private function validatedTargetBarangayIds(
+        array $barangayIds
+    ): array {
+        $requestedIds = collect($barangayIds)
+            ->map(
+                fn ($id): int => (int) $id
+            )
+            ->filter(
+                fn (int $id): bool => $id > 0
+            )
+            ->unique()
+            ->values();
+
+        $validIds = Barangay::query()
+            ->whereIn(
+                'barangay_name',
+                DaoBarangays::names()
+            )
+            ->whereIn(
+                'id',
+                $requestedIds->all()
+            )
+            ->pluck('id')
+            ->map(
+                fn ($id): int => (int) $id
+            )
+            ->unique()
+            ->values();
+
+        if (
+            $requestedIds->isEmpty()
+            || $validIds->count()
+                !== $requestedIds->count()
+        ) {
+            throw ValidationException::withMessages([
+                'barangay_ids' =>
+                    'One or more selected barangays are not part of the official Dao, Capiz barangay list.',
+            ]);
+        }
+
+        return $validIds->all();
+    }
+
+    private function allowedAudiencesForUser(User $user): array    {
         return match (true) {
             $user->isOfficial() => [
                 'everyone',

@@ -13,10 +13,10 @@
             <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-blue-800">Total Incidents</p><span class="text-blue-700 transition group-hover:translate-x-1">→</span></div>
         </a>
 
-        <a href="{{ route('admin.cases.index') }}" class="group block rounded-2xl border border-amber-300 bg-amber-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-300">
+        <a href="{{ route('admin.incidents.index') }}" class="group block rounded-2xl border border-amber-300 bg-amber-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-300">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-700">🕒</div>
-            <p class="text-4xl font-bold text-slate-900">{{ $activeCases }}</p>
-            <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-amber-800">Active Cases</p><span class="text-amber-700 transition group-hover:translate-x-1">→</span></div>
+            <p class="text-4xl font-bold text-slate-900">{{ $activeIncidents }}</p>
+            <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-amber-800">Active Incidents</p><span class="text-amber-700 transition group-hover:translate-x-1">→</span></div>
         </a>
 
         <a href="{{ route('admin.incidents.index') }}" class="group block rounded-2xl border border-red-300 bg-red-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-300">
@@ -27,7 +27,7 @@
 
         <a href="{{ route('admin.incidents.index') }}" class="group block rounded-2xl border border-emerald-300 bg-emerald-50 p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-300">
             <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">✅</div>
-            <p class="text-4xl font-bold text-slate-900">{{ $resolvedCases }}</p>
+            <p class="text-4xl font-bold text-slate-900">{{ $resolvedIncidents }}</p>
             <div class="mt-2 flex items-center justify-between gap-3"><p class="text-sm font-semibold text-emerald-800">Resolved</p><span class="text-emerald-700 transition group-hover:translate-x-1">→</span></div>
         </a>
 

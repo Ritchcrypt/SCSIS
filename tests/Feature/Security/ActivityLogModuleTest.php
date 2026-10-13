@@ -82,8 +82,7 @@ class ActivityLogModuleTest extends TestCase
             'actor_role' => 'admin',
             'event' => 'incident.status_updated',
             'category' => 'incident',
-            'description' =>
-                'An incident status was updated.',
+            'description' => 'An incident status was updated.',
             'ip_address' => '127.0.0.1',
         ]);
 
@@ -137,18 +136,16 @@ class ActivityLogModuleTest extends TestCase
             'actor_id' => $actor->id,
             'actor_name' => $actor->name,
             'actor_role' => 'official',
-            'event' => 'case.created',
-            'category' => 'case',
-            'description' =>
-                'Special audit marker was recorded.',
+            'event' => 'incident.status_updated',
+            'category' => 'incident',
+            'description' => 'Special audit marker was recorded.',
             'created_at' => now()->subDay(),
         ]);
 
         $hidden = $this->activityLog([
             'event' => 'auth.login.succeeded',
             'category' => 'authentication',
-            'description' =>
-                'Unrelated authentication activity.',
+            'description' => 'Unrelated authentication activity.',
             'created_at' => now()->subDays(10),
         ]);
 
@@ -158,17 +155,14 @@ class ActivityLogModuleTest extends TestCase
                 route(
                     'admin.activity-logs.index',
                     [
-                        'search' =>
-                            'Special audit marker',
-                        'category' => 'case',
-                        'event' => 'case.created',
+                        'search' => 'Special audit marker',
+                        'category' => 'incident',
+                        'event' => 'incident.status_updated',
                         'actor_id' => $actor->id,
-                        'date_from' =>
-                            now()
-                                ->subDays(2)
-                                ->format('Y-m-d'),
-                        'date_to' =>
-                            now()->format('Y-m-d'),
+                        'date_from' => now()
+                            ->subDays(2)
+                            ->format('Y-m-d'),
+                        'date_to' => now()->format('Y-m-d'),
                         'per_page' => 10,
                     ]
                 )
@@ -219,11 +213,10 @@ class ActivityLogModuleTest extends TestCase
 
         $this->assertFalse(
             collect($queries)->contains(
-                fn (array $query): bool =>
-                    str_contains(
-                        $query['sql'],
-                        $payload
-                    )
+                fn (array $query): bool => str_contains(
+                    $query['sql'],
+                    $payload
+                )
             )
         );
     }
@@ -236,11 +229,9 @@ class ActivityLogModuleTest extends TestCase
 
         $activityLog = $this->activityLog([
             'metadata' => [
-                'password' =>
-                    'never-display-this-password',
+                'password' => 'never-display-this-password',
                 'nested' => [
-                    'authorization' =>
-                        'Bearer never-display-this-token',
+                    'authorization' => 'Bearer never-display-this-token',
                     'safe_key' => 'safe-value',
                 ],
             ],
@@ -331,10 +322,8 @@ class ActivityLogModuleTest extends TestCase
                     'target_role' => null,
                     'event' => 'system.test_event',
                     'category' => 'system',
-                    'description' =>
-                        'Activity log module test record.',
-                    'route_name' =>
-                        'admin.activity-logs.index',
+                    'description' => 'Activity log module test record.',
+                    'route_name' => 'admin.activity-logs.index',
                     'request_method' => 'GET',
                     'ip_address' => '127.0.0.1',
                     'user_agent' => 'PHPUnit',

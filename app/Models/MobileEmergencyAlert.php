@@ -14,6 +14,7 @@ class MobileEmergencyAlert extends Model
         'alert_code',
         'device_id',
         'user_id',
+        'reporter_name',
         'installation_id',
         'request_id',
         'status',
@@ -67,6 +68,34 @@ class MobileEmergencyAlert extends Model
 
     public function getDisplayNameAttribute(): string
     {
-        return $this->user?->name ?: 'Unidentified mobile user';
+        $registeredName = trim(
+            (string) (
+                $this->user?->name
+                ?? ''
+            )
+        );
+
+        if ($registeredName !== '') {
+            return $registeredName;
+        }
+
+        $submittedName = trim(
+            (string) (
+                $this->reporter_name
+                ?? ''
+            )
+        );
+
+        if ($submittedName !== '') {
+            return $submittedName;
+        }
+
+        return strtolower(
+            trim(
+                (string) $this->source
+            )
+        ) === 'website'
+            ? 'Unidentified website reporter'
+            : 'Unidentified mobile user';
     }
 }

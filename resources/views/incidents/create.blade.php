@@ -26,6 +26,17 @@
     $storeUrl = $storeRouteName ? route($storeRouteName) : '#';
     $indexUrl = $indexRouteName ? route($indexRouteName) : url()->previous();
 
+    $categoryStoreRouteName =
+        $routePrefix . 'incident-categories.quick-store';
+
+    $categoryDeleteRouteName =
+        $routePrefix . 'incident-categories.quick-delete';
+
+    $canManageIncidentCategories =
+        in_array($role, ['admin', 'official'], true)
+        && Route::has($categoryStoreRouteName)
+        && Route::has($categoryDeleteRouteName);
+
     $categories = $categories ?? collect();
     $barangays = $barangays ?? collect();
     $severityOptions = $severityOptions ?? [
@@ -34,6 +45,12 @@
         'high' => 'High',
         'critical' => 'Critical',
     ];
+
+    $canAssessSeverity = in_array(
+        $role,
+        ['admin', 'official', 'dao'],
+        true
+    );
 @endphp
 
 <div class="space-y-6">
@@ -109,27 +126,7 @@
                     </div>
 
                     <div class="space-y-5 p-6">
-                        <div>
-                            <label for="incident_title" class="mb-2 block text-sm font-semibold text-slate-700">
-                                Incident Title
-                            </label>
-
-                            <input
-                                id="incident_title"
-                                type="text"
-                                name="incident_title"
-                                value="{{ old('incident_title') }}"
-                                required
-                                placeholder="Example: Road accident near public market"
-                                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                            >
-
-                            @error('incident_title')
-                                <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <div class="grid gap-5 md:grid-cols-2">
+<div class="grid gap-5 md:grid-cols-2">
                             <div>
                                 <label for="category_id" class="mb-2 block text-sm font-semibold text-slate-700">
                                     Incident Category
@@ -139,7 +136,7 @@
                                     id="category_id"
                                     name="category_id"
                                     required
-                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 >
                                     <option value="">Select category</option>
 
@@ -153,9 +150,82 @@
                                 @error('category_id')
                                     <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
                                 @enderror
+
+                                @if ($canManageIncidentCategories)
+                                    <div class="mt-2 flex flex-wrap items-center justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onclick="document.getElementById('addIncidentCategoryPanel').classList.toggle('hidden')"
+                                            class="inline-flex h-9 min-w-[116px] items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                                        >
+                                            + Add Category
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onclick="document.getElementById('removeIncidentCategoryPanel').classList.toggle('hidden')"
+                                            class="inline-flex h-9 min-w-[116px] items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 hover:bg-red-100"
+                                        >
+                                            Remove Category
+                                        </button>
+                                    </div>
+                                @endif
+                                @if ($canManageIncidentCategories)
+                                    <div id="addIncidentCategoryPanel" class="mt-3 hidden w-full rounded-xl border border-blue-200 bg-blue-50 p-4">
+                                        <div class="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
+                                            <input
+                                                id="quick_incident_category_name"
+                                                type="text"
+                                                maxlength="100"
+                                                placeholder="Enter incident type/category"
+                                                class="h-11 min-w-0 flex-1 rounded-xl border border-blue-200 px-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                            >
+
+                                            <button
+                                                type="button"
+                                                data-store-url="{{ route($categoryStoreRouteName) }}"
+                                                onclick="submitQuickIncidentCategoryForm(this)"
+                                                class="inline-flex h-11 min-w-[118px] shrink-0 items-center justify-center rounded-xl bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800"
+                                            >
+                                                Save Category
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div id="removeIncidentCategoryPanel" class="mt-3 hidden w-full rounded-xl border border-red-200 bg-red-50 p-4">
+                                        <div class="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
+                                            <select
+                                                id="delete_incident_category_id"
+                                                class="h-11 min-w-0 flex-1 rounded-xl border border-red-200 px-4 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                                            >
+                                                <option value="">Select category to remove</option>
+
+                                                @foreach ($categories as $category)
+                                                    <option
+                                                        value="{{ $category->id }}"
+                                                        data-delete-url="{{ route($categoryDeleteRouteName, $category->id) }}"
+                                                    >
+                                                        {{ $category->category_name ?? $category->name ?? 'Category' }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+
+                                            <button
+                                                type="button"
+                                                onclick="submitQuickDeleteIncidentCategoryForm()"
+                                                class="inline-flex h-11 min-w-[118px] shrink-0 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-bold text-white hover:bg-red-700"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+
+
+                                    </div>
+                                @endif
                             </div>
 
-                            <div>
+                            @if ($canAssessSeverity)
+<div>
                                 <label for="priority" class="mb-2 block text-sm font-semibold text-slate-700">
                                     Severity
                                 </label>
@@ -163,10 +233,10 @@
                                 <select
                                     id="priority"
                                     name="priority"
-                                    required
-                                    class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+
+                                    class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                                 >
-                                    <option value="">Select severity</option>
+                                    <option value="">Pending assessment / select after verification</option>
 
                                     @foreach ($severityOptions as $value => $label)
                                         <option value="{{ $value }}" @selected(old('priority') === $value)>
@@ -179,6 +249,18 @@
                                     <p class="mt-2 text-sm font-medium text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
+@else
+<div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <p class="text-sm font-bold text-slate-800">
+        Severity assessment
+    </p>
+
+    <p class="mt-1 text-sm leading-6 text-slate-600">
+        Severity will be assigned by an administrator or barangay official after the situation is assessed.
+        You can still pinpoint the exact incident location on the map below.
+    </p>
+</div>
+@endif
                         </div>
 
                         <div>
@@ -210,23 +292,23 @@
         </h2>
 
         <p class="mt-1 text-sm text-slate-500">
-            Provide the barangay, exact landmark, and search or pin the location on the map.
+            Select the barangay to move the map there automatically, then click the map to pin the exact incident location.
         </p>
     </div>
 
     <div class="space-y-5 p-6">
         <div>
-            <div class="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <label for="barangay_id" class="block text-sm font-semibold text-slate-700">
                     Barangay
                 </label>
 
                 @if (in_array($role, ['admin', 'official'], true))
-                    <div class="flex flex-wrap gap-2">
+                    <div class="flex shrink-0 flex-wrap items-center gap-2">
                         <button
                             type="button"
                             onclick="document.getElementById('addBarangayPanel').classList.toggle('hidden')"
-                            class="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                            class="inline-flex h-10 min-w-[118px] items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
                         >
                             + Add Barangay
                         </button>
@@ -234,7 +316,7 @@
                         <button
                             type="button"
                             onclick="document.getElementById('removeBarangayPanel').classList.toggle('hidden')"
-                            class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100"
+                            class="inline-flex h-10 min-w-[118px] items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 hover:bg-red-100"
                         >
                             Remove Barangay
                         </button>
@@ -246,7 +328,7 @@
                 id="barangay_id"
                 name="barangay_id"
                 required
-                class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                class="h-11 w-full rounded-xl border border-slate-300 px-4 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
                 <option value="">Select barangay</option>
 
@@ -263,30 +345,30 @@
         </div>
 
         @if (in_array($role, ['admin', 'official'], true))
-            <div id="addBarangayPanel" class="hidden rounded-xl border border-blue-200 bg-blue-50 p-4">
-    <div class="flex flex-col gap-3 md:flex-row">
+            <div id="addBarangayPanel" class="hidden w-full rounded-xl border border-blue-200 bg-blue-50 p-4">
+    <div class="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
         <input
             id="quick_barangay_name"
             type="text"
             placeholder="Enter barangay name"
-            class="flex-1 rounded-xl border border-blue-200 px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            class="h-11 min-w-0 flex-1 rounded-xl border border-blue-200 px-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
         >
 
         <button
             type="button"
             onclick="submitQuickBarangayForm()"
-            class="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-800"
+            class="inline-flex h-11 min-w-[118px] shrink-0 items-center justify-center rounded-xl bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800"
         >
             Save Barangay
         </button>
     </div>
 </div>
 
-            <div id="removeBarangayPanel" class="hidden rounded-xl border border-red-200 bg-red-50 p-4">
-    <div class="flex flex-col gap-3 md:flex-row">
+            <div id="removeBarangayPanel" class="hidden w-full rounded-xl border border-red-200 bg-red-50 p-4">
+    <div class="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
         <select
             id="delete_barangay_id"
-            class="flex-1 rounded-xl border border-red-200 px-4 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+            class="h-11 min-w-0 flex-1 rounded-xl border border-red-200 px-4 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
         >
             <option value="">Select barangay to remove</option>
 
@@ -300,15 +382,13 @@
         <button
             type="button"
             onclick="submitQuickDeleteBarangayForm()"
-            class="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700"
+            class="inline-flex h-11 min-w-[118px] shrink-0 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-bold text-white hover:bg-red-700"
         >
             Remove
         </button>
     </div>
 
-    <p class="mt-2 text-xs text-red-700">
-        Barangays already used by incidents cannot be removed.
-    </p>
+
 </div>
         @endif
 
@@ -332,29 +412,10 @@
         </div>
 
         <div>
-            <label for="mapSearchInput" class="mb-2 block text-sm font-semibold text-slate-700">
-                Search Location on Map
-            </label>
+            <input id="mapSearchInput" type="hidden">
 
-            <div class="flex flex-col gap-3 md:flex-row">
-                <input
-                    id="mapSearchInput"
-                    type="text"
-                    placeholder="Search place, road, landmark, or barangay..."
-                    class="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                >
-
-                <button
-                    type="button"
-                    onclick="searchIncidentMapLocation()"
-                    class="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-800"
-                >
-                    Search Map
-                </button>
-            </div>
-
-            <p id="mapSearchStatus" class="mt-2 text-xs text-slate-500">
-                Search results will automatically move the map pin.
+            <p id="mapSearchStatus" class="text-xs text-slate-500">
+                Select a barangay above to center the map automatically.
             </p>
         </div>
 
@@ -366,7 +427,7 @@
                     </p>
 
                     <p class="mt-1 text-xs text-slate-500">
-                        Click the map or search above to save the incident location.
+                        Select a barangay to center the map, then click the map to pin the exact incident location.
                     </p>
                 </div>
 
@@ -521,7 +582,7 @@
 
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-      
+
       <style>
     #incidentCreateMap,
     #incidentCreateMap.leaflet-container {
@@ -670,7 +731,6 @@
     const barangayName = barangayNameInput.value.trim();
 
     if (! barangayName) {
-        alert('Enter a barangay name first.');
         return;
     }
 
@@ -683,17 +743,199 @@ function submitQuickDeleteBarangayForm() {
     const form = document.getElementById('quickRemoveBarangayForm');
 
     if (! barangayId) {
-        alert('Select a barangay to remove first.');
         return;
     }
 
-    if (! confirm('Remove this barangay? This cannot remove barangays already linked to incidents.')) {
-        return;
-    }
 
     const baseUrl = "{{ url('/admin/barangays') }}";
     form.action = `${baseUrl}/${barangayId}/quick-delete`;
     form.submit();
 }
+</script>
+
+<script>
+    function createIncidentReferenceForm(action, method, fields = {}) {
+        const form = document.createElement('form');
+
+        form.method = 'POST';
+        form.action = action;
+        form.classList.add('hidden');
+
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = '_token';
+        csrf.value = @json(csrf_token());
+        form.appendChild(csrf);
+
+        if (method && method.toUpperCase() !== 'POST') {
+            const methodInput = document.createElement('input');
+            methodInput.type = 'hidden';
+            methodInput.name = '_method';
+            methodInput.value = method.toUpperCase();
+            form.appendChild(methodInput);
+        }
+
+        Object.entries(fields).forEach(([name, value]) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    function submitQuickIncidentCategoryForm(button) {
+        const input = document.getElementById('quick_incident_category_name');
+        const categoryName = input?.value?.trim();
+        const storeUrl = button?.dataset?.storeUrl;
+
+        if (! categoryName || ! storeUrl) {
+            return;
+        }
+
+        createIncidentReferenceForm(
+            storeUrl,
+            'POST',
+            {
+                category_name: categoryName,
+            }
+        );
+    }
+
+    function submitQuickDeleteIncidentCategoryForm() {
+        const select = document.getElementById('delete_incident_category_id');
+        const selectedOption = select?.options?.[select.selectedIndex];
+        const deleteUrl = selectedOption?.dataset?.deleteUrl;
+
+        if (! deleteUrl) {
+            return;
+        }
+
+
+        createIncidentReferenceForm(
+            deleteUrl,
+            'DELETE'
+        );
+    }
+
+    async function centerIncidentMapOnSelectedBarangay() {
+        const barangaySelect =
+            document.getElementById('barangay_id');
+
+        const searchInput =
+            document.getElementById('mapSearchInput');
+
+        const status =
+            document.getElementById('mapSearchStatus');
+
+        if (! barangaySelect || ! searchInput) {
+            return;
+        }
+
+        const option =
+            barangaySelect.options[
+                barangaySelect.selectedIndex
+            ];
+
+        const barangayName =
+            option?.textContent?.trim();
+
+        if (
+            ! barangaySelect.value
+            || ! barangayName
+        ) {
+            if (status) {
+                status.textContent =
+                    'Select a barangay above and the map will move to that area automatically.';
+            }
+
+            return;
+        }
+
+        /*
+         * A changed barangay invalidates an exact pin from the previous
+         * barangay. Clear it before moving the map.
+         */
+        if (
+            typeof clearIncidentMapPin
+            === 'function'
+        ) {
+            clearIncidentMapPin();
+        }
+
+        searchInput.value =
+            barangayName;
+
+        if (
+            typeof searchIncidentMapLocation
+            !== 'function'
+        ) {
+            return;
+        }
+
+        if (status) {
+            status.textContent =
+                `Moving map to ${barangayName}, Dao, Capiz...`;
+        }
+
+        await searchIncidentMapLocation();
+
+        /*
+         * The established search helper also places a marker. For automatic
+         * barangay centering we keep only the map position; the reporter must
+         * still click the map for the exact incident point.
+         */
+        if (
+            typeof clearIncidentMapPin
+            === 'function'
+        ) {
+            clearIncidentMapPin();
+        }
+
+        if (status) {
+            status.textContent =
+                `Map centered on ${barangayName}. Click the map to pin the exact incident location.`;
+        }
+    }
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        function () {
+            const barangaySelect =
+                document.getElementById(
+                    'barangay_id'
+                );
+
+            if (! barangaySelect) {
+                return;
+            }
+
+            barangaySelect.addEventListener(
+                'change',
+                centerIncidentMapOnSelectedBarangay
+            );
+
+            const latitude =
+                document.getElementById(
+                    'latitude'
+                )?.value;
+
+            const longitude =
+                document.getElementById(
+                    'longitude'
+                )?.value;
+
+            if (
+                barangaySelect.value
+                && ! latitude
+                && ! longitude
+            ) {
+                centerIncidentMapOnSelectedBarangay();
+            }
+        }
+    );
 </script>
 @endsection

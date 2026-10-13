@@ -86,6 +86,35 @@ class ResidentComplaintController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
+            'feedback_category' => [
+                'required',
+                Rule::in([
+                    'system_experience',
+                    'staff_response',
+                    'barangay_service',
+                    'community_concern',
+                    'suggestion',
+                ]),
+            ],
+            'feedback_type' => [
+                'required',
+                Rule::in([
+                    'concern',
+                    'complaint',
+                    'suggestion',
+                    'compliment',
+                ]),
+            ],
+            'feedback_subject' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+            'service_rating' => [
+                'nullable',
+                'integer',
+                'between:1,5',
+            ],
             'complainant_name' => [
                 'required',
                 'string',
@@ -98,7 +127,7 @@ class ResidentComplaintController extends Controller
                 'regex:/^[0-9+()\-.\s]*$/',
             ],
             'complaint_address' => [
-                'required',
+                'nullable',
                 'string',
                 'max:500',
             ],
@@ -117,22 +146,22 @@ class ResidentComplaintController extends Controller
             ],
         ], [
             'complainant_name.required' =>
-                'Please enter the complainant full name.',
+                'Please enter the resident name.',
 
             'complaint_address.required' =>
-                'Please enter the address of the complaint.',
+                'Please enter a location or service area when relevant.',
 
             'complaint_description.required' =>
-                'Please describe the complaint.',
+                'Please describe your feedback.',
 
             'evidence.image' =>
-                'The evidence attachment must be an image.',
+                'The supporting attachment must be an image.',
 
             'evidence.mimes' =>
-                'The evidence picture must be JPG, JPEG, PNG, or WEBP.',
+                'The supporting picture must be JPG, JPEG, PNG, or WEBP.',
 
             'evidence.max' =>
-                'The evidence picture must not exceed 10MB.',
+                'The supporting picture must not exceed 10MB.',
         ]);
 
         $evidencePath = null;
@@ -162,6 +191,14 @@ class ResidentComplaintController extends Controller
                     */
 
                     'resident_id' => $user->id,
+                    'feedback_category' =>
+                        $validated['feedback_category'],
+                    'feedback_type' =>
+                        $validated['feedback_type'],
+                    'feedback_subject' =>
+                        $validated['feedback_subject'],
+                    'service_rating' =>
+                        $validated['service_rating'] ?? null,
                     'complainant_name' =>
                         $validated['complainant_name'],
                     'contact_number' =>
@@ -169,7 +206,7 @@ class ResidentComplaintController extends Controller
                     'complaint_description' =>
                         $validated['complaint_description'],
                     'complaint_address' =>
-                        $validated['complaint_address'],
+                        $validated['complaint_address'] ?? null,
                     'evidence_path' => $evidencePath,
                     'status' => 'submitted',
                     'submitted_at' => now(),
@@ -197,7 +234,7 @@ class ResidentComplaintController extends Controller
         $this->recordOperationalActivity(
             event: 'complaint.created',
             category: 'complaint',
-            description: 'A resident complaint was submitted.',
+            description: 'Resident feedback was submitted.',
             metadata: [
                 'complaint_id' => (int) $complaint->id,
                 'status' => $complaint->status,
@@ -214,7 +251,7 @@ class ResidentComplaintController extends Controller
             )
             ->with(
                 'success',
-                'Complaint submitted successfully.'
+                'Feedback submitted successfully.'
             );
     }
 
@@ -281,7 +318,7 @@ class ResidentComplaintController extends Controller
     $this->recordOperationalActivity(
         event: 'complaint.status_updated',
         category: 'complaint',
-        description: 'A resident complaint status was updated.',
+        description: 'A resident feedback status was updated.',
         metadata: [
             'complaint_id' => (int) $residentComplaint->id,
             'previous_status' => $previousStatus,
@@ -292,7 +329,7 @@ class ResidentComplaintController extends Controller
 
     return back()->with(
         'success',
-        'Complaint status updated successfully.'
+        'Feedback status updated successfully.'
     );
 }
 
@@ -389,7 +426,7 @@ class ResidentComplaintController extends Controller
         $this->recordOperationalActivity(
             event: 'complaint.proof_uploaded',
             category: 'complaint',
-            description: 'A proof image was uploaded for a resident complaint.',
+            description: 'Response and action evidence was added to resident feedback.',
             metadata: [
                 'complaint_id' =>
                     (int) $residentComplaint->id,
@@ -401,7 +438,7 @@ class ResidentComplaintController extends Controller
 
         return back()->with(
             'success',
-            'Proof picture sent to resident successfully.'
+            'Response and action evidence added successfully.'
         );
     }
 
@@ -506,7 +543,7 @@ class ResidentComplaintController extends Controller
         $this->recordOperationalActivity(
             event: 'complaint.deleted',
             category: 'complaint',
-            description: 'A resident complaint was deleted.',
+            description: 'Resident feedback was deleted.',
             metadata: $auditMetadata,
             request: $request,
         );
@@ -519,7 +556,7 @@ class ResidentComplaintController extends Controller
             )
             ->with(
                 'success',
-                'Complaint deleted successfully.'
+                'Feedback deleted successfully.'
             );
     }
 
@@ -547,8 +584,8 @@ class ResidentComplaintController extends Controller
                             'user_id' => $user->id,
                             'type' => 'resident_complaint',
                             'source_id' => $complaint->id,
-                            'title' => 'New resident complaint',
-                            'message' => $complaint->complainant_name . ' submitted a complaint: ' . mb_substr($complaint->complaint_description, 0, 160),
+                            'title' => 'New resident feedback',
+                            'message' => $complaint->complainant_name . ' submitted feedback: ' . mb_substr($complaint->complaint_description, 0, 160),
                             'is_read' => false,
                             'read_at' => null,
                         ]

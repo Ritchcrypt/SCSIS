@@ -28,6 +28,11 @@ class AnnouncementController extends Controller
 
         $canManage = Gate::allows('create', Announcement::class);
 
+        $barangayTargetingReady = Schema::hasTable(
+            'announcement_barangay'
+        )
+            && Schema::hasColumn('users', 'barangay_id');
+
         $query = Announcement::query()->with('poster');
 
         if (! $canManage) {
@@ -40,6 +45,32 @@ class AnnouncementController extends Controller
                     'audience',
                     $this->allowedAudiencesForUser($user)
                 );
+            }
+
+            if ($barangayTargetingReady) {
+                if (empty($user->barangay_id)) {
+                    $query->whereDoesntHave(
+                        'targetBarangays'
+                    );
+                } else {
+                    $query->where(
+                        function ($visibilityQuery) use ($user): void {
+                            $visibilityQuery
+                                ->whereDoesntHave(
+                                    'targetBarangays'
+                                )
+                                ->orWhereHas(
+                                    'targetBarangays',
+                                    function ($barangayQuery) use ($user): void {
+                                        $barangayQuery->where(
+                                            'barangays.id',
+                                            (int) $user->barangay_id
+                                        );
+                                    }
+                                );
+                        }
+                    );
+                }
             }
         }
 

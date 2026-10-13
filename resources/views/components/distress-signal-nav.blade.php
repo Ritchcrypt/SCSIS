@@ -2,12 +2,23 @@
     $distressUser = auth()->user();
     $distressRole = strtolower(trim((string) ($distressUser?->role ?? '')));
 
+    $distressNavLabel = in_array(
+        $distressRole,
+        ['resident', 'tanod'],
+        true
+    )
+        ? 'Send Distress Signal'
+        : 'Distress Signal';
+
     $distressRouteName = match ($distressRole) {
         'admin' => \Illuminate\Support\Facades\Route::has('admin.mobile-sos.index')
             ? 'admin.mobile-sos.index'
             : null,
         'official', 'dao' => \Illuminate\Support\Facades\Route::has('official.mobile-sos.index')
             ? 'official.mobile-sos.index'
+            : null,
+        'resident', 'tanod' => \Illuminate\Support\Facades\Route::has('distress-signal.create')
+            ? 'distress-signal.create'
             : null,
         default => null,
     };
@@ -18,6 +29,12 @@
             : null,
         'official', 'dao' => \Illuminate\Support\Facades\Route::has('official.incidents.index')
             ? 'official.incidents.index'
+            : null,
+        'tanod' => \Illuminate\Support\Facades\Route::has('tanod.incidents.index')
+            ? 'tanod.incidents.index'
+            : null,
+        'resident' => \Illuminate\Support\Facades\Route::has('resident.incidents.index')
+            ? 'resident.incidents.index'
             : null,
         default => null,
     };
@@ -34,6 +51,7 @@
 
             const distressUrl = @json(route($distressRouteName));
             const incidentsUrl = @json(route($incidentRouteName));
+            const distressLabel = @json($distressNavLabel);
 
             function normalizePath(url) {
                 try {
@@ -89,7 +107,7 @@
                 icon.textContent = '🆘';
 
                 const label = document.createElement('span');
-                label.textContent = 'Distress Signal';
+                label.textContent = distressLabel;
 
                 link.append(icon, label);
                 incidentsLink.insertAdjacentElement('afterend', link);

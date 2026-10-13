@@ -70,7 +70,7 @@
         }
 
         .summary-grid td {
-            width: 25%;
+            width: 33.33%;
             border: 1px solid #d1d5db;
             padding: 10px;
             vertical-align: top;
@@ -199,192 +199,80 @@
         </div>
 
         <div class="section">
-            <div class="section-title">Summary</div>
+            <div class="section-title">
+                {{ $selectedMetricLabel ?? 'Total Incidents' }}
+            </div>
 
             <table class="summary-grid">
                 <tr>
-                    <td>
-                        <div class="summary-label">Total Incidents</div>
-                        <div class="summary-value">{{ $totalIncidents }}</div>
-                    </td>
+                    <td style="width: 100%;">
+                        <div class="summary-label">
+                            Selected Metric
+                        </div>
 
-                    <td>
-                        <div class="summary-label">Active / Pending</div>
-                        <div class="summary-value">{{ $activeIncidents }}</div>
-                    </td>
-
-                    <td>
-                        <div class="summary-label">Resolved</div>
-                        <div class="summary-value">{{ $resolvedIncidents }}</div>
-                    </td>
-
-                    <td>
-                        <div class="summary-label">Cases Filed</div>
-                        <div class="summary-value">{{ $casesFiled }}</div>
-                    </td>
-
-                </tr>
-            </table>
-
-            <table class="summary-grid" style="margin-top: 8px;">
-                <tr>
-                    <td style="width: 33.33%;">
-                        <div class="summary-label">Resident Complaints</div>
-                        <div class="summary-value">{{ $residentComplaints ?? 0 }}</div>
-                    </td>
-
-                    <td style="width: 33.33%;">
-                        <div class="summary-label">Distress Signals</div>
-                        <div class="summary-value">{{ $distressSignals ?? 0 }}</div>
-                    </td>
-
-                    <td style="width: 33.33%;">
-                        <div class="summary-label">Announcements</div>
-                        <div class="summary-value">{{ $announcements ?? 0 }}</div>
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <div class="section">
-            <div class="section-title">Incident Operational Summary</div>
-
-            <table class="two-column">
-                <tr>
-                    <td>
-                        <strong>Status Breakdown</strong>
-                        @if (count($statusSummary))
-                            <table class="data-table" style="margin-top: 6px;">
-                                @foreach ($statusSummary as $row)
-                                    <tr>
-                                        <td>{{ $row['label'] }}</td>
-                                        <td style="width: 25%; text-align: center;">{{ $row['total'] }}</td>
-                                    </tr>
-                                @endforeach
-                            </table>
-                        @else
-                            <div class="empty" style="margin-top: 6px;">No status data.</div>
-                        @endif
-                    </td>
-
-                    <td>
-                        <strong>Severity Breakdown</strong>
-                        @if (count($severitySummary))
-                            <table class="data-table" style="margin-top: 6px;">
-                                @foreach ($severitySummary as $row)
-                                    <tr>
-                                        <td>{{ $row['label'] }}</td>
-                                        <td style="width: 25%; text-align: center;">{{ $row['total'] }}</td>
-                                    </tr>
-                                @endforeach
-                            </table>
-                        @else
-                            <div class="empty" style="margin-top: 6px;">No severity data.</div>
-                        @endif
+                        <div class="summary-value">
+                            {{ $selectedMetricCount ?? count($records ?? []) }}
+                        </div>
                     </td>
                 </tr>
             </table>
 
-            <div style="margin-top: 10px;">
-                <strong>Top Barangay Areas by Incident Count</strong>
-                @if (count($barangaySummary))
-                    <table class="data-table" style="margin-top: 6px;">
-                        <thead>
-                            <tr>
-                                <th>Barangay Area</th>
-                                <th style="width: 20%;">Incidents</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($barangaySummary as $row)
-                                <tr>
-                                    <td>{{ $row['label'] }}</td>
-                                    <td>{{ $row['total'] }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                @else
-                    <div class="empty" style="margin-top: 6px;">No barangay incident data.</div>
-                @endif
+            <div class="empty" style="margin-top: 8px;">
+                This PDF contains only
+                {{ strtolower($selectedMetricLabel ?? 'the selected metric') }}
+                and its matching records for {{ $periodLabel }}.
             </div>
         </div>
 
         <div class="section">
-            <div class="section-title">Records Breakdown</div>
+            <div class="section-title">
+                {{ $selectedMetricLabel ?? 'Total Incidents' }} Records Breakdown
+            </div>
 
-            @if (count($records))
+            @if (count($records ?? []))
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width: 11%;">Category</th>
-                            <th style="width: 23%;">Details</th>
-                            <th style="width: 12%;">Type</th>
+                            <th style="width: 12%;">Category</th>
+                            <th style="width: 24%;">Details</th>
+                            <th style="width: 12%;">Type / Shift</th>
                             <th style="width: 10%;">Severity</th>
-                            <th style="width: 14%;">Area / Location</th>
+                            <th style="width: 15%;">Barangay / Location</th>
                             <th style="width: 12%;">Status</th>
-                            <th style="width: 18%;">Date & Time</th>
+                            <th style="width: 15%;">Date / As Of</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        @foreach ($records as $record)
+                        @foreach (($records ?? []) as $record)
                             <tr>
-                                <td>{{ $record['category'] }}</td>
-                                <td>{{ $record['title'] }}</td>
+                                <td>{{ $record['category'] ?? '—' }}</td>
+                                <td>{{ $record['title'] ?? '—' }}</td>
                                 <td>{{ $record['type'] ?? '—' }}</td>
                                 <td>{{ $record['severity'] ?? '—' }}</td>
                                 <td>{{ $record['barangay'] ?? '—' }}</td>
                                 <td>{{ $record['status'] ?? '—' }}</td>
-                                <td>{{ $record['datetime'] }}</td>
+                                <td>{{ $record['datetime'] ?? '—' }}</td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             @else
                 <div class="empty">
-                    No records found for {{ strtolower($periodLabel) }}.
+                    No matching records were found for this metric and timeline.
                 </div>
             @endif
         </div>
 
-        <div class="section">
-            <div class="section-title">Tanod Response Summary</div>
-
-            @if (count($tanodSummary))
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Tanod</th>
-                            <th>Total Tasks</th>
-                            <th>Accepted</th>
-                            <th>Declined</th>
-                            <th>Pending</th>
-                            <th>Response Rate</th>
-                            <th>Last Response</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @foreach ($tanodSummary as $tanod)
-                            <tr>
-                                <td>{{ $tanod['name'] }}</td>
-                                <td>{{ $tanod['total_tasks'] }}</td>
-                                <td>{{ $tanod['accepted'] }}</td>
-                                <td>{{ $tanod['declined'] }}</td>
-                                <td>{{ $tanod['pending'] }}</td>
-                                <td>{{ $tanod['response_rate'] }}%</td>
-                                <td>{{ $tanod['last_response'] }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            @else
+        @if (($isArchivedSnapshot ?? false))
+            <div class="section">
                 <div class="empty">
-                    No tanod task responses recorded for this period.
+                    Archived historical snapshot ID:
+                    {{ $historicalSnapshotId ?? '—' }}.
+                    Stored report integrity is verified before PDF generation.
                 </div>
-            @endif
-        </div>
+            </div>
+        @endif
 
         <table class="signature-table">
             <tr>

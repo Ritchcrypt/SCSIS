@@ -41,7 +41,7 @@
             </h1>
 
             <p class="mt-1 text-sm text-slate-500">
-                Incident location pins and heatmap based on reported incidents.
+                Incident pins use responder-assessed severity. Reports awaiting assessment remain visible as neutral gray pins.
             </p>
         </div>
 
@@ -92,7 +92,11 @@
                 Map Legend
             </span>
 
-            <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2">
+                <span class="h-3.5 w-3.5 rounded-full bg-slate-500 ring-2 ring-white shadow-sm"></span>
+                <span class="text-sm font-medium text-slate-600">Pending assessment</span>
+            </div>
+<div class="flex items-center gap-2">
                 <span class="h-3.5 w-3.5 rounded-full bg-green-500 ring-2 ring-white shadow-sm"></span>
                 <span class="text-sm font-medium text-slate-600">Low</span>
             </div>
@@ -206,13 +210,17 @@
     }
 
     function renderHeatmap() {
-        const heatPoints = mapIncidents.map(function (incident) {
-            return [
-                incident.latitude,
-                incident.longitude,
-                incident.heat_intensity
-            ];
-        });
+        const heatPoints = mapIncidents
+            .filter(function (incident) {
+                return incident.severity !== 'unassessed';
+            })
+            .map(function (incident) {
+                return [
+                    incident.latitude,
+                    incident.longitude,
+                    incident.heat_intensity
+                ];
+            });
 
         heatLayer = L.heatLayer(heatPoints, {
             radius: 35,

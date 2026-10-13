@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\TanodProfile;
 use App\Models\User;
 use App\Services\TanodDutyScheduleService;
+use App\Support\DaoBarangays;
 use App\Support\SqlLikePattern;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -76,7 +77,7 @@ class TanodRosterController extends Controller
         )
         ->with([
             'user',
-            'employee',
+            'employee.barangay',
         ])
         ->when(
             $searchPattern !== null,
@@ -201,6 +202,7 @@ class TanodRosterController extends Controller
         'shifts' => $this->shifts(),
 
         'statuses' => $this->statuses(),
+        'barangays' => $this->officialBarangays(),
     ]);
 }
 
@@ -220,14 +222,7 @@ class TanodRosterController extends Controller
         $validated['email'] ?? null
     );
 
-    $barangayId = $this->defaultBarangayId();
-
-    if (! $barangayId) {
-        return back()->with(
-            'error',
-            'Add at least one barangay before creating a tanod account.'
-        );
-    }
+    $barangayId = (int) $validated['barangay_id'];
 
     $createdUser = null;
     $createdTanodProfile = null;
@@ -245,7 +240,7 @@ class TanodRosterController extends Controller
                 $validated['full_name']
             );
 
-        $createdUser = User::create([
+        $userData = [
             'name' => trim($validated['full_name']),
             'email' => $email,
             'password' => Hash::make(Str::random(64)),
@@ -255,7 +250,13 @@ class TanodRosterController extends Controller
             ),
             'is_active' => true,
             'status' => true,
-        ]);
+        ];
+
+        if (Schema::hasColumn('users', 'barangay_id')) {
+            $userData['barangay_id'] = $barangayId;
+        }
+
+        $createdUser = User::create($userData);
 
         $employee = Employee::create([
             'user_id' => $createdUser->id,
@@ -263,7 +264,8 @@ class TanodRosterController extends Controller
             'employee_type' => 'tanod',
             'position' => 'Barangay Tanod',
             'department' => 'Public Safety',
-            'is_active' => $validated['status'] !== 'off_duty',
+            'is_active' =>
+                $validated['status'] !== 'off_duty',
         ]);
 
         $profileData = [
@@ -272,10 +274,8 @@ class TanodRosterController extends Controller
             'contact_number' => $this->nullableText(
                 $validated['contact_number'] ?? null
             ),
-            'purok_assignment' => $this->nullableText(
-                $validated['purok_assignment'] ?? null
-            ),
-            'date_appointed' => $validated['date_appointed'] ?? null,
+            'date_appointed' =>
+                $validated['date_appointed'] ?? null,
             'shift' => $validated['shift'],
             'status' => $validated['status'],
             'notes' => $this->nullableText(
@@ -283,35 +283,37 @@ class TanodRosterController extends Controller
             ),
         ];
 
-        if (Schema::hasColumn('tanod_profiles', 'auto_duty_enabled')) {
-            $profileData['auto_duty_enabled'] = (bool) (
-                $validated['auto_duty_enabled'] ?? false
-            );
+        if (
+            Schema::hasColumn(
+                'tanod_profiles',
+                'auto_duty_enabled'
+            )
+        ) {
+            $profileData['auto_duty_enabled'] =
+                (bool) (
+                    $validated[
+                        'auto_duty_enabled'
+                    ] ?? false
+                );
         }
 
-        $createdTanodProfile = TanodProfile::create($profileData);
+        $createdTanodProfile =
+            TanodProfile::create($profileData);
     });
 
-    /*
-    |--------------------------------------------------------------------------
-    | Creation integrity check
-    |--------------------------------------------------------------------------
-    |
-    | The transaction above must create both the user account and the tanod
-    | profile. This explicit check also allows static analysis tools to know
-    | that both variables are valid model instances below this point.
-    |
-    */
     if (! $createdUser || ! $createdTanodProfile) {
         throw new \RuntimeException(
             'Tanod account creation completed without the required linked records.'
         );
     }
 
-    app(TanodDutyScheduleService::class)->syncProfile($createdTanodProfile);
+    app(TanodDutyScheduleService::class)
+        ->syncProfile($createdTanodProfile);
+
     $createdTanodProfile->refresh();
 
-    $message = 'Tanod member added successfully.';
+    $message =
+        'Tanod member added successfully.';
 
     if ($providedEmail) {
         try {
@@ -325,29 +327,41 @@ class TanodRosterController extends Controller
                 'Tanod password setup email could not be sent.',
                 [
                     'user_id' => $createdUser->id,
-                    'error' => $exception->getMessage(),
+                    'error' =>
+                        $exception->getMessage(),
                 ]
             );
         }
 
-        $message .= $resetStatus === Password::RESET_LINK_SENT
+        $message .=
+            $resetStatus
+                === Password::RESET_LINK_SENT
             ? ' A secure password setup link was sent to the tanod email.'
             : ' The account was created, but the password setup email could not be sent. Use User Management to resend it.';
     } else {
-        $message .= ' Add a valid email in User Management before sending a password setup link.';
+        $message .=
+            ' Add a valid email in User Management before sending a password setup link.';
     }
 
     $this->recordOperationalActivity(
         event: 'tanod_roster.created',
         category: 'tanod_roster',
-        description: 'A tanod roster member was created.',
+        description:
+            'A tanod roster member was created.',
         metadata: [
-            'tanod_profile_id' => (int) $createdTanodProfile->id,
-            'user_id' => (int) $createdUser->id,
-            'employee_id' => $createdTanodProfile->employee_id,
-            'shift' => $createdTanodProfile->shift,
-            'status' => $createdTanodProfile->status,
-            'password_setup_email_requested' => $providedEmail !== null,
+            'tanod_profile_id' =>
+                (int) $createdTanodProfile->id,
+            'user_id' =>
+                (int) $createdUser->id,
+            'employee_id' =>
+                $createdTanodProfile->employee_id,
+            'barangay_id' => $barangayId,
+            'shift' =>
+                $createdTanodProfile->shift,
+            'status' =>
+                $createdTanodProfile->status,
+            'password_setup_email_requested' =>
+                $providedEmail !== null,
         ],
         request: $request,
     );
@@ -373,102 +387,190 @@ class TanodRosterController extends Controller
 
         $previousStatus = $tanod->status;
         $previousShift = $tanod->shift;
+        $previousBarangayId =
+            $tanod->employee?->barangay_id;
 
         DB::transaction(function () use (
             $tanod,
             $validated
         ): void {
-            $lockedTanod = TanodProfile::query()
-                ->with(['user', 'employee'])
-                ->lockForUpdate()
-                ->findOrFail($tanod->getKey());
+            $lockedTanod =
+                TanodProfile::query()
+                    ->with([
+                        'user',
+                        'employee',
+                    ])
+                    ->lockForUpdate()
+                    ->findOrFail(
+                        $tanod->getKey()
+                    );
 
             $user = $lockedTanod->user;
-            $employee = $lockedTanod->employee;
+            $employee =
+                $lockedTanod->employee;
+
+            $barangayId =
+                (int) $validated['barangay_id'];
 
             if ($user) {
-                $newEmail = $this->nullableText(
-                    $validated['email'] ?? null
-                );
+                $newEmail =
+                    $this->nullableText(
+                        $validated['email'] ?? null
+                    );
 
                 $userData = [
-                    'name' => trim($validated['full_name']),
-                    'contact_number' => $this->nullableText(
-                        $validated['contact_number'] ?? null
+                    'name' => trim(
+                        $validated['full_name']
                     ),
+                    'contact_number' =>
+                        $this->nullableText(
+                            $validated[
+                                'contact_number'
+                            ] ?? null
+                        ),
                 ];
 
+                if (
+                    Schema::hasColumn(
+                        'users',
+                        'barangay_id'
+                    )
+                ) {
+                    $userData['barangay_id'] =
+                        $barangayId;
+                }
+
                 if ($newEmail) {
-                    $newEmail = strtolower($newEmail);
+                    $newEmail =
+                        strtolower($newEmail);
 
-                    if (strcasecmp($newEmail, (string) $user->email) !== 0) {
-                        $userData['email'] = $newEmail;
+                    if (
+                        strcasecmp(
+                            $newEmail,
+                            (string) $user->email
+                        ) !== 0
+                    ) {
+                        $userData['email'] =
+                            $newEmail;
 
-                        if (array_key_exists(
-                            'email_verified_at',
-                            $user->getAttributes()
-                        )) {
-                            $userData['email_verified_at'] = null;
+                        if (
+                            array_key_exists(
+                                'email_verified_at',
+                                $user->getAttributes()
+                            )
+                        ) {
+                            $userData[
+                                'email_verified_at'
+                            ] = null;
                         }
                     }
                 }
 
-                $user->forceFill($userData)->save();
+                $user->forceFill(
+                    $userData
+                )->save();
             }
 
             if ($employee) {
                 $employee->update([
-                    'is_active' => $validated['status'] !== 'off_duty',
+                    'barangay_id' => $barangayId,
+                    'is_active' =>
+                        $validated['status']
+                            !== 'off_duty',
                 ]);
             }
 
             $updateData = [
-                'contact_number' => $this->nullableText(
-                    $validated['contact_number'] ?? null
-                ),
-                'purok_assignment' => $this->nullableText(
-                    $validated['purok_assignment'] ?? null
-                ),
-                'date_appointed' => $validated['date_appointed'] ?? null,
-                'shift' => $validated['shift'],
-                'status' => $validated['status'],
-                'notes' => $this->nullableText(
-                    $validated['notes'] ?? null
-                ),
+                'contact_number' =>
+                    $this->nullableText(
+                        $validated[
+                            'contact_number'
+                        ] ?? null
+                    ),
+                'date_appointed' =>
+                    $validated[
+                        'date_appointed'
+                    ] ?? null,
+                'shift' =>
+                    $validated['shift'],
+                'status' =>
+                    $validated['status'],
+                'notes' =>
+                    $this->nullableText(
+                        $validated['notes']
+                            ?? null
+                    ),
             ];
 
-            if (Schema::hasColumn('tanod_profiles', 'auto_duty_enabled')) {
-                $updateData['auto_duty_enabled'] = (bool) (
-                    $validated['auto_duty_enabled'] ?? false
+            if (
+                Schema::hasColumn(
+                    'tanod_profiles',
+                    'auto_duty_enabled'
+                )
+            ) {
+                $updateData[
+                    'auto_duty_enabled'
+                ] = (bool) (
+                    $validated[
+                        'auto_duty_enabled'
+                    ] ?? false
                 );
             }
 
-            $lockedTanod->update($updateData);
+            $lockedTanod->update(
+                $updateData
+            );
         });
 
         $tanod->refresh();
-        app(TanodDutyScheduleService::class)->syncProfile($tanod);
+
+        app(
+            TanodDutyScheduleService::class
+        )->syncProfile($tanod);
+
         $tanod->refresh();
+
+        $newBarangayId =
+            $tanod->employee?->barangay_id;
 
         $this->recordOperationalActivity(
             event: 'tanod_roster.updated',
             category: 'tanod_roster',
-            description: 'A tanod roster member was updated.',
+            description:
+                'A tanod roster member was updated.',
             metadata: [
-                'tanod_profile_id' => (int) $tanod->id,
-                'user_id' => $tanod->user_id,
-                'employee_id' => $tanod->employee_id,
-                'previous_status' => $previousStatus,
-                'new_status' => $tanod->status,
-                'previous_shift' => $previousShift,
-                'new_shift' => $tanod->shift,
+                'tanod_profile_id' =>
+                    (int) $tanod->id,
+                'user_id' =>
+                    $tanod->user_id,
+                'employee_id' =>
+                    $tanod->employee_id,
+                'previous_barangay_id' =>
+                    $previousBarangayId,
+                'new_barangay_id' =>
+                    $newBarangayId,
+                'previous_status' =>
+                    $previousStatus,
+                'new_status' =>
+                    $tanod->status,
+                'previous_shift' =>
+                    $previousShift,
+                'new_shift' =>
+                    $tanod->shift,
             ],
             request: $request,
         );
 
         return redirect()
-            ->to($this->rosterIndexUrl($request))
-            ->with('success', 'Tanod member updated successfully.');
+            ->to(
+                $this->rosterIndexUrl(
+                    $request
+                )
+            )
+            ->with(
+                'success',
+                'Tanod member updated successfully.'
+            );
     }
 
     public function destroy(
@@ -542,7 +644,11 @@ class TanodRosterController extends Controller
         ?TanodProfile $tanod = null
     ): array {
         return [
-            'full_name' => ['required', 'string', 'max:255'],
+            'full_name' => [
+                'required',
+                'string',
+                'max:255',
+            ],
             'contact_number' => [
                 'nullable',
                 'string',
@@ -554,13 +660,26 @@ class TanodRosterController extends Controller
                 'string',
                 'email',
                 'max:255',
-                Rule::unique('users', 'email')
-                    ->ignore($tanod?->user_id),
+                Rule::unique(
+                    'users',
+                    'email'
+                )->ignore(
+                    $tanod?->user_id
+                ),
             ],
-            'purok_assignment' => [
-                'nullable',
-                'string',
-                'max:100',
+            'barangay_id' => [
+                'required',
+                'integer',
+                Rule::exists(
+                    'barangays',
+                    'id'
+                )->where(
+                    fn ($query) =>
+                        $query->whereIn(
+                            'barangay_name',
+                            DaoBarangays::names()
+                        )
+                ),
             ],
             'date_appointed' => [
                 'nullable',
@@ -573,14 +692,50 @@ class TanodRosterController extends Controller
             ],
             'shift' => [
                 'required',
-                Rule::in(array_keys($this->shifts())),
+                Rule::in(
+                    array_keys(
+                        $this->shifts()
+                    )
+                ),
             ],
             'status' => [
                 'required',
-                Rule::in(array_keys($this->statuses())),
+                Rule::in(
+                    array_keys(
+                        $this->statuses()
+                    )
+                ),
             ],
-            'notes' => ['nullable', 'string', 'max:3000'],
+            'notes' => [
+                'nullable',
+                'string',
+                'max:3000',
+            ],
         ];
+    }
+
+    private function officialBarangays()
+    {
+        if (
+            ! Schema::hasTable(
+                'barangays'
+            )
+        ) {
+            return collect();
+        }
+
+        return Barangay::query()
+            ->whereIn(
+                'barangay_name',
+                DaoBarangays::names()
+            )
+            ->orderBy(
+                'barangay_name'
+            )
+            ->get([
+                'id',
+                'barangay_name',
+            ]);
     }
 
     private function shifts(): array

@@ -180,6 +180,12 @@ class NotificationCenterController extends Controller
                 : $this->target('dashboard');
         }
 
+        if ($type === 'tanod_task_response') {
+            return $this->tanodTaskResponseTarget(
+                $role,
+                $sourceId
+            );
+        }
         if (
             in_array(
                 $type,
@@ -242,5 +248,62 @@ class NotificationCenterController extends Controller
             'module' => $module,
             'source_id' => $sourceId,
         ];
+    }
+
+    private function tanodTaskResponseTarget(
+        string $role,
+        ?int $taskId
+    ): array {
+        if (! $taskId) {
+            return $this->target('dashboard');
+        }
+
+        if (
+            in_array(
+                $role,
+                ['admin', 'tanod'],
+                true
+            )
+        ) {
+            return $this->target(
+                'tanodTasks',
+                $taskId
+            );
+        }
+
+        if (
+            in_array(
+                $role,
+                ['official', 'dao'],
+                true
+            )
+            && Schema::hasTable('tanod_tasks')
+            && Schema::hasColumn(
+                'tanod_tasks',
+                'incident_id'
+            )
+        ) {
+            $incidentId = DB::table('tanod_tasks')
+                ->where('id', $taskId)
+                ->value('incident_id');
+
+            if (
+                $incidentId
+                && Schema::hasTable('incidents')
+                && DB::table('incidents')
+                    ->where(
+                        'id',
+                        (int) $incidentId
+                    )
+                    ->exists()
+            ) {
+                return $this->target(
+                    'incidents',
+                    (int) $incidentId
+                );
+            }
+        }
+
+        return $this->target('dashboard');
     }
 }
