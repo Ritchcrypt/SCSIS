@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Support\Facades\Auth;
@@ -85,30 +85,34 @@ new #[Layout('components.layouts.auth')] class extends Component {
     }
 }; ?>
 
-<div class="flex flex-col gap-6">
-    <x-auth-header
-        title="Log in to your account"
-        description="Enter your email and password below to log in"
-    />
+<div>
+<p class="tn21-login-description">
+        Access your account to continue
+    </p>
 
     <x-auth-session-status
         class="text-center"
         :status="session('status')"
     />
 
-    <form wire:submit="login" class="flex flex-col gap-6">
+    <form
+        wire:submit="login"
+        class="tn21-form"
+    >
+
         <flux:input
             wire:model="email"
-            :label="__('Email address')"
+            :label="__('Email Address')"
             type="email"
             name="email"
             required
             autofocus
             autocomplete="email"
-            placeholder="email@example.com"
+            placeholder="Enter your email"
         />
 
-        <div class="relative">
+        <div class="tn21-password-wrap">
+
             <flux:input
                 wire:model="password"
                 :label="__('Password')"
@@ -116,54 +120,68 @@ new #[Layout('components.layouts.auth')] class extends Component {
                 name="password"
                 required
                 autocomplete="current-password"
-                :placeholder="__('Password')"
+                :placeholder="__('Enter your password')"
                 viewable
             />
 
             @if (Route::has('password.request'))
-                <x-text-link
-                    class="absolute right-0 top-0"
-                    href="{{ route('password.request') }}"
-                >
-                    {{ __('Forgot your password?') }}
-                </x-text-link>
+
+                <div class="tn21-forgot-row">
+
+                    <a
+                        href="{{ route('password.request') }}"
+                        class="tn21-link"
+                    >
+                        {{ __('Forgot Password?') }}
+                    </a>
+
+                </div>
+
             @endif
+
         </div>
 
-        <label for="remember" class="tn-auth-remember">
+        <label
+            for="remember"
+            class="tn21-remember"
+        >
+
             <input
                 id="remember"
                 name="remember"
                 type="checkbox"
                 value="1"
                 wire:model="remember"
-                class="tn-auth-remember-input"
             >
 
-            <span class="tn-auth-remember-label">
+            <span>
                 {{ __('Remember me') }}
             </span>
+
         </label>
 
-        <div class="flex items-center justify-end">
+        <div class="tn21-submit">
+
             <flux:button
                 variant="primary"
                 type="submit"
-                class="w-full"
             >
-                {{ __('Log in') }}
+                {{ __('Sign In') }}
             </flux:button>
+
         </div>
+
+        <div class="tn21-divider">
+            <span>or</span>
+        </div>
+
+        <a
+            href="{{ route('register') }}"
+            class="tn21-signup"
+        >
+            {{ __('Sign Up') }}
+        </a>
+
     </form>
 
-    <div class="space-x-1 text-center text-sm text-zinc-600 dark:text-zinc-400">
-        <span>Don't have an account?</span>
-
-        <x-text-link href="{{ route('register') }}">
-            {{ __('Sign up') }}
-        </x-text-link>
-    </div>
-
-    @if (Route::has('distress-signal.create'))
-    @endif
 </div>

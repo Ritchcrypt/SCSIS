@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\UserNotification;
+use App\Services\NotificationBellService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,27 @@ use Illuminate\Support\Facades\Schema;
 
 class NotificationOpenController extends Controller
 {
+    public function destroy(
+        Request $request,
+        UserNotification $notification,
+        NotificationBellService $notificationBell
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user, 403, 'Unauthenticated request.');
+
+        Gate::authorize('delete', $notification);
+
+        $notificationBell->deleteOwnedNotificationGroup(
+            $user,
+            $notification
+        );
+
+        return back()->with(
+            'success',
+            'Notification removed from your account only.'
+        );
+    }
     public function open(Request $request, UserNotification $notification): RedirectResponse
     {
         $user = $request->user();
@@ -95,6 +117,23 @@ class NotificationOpenController extends Controller
         }
 
         return redirect()->to($this->dashboardUrl($role));
+    }
+
+    public function markAllRead(
+        Request $request,
+        NotificationBellService $notificationBell
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless(
+            $user,
+            403,
+            'Unauthenticated request.'
+        );
+
+        $notificationBell->markAllUnreadAsRead($user);
+
+        return redirect()->back();
     }
 
     private function markNotificationGroupAsRead(UserNotification $notification): void

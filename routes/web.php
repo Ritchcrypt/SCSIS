@@ -84,6 +84,17 @@ Route::middleware(['auth', 'active.user'])->group(function () {
         ->name('notifications.pulse');
 
     Route::post(
+        '/notifications/read-all',
+        [NotificationOpenController::class, 'markAllRead']
+    )
+        ->name('notifications.read-all');
+
+    Route::delete(
+        '/notifications/{notification}',
+        [NotificationOpenController::class, 'destroy']
+    )
+        ->name('notifications.destroy');
+    Route::post(
         '/notifications/{notification}/open',
         [NotificationOpenController::class, 'open']
     )

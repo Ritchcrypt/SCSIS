@@ -243,10 +243,7 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
 
     DB::transaction(function () use ($tanodTask): void {
         if (Schema::hasTable('notifications')) {
-            UserNotification::query()
-                ->where('source_id', $tanodTask->id)
-                ->where('type', 'tanod_task')
-                ->delete();
+            // Recipient-owned notification receipts are intentionally preserved for this task.
         }
 
         if (method_exists($tanodTask, 'responses')) {

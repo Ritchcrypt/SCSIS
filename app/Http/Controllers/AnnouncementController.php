@@ -357,12 +357,7 @@ class AnnouncementController extends Controller
             $lockedAnnouncement = Announcement::query()
                 ->lockForUpdate()
                 ->findOrFail($announcement->getKey());
-
-            $this->deleteAnnouncementNotifications(
-                $lockedAnnouncement
-            );
-
-            $lockedAnnouncement->delete();
+$lockedAnnouncement->delete();
         });
 
         $this->recordOperationalActivity(

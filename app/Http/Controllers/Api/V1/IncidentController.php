@@ -2458,37 +2458,7 @@ $this->recordOperationalActivity(
                 'source_id'
             )
         ) {
-            DB::table('notifications')
-                ->where(
-                    'source_id',
-                    $incidentId
-                )
-                ->when(
-                    Schema::hasColumn(
-                        'notifications',
-                        'type'
-                    ),
-                    function (QueryBuilder $query): void {
-                        $query->whereIn(
-                            'type',
-                            [
-                                'incident',
-                                'incident_reported',
-                                'incident_update',
-                                'incident_updated',
-                                'incident_status_update',
-                                'status_update',
-                                'dispatch',
-                                'escalation',
-                                'emergency',
-                                'resolved',
-                                'community_problem',
-                                'community',
-                            ]
-                        );
-                    }
-                )
-                ->delete();
+            // Recipient-owned notification receipts are intentionally preserved for this incident.
         }
     }
 

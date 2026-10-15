@@ -604,12 +604,7 @@ class ResidentComplaintController extends Controller
         DB::transaction(function () use (
             $residentComplaint
         ): void {
-            $this
-                ->deleteComplaintNotifications(
-                    $residentComplaint
-                );
-
-            $this->deleteComplaintProofRows(
+$this->deleteComplaintProofRows(
                 $residentComplaint
             );
 

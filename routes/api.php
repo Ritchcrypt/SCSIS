@@ -376,6 +376,16 @@ Route::prefix('v1')
             'pulse',
         ])->name('api.v1.notifications.pulse');
 
+        Route::post('/notifications/read-all', [
+            NotificationCenterController::class,
+            'markAllRead',
+        ])->name('api.v1.notifications.read-all');
+
+        Route::delete('/notifications/{notification}', [
+            NotificationCenterController::class,
+            'destroy',
+        ])->whereNumber('notification')
+            ->name('api.v1.notifications.destroy');
         Route::post('/notifications/{notification}/open', [
             NotificationCenterController::class,
             'open',

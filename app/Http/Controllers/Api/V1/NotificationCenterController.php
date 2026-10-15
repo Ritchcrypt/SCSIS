@@ -81,6 +81,85 @@ class NotificationCenterController extends Controller
             ->header('Cache-Control', 'no-store, private');
     }
 
+    public function markAllRead(
+        Request $request,
+        NotificationBellService $notificationBell
+    ): JsonResponse {
+        $user = $request->user();
+
+        abort_unless(
+            $user,
+            401,
+            'Authentication is required.'
+        );
+
+        $markedRead =
+            $notificationBell->markAllUnreadAsRead($user);
+
+        $bell = $notificationBell->forUser($user);
+
+        return response()
+            ->json([
+                'message' => 'All notifications marked as read.',
+                'data' => [
+                    'marked_read' => $markedRead,
+                    'unread_count' =>
+                        (int) ($bell['unread_count'] ?? 0),
+                    'notifications' => collect(
+                        $bell['notifications'] ?? []
+                    )->values()->all(),
+                ],
+            ])
+            ->header(
+                'Cache-Control',
+                'no-store, private'
+            );
+    }
+
+    public function destroy(
+        Request $request,
+        UserNotification $notification,
+        NotificationBellService $notificationBell
+    ): JsonResponse {
+        $user = $request->user();
+
+        abort_unless(
+            $user,
+            401,
+            'Authentication is required.'
+        );
+
+        Gate::authorize(
+            'delete',
+            $notification
+        );
+
+        $deleted = $notificationBell
+            ->deleteOwnedNotificationGroup(
+                $user,
+                $notification
+            );
+
+        $bell = $notificationBell->forUser($user);
+
+        return response()
+            ->json([
+                'message' =>
+                    'Notification removed from your account only.',
+                'data' => [
+                    'deleted_count' => $deleted,
+                    'unread_count' =>
+                        (int) ($bell['unread_count'] ?? 0),
+                    'notifications' => collect(
+                        $bell['notifications'] ?? []
+                    )->values()->all(),
+                ],
+            ])
+            ->header(
+                'Cache-Control',
+                'no-store, private'
+            );
+    }
     private function markNotificationGroupAsRead(
         UserNotification $notification
     ): void {

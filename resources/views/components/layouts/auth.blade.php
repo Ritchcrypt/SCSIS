@@ -1,4 +1,4 @@
-@php
+﻿@php
     $setting = null;
 
     $settingsTable = (new \App\Models\SystemSetting())->getTable();
@@ -15,14 +15,6 @@
         (string) ($setting?->system_subtitle ?: 'Dao, Capiz')
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Public Authentication Branding
-    |--------------------------------------------------------------------------
-    | Authentication pages use the administrator-managed global system logo.
-    | There is deliberately no bundled legacy-logo fallback.
-    */
-
     $logoUrl = null;
 
     if (
@@ -38,52 +30,779 @@
 @endphp
 
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
-      class="light"
-      data-theme="light"
-      style="color-scheme: light;">
+<html
+    lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+    class="light"
+    data-theme="light"
+    style="color-scheme: light;"
+>
 <head>
     @include('partials.head')
-    {{-- TABANGNOW_PUBLIC_AUTH_LIGHT_PREPAINT --}}
+
     <script>
         (() => {
             const root = document.documentElement;
 
             root.classList.remove('dark');
             root.classList.add('light');
-
             root.dataset.theme = 'light';
             root.style.colorScheme = 'light';
         })();
     </script>
 
-    <meta name="theme-color" content="#0f2f5f">
+    <meta name="theme-color" content="#ffffff">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body.tn21-auth {
+            min-height: 100vh;
+            overflow-x: hidden;
+            background: #beddf1;
+            color: #102653;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+                BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .tn21-page {
+            min-height: 100vh;
+        }
+
+        .tn21-header {
+            position: relative;
+            z-index: 30;
+            height: 96px;
+            background: rgba(255, 255, 255, .97);
+            border-bottom: 1px solid rgba(8, 42, 96, .10);
+            box-shadow: 0 4px 20px rgba(12, 49, 91, .08);
+        }
+
+        .tn21-header-inner {
+            width: min(1480px, calc(100% - 64px));
+            height: 100%;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 32px;
+        }
+
+        .tn21-brand {
+            display: flex;
+            align-items: center;
+            gap: 17px;
+            min-width: 0;
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .tn21-header-logo {
+            width: 69px;
+            height: 69px;
+            flex: 0 0 auto;
+            object-fit: contain;
+        }
+
+        .tn21-brand-fallback {
+            width: 69px;
+            height: 69px;
+            flex: 0 0 auto;
+            display: grid;
+            place-items: center;
+            border: 3px solid #173c76;
+            border-radius: 50%;
+            background: white;
+            color: #173c76;
+            font-size: 11px;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        .tn21-title {
+            margin: 0;
+            color: #082b68;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: clamp(26px, 2.15vw, 42px);
+            font-weight: 800;
+            line-height: .96;
+            letter-spacing: .025em;
+            white-space: nowrap;
+        }
+
+        .tn21-subtitle {
+            margin-top: 8px;
+            color: #082b68;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .42em;
+            white-space: nowrap;
+        }
+
+        .tn21-nav {
+            height: 100%;
+            display: flex;
+            align-items: stretch;
+            gap: 32px;
+        }
+
+        .tn21-nav a {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            color: #172d58;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+            transition: color .15s ease;
+        }
+
+        .tn21-nav a:hover {
+            color: #0c57a7;
+        }
+
+        .tn21-nav {
+            position: relative;
+        }
+
+        .tn21-nav-indicator {
+            position: absolute;
+            bottom: 21px;
+            left: 0;
+            width: 0;
+            height: 4px;
+            border-radius: 999px;
+            background: #f7ad1b;
+            pointer-events: none;
+
+            transition:
+                transform .24s cubic-bezier(.22,.61,.36,1),
+                width .24s cubic-bezier(.22,.61,.36,1);
+        }
+
+        .tn21-hero {
+            position: relative;
+            min-height: calc(100vh - 96px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 48px 24px;
+        }
+
+        .tn21-background {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            background: #8ebfdd;
+        }
+
+        .tn21-background::before {
+            content: "";
+            position: absolute;
+            inset: -18px;
+            background:
+                linear-gradient(
+                    rgba(255,255,255,.02),
+                    rgba(17,50,81,.10)
+                ),
+                url('/images/auth/dao-login-landscape.svg')
+                center center / cover no-repeat;
+
+            filter: blur(4px);
+            transform: scale(1.035);
+        }
+
+        .tn21-background::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(
+                    90deg,
+                    rgba(255,255,255,.03),
+                    rgba(10,38,72,.04)
+                );
+        }
+
+        .tn21-card {
+            position: relative;
+            z-index: 10;
+            width: min(100%, 500px);
+            padding: 30px 38px 31px;
+            border: 1px solid rgba(255,255,255,.88);
+            border-radius: 20px;
+            background: rgba(255,255,255,.95);
+            box-shadow:
+                0 32px 80px rgba(3,27,64,.27),
+                0 7px 24px rgba(3,27,64,.13);
+
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .tn21-card-brand {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 6px;
+        }
+
+        .tn21-card-logo {
+            width: 132px;
+            height: 132px;
+            object-fit: contain;
+        }
+
+        .tn21-card-logo-fallback {
+            width: 118px;
+            height: 118px;
+            display: grid;
+            place-items: center;
+            border: 4px solid #123b7c;
+            border-radius: 50%;
+            color: #123b7c;
+            background: white;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        .tn21-login-title {
+            margin: 0;
+            color: #092b67;
+            text-align: center;
+            font-size: 37px;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -.03em;
+        }
+
+        .tn21-login-description {
+            margin: 11px 0 25px;
+            color: #5b6880;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .tn21-form {
+            display: flex;
+            flex-direction: column;
+            gap: 17px;
+        }
+
+        .tn21-password-wrap {
+            position: relative;
+        }
+
+        .tn21-forgot-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 8px;
+        }
+
+        .tn21-link {
+            color: #0b5ed7;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        .tn21-remember {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            color: #56647c;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .tn21-remember input {
+            width: 16px;
+            height: 16px;
+            accent-color: #0b4c91;
+        }
+
+        .tn21-submit {
+            width: 100%;
+        }
+
+        .tn21-submit button {
+            width: 100% !important;
+            min-height: 50px !important;
+            border-radius: 12px !important;
+            background:
+                linear-gradient(
+                    90deg,
+                    #092f71,
+                    #0753a5
+                ) !important;
+            color: #fff !important;
+            font-size: 16px !important;
+            font-weight: 700 !important;
+        }
+
+        .tn21-divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            color: #53617a;
+            font-size: 13px;
+        }
+
+        .tn21-divider::before,
+        .tn21-divider::after {
+            content: "";
+            height: 1px;
+            flex: 1;
+            background: #b0bacb;
+        }
+
+        .tn21-signup {
+            width: 100%;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1.5px solid #075ed1;
+            border-radius: 12px;
+            background: white;
+            color: #075ed1;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 700;
+            transition:
+                background .15s ease,
+                color .15s ease;
+        }
+
+        .tn21-signup:hover {
+            background: #075ed1;
+            color: white;
+        }
+
+        @media (max-width: 900px) {
+            .tn21-header {
+                height: 82px;
+            }
+
+            .tn21-header-inner {
+                width: calc(100% - 30px);
+            }
+
+            .tn21-header-logo,
+            .tn21-brand-fallback {
+                width: 54px;
+                height: 54px;
+            }
+
+            .tn21-title {
+                font-size: 23px;
+            }
+
+            .tn21-subtitle {
+                font-size: 9px;
+                letter-spacing: .25em;
+            }
+
+            .tn21-nav {
+                display: none;
+            }
+
+            .tn21-hero {
+                min-height: calc(100vh - 82px);
+                padding: 32px 18px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .tn21-title {
+                font-size: 18px;
+            }
+
+            .tn21-subtitle {
+                font-size: 7px;
+                letter-spacing: .16em;
+            }
+
+            .tn21-header-logo,
+            .tn21-brand-fallback {
+                width: 46px;
+                height: 46px;
+            }
+
+            .tn21-card {
+                padding: 27px 22px;
+                border-radius: 18px;
+            }
+
+            .tn21-card-logo {
+                width: 102px;
+                height: 102px;
+            }
+
+            .tn21-login-title {
+                font-size: 31px;
+            }
+        }
+    
+/* CAPSTONE21_AUTH_INTERACTION_START */
+
+/*
+|--------------------------------------------------------------------------
+| Authentication interaction / contrast upgrade
+|--------------------------------------------------------------------------
+*/
+
+.tn21-card {
+    border: 1px solid rgba(14, 58, 116, .14);
+    background: rgba(255, 255, 255, .96);
+    box-shadow:
+        0 30px 75px rgba(5, 34, 73, .28),
+        0 8px 26px rgba(5, 34, 73, .15);
+}
+
+/* Give auth form controls more separation from the white card. */
+.tn21-card input:not([type="checkbox"]),
+.tn21-card textarea,
+.tn21-card select {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    transition:
+        border-color .18s ease,
+        box-shadow .18s ease,
+        background-color .18s ease,
+        transform .12s ease;
+}
+
+.tn21-card input:not([type="checkbox"]):focus,
+.tn21-card textarea:focus,
+.tn21-card select:focus {
+    background-color: #ffffff !important;
+    border-color: #1767c0 !important;
+    box-shadow:
+        0 0 0 3px rgba(23, 103, 192, .14) !important;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Submit buttons
+|--------------------------------------------------------------------------
+*/
+
+.tn21-card form button[type="submit"] {
+    min-height: 50px !important;
+    border: 1px solid #0a458c !important;
+    border-radius: 12px !important;
+
+    background:
+        linear-gradient(
+            135deg,
+            #0b3d80 0%,
+            #0754a6 55%,
+            #0873cf 100%
+        ) !important;
+
+    color: #ffffff !important;
+
+    box-shadow:
+        0 8px 18px rgba(6, 71, 146, .22);
+
+    cursor: pointer;
+
+    transition:
+        transform .12s ease,
+        box-shadow .18s ease,
+        filter .18s ease !important;
+}
+
+.tn21-card form button[type="submit"]:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+
+    box-shadow:
+        0 11px 23px rgba(6, 71, 146, .30);
+}
+
+.tn21-card form button[type="submit"]:active {
+    transform: translateY(1px) scale(.985);
+
+    box-shadow:
+        0 4px 10px rgba(6, 71, 146, .24);
+}
+
+.tn21-card form button[type="submit"]:focus-visible {
+    outline: 3px solid rgba(36, 125, 220, .32);
+    outline-offset: 3px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Signup page "Log in" link
+|--------------------------------------------------------------------------
+*/
+
+.tn21-card a[href*="login"] {
+    position: relative;
+
+    color: #0756b5 !important;
+
+    font-weight: 700 !important;
+    text-decoration: none !important;
+
+    transition:
+        color .16s ease,
+        transform .16s ease,
+        text-shadow .16s ease;
+}
+
+.tn21-card a[href*="login"]::after {
+    content: "";
+
+    position: absolute;
+
+    left: 0;
+    right: 0;
+    bottom: -3px;
+
+    height: 2px;
+
+    border-radius: 999px;
+
+    background: #f5a900;
+
+    transform: scaleX(0);
+    transform-origin: center;
+
+    transition: transform .18s ease;
+}
+
+.tn21-card a[href*="login"]:hover {
+    color: #063d82 !important;
+
+    text-shadow:
+        0 1px 8px rgba(7, 86, 181, .12);
+}
+
+.tn21-card a[href*="login"]:hover::after {
+    transform: scaleX(1);
+}
+
+.tn21-card a[href*="login"]:active {
+    transform: scale(.95);
+}
+
+.tn21-card a[href*="login"]:focus-visible {
+    outline: 3px solid rgba(7, 86, 181, .22);
+    outline-offset: 5px;
+    border-radius: 4px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Registration footer readability
+|--------------------------------------------------------------------------
+*/
+
+.tn21-card .text-zinc-600,
+.tn21-card .text-zinc-500,
+.tn21-card .text-zinc-400 {
+    color: #65728a !important;
+}
+
+/* CAPSTONE21_AUTH_INTERACTION_END */
+
+</style>
 </head>
 
-<body class="tn-auth-body antialiased">
-    <main class="tn-auth-shell">
-        <section class="tn-auth-form-panel">
-            <div class="tn-auth-form-inner">
-                <x-auth.brand
-                    :system-name="$systemName"
-                    :system-subtitle="$systemSubtitle"
-                    :logo-url="$logoUrl"
-                />
+<body class="tn21-auth antialiased">
 
-                <div class="tn-auth-form-card">
-                    {{ $slot }}
+<div class="tn21-page">
+
+    <header class="tn21-header">
+
+        <div class="tn21-header-inner">
+
+            <a
+                href="{{ route('home') }}"
+                class="tn21-brand"
+            >
+
+                @if ($logoUrl)
+
+                    <img
+                        src="{{ $logoUrl }}"
+                        alt="{{ $systemName }} logo"
+                        class="tn21-header-logo"
+                    >
+
+                @else
+
+                    <div class="tn21-brand-fallback">
+                        DAO
+                    </div>
+
+                @endif
+
+                <div>
+
+                    <h1 class="tn21-title">
+                        BAYAN NG DAO
+                    </h1>
+
+                    <div class="tn21-subtitle">
+                        LALAWIGAN NG CAPIZ
+                    </div>
+
                 </div>
 
+            </a>
+
+            <nav
+                class="tn21-nav"
+                aria-label="Public navigation"
+            >
+                <a
+                    href="{{ route('home') }}"
+                    class="tn21-active"
+                >
+                    HOME
+                </a>
+
+                <a href="{{ route('home') }}#about">
+                    ABOUT
+                </a>
+
+                <a href="{{ route('home') }}#services">
+                    SERVICES
+                </a>
+
+                <a href="{{ route('home') }}#contact">
+                    CONTACT
+                </a>
+
+                <span
+                    class="tn21-nav-indicator"
+                    aria-hidden="true"
+                ></span>
+            </nav>
+
+        </div>
+
+    </header>
+
+    <main class="tn21-hero">
+
+        <div
+            class="tn21-background"
+            aria-hidden="true"
+        ></div>
+
+        <section class="tn21-card">
+
+            <div class="tn21-card-brand">
+
+                @if ($logoUrl)
+
+                    <img
+                        src="{{ $logoUrl }}"
+                        alt="{{ $systemName }} logo"
+                        class="tn21-card-logo"
+                    >
+
+                @else
+
+                    <div class="tn21-card-logo-fallback">
+                        {{ $systemName }}
+                    </div>
+
+                @endif
+
             </div>
+
+            {{ $slot }}
+
         </section>
 
-        <aside class="tn-auth-visual-panel">
-            <x-auth.response-scene
-                :system-name="$systemName"
-            />
-        </aside>
     </main>
 
-    @fluxScripts
+</div>
+
+<script>
+    (() => {
+        const nav = document.querySelector('.tn21-nav');
+        const indicator = document.querySelector('.tn21-nav-indicator');
+
+        if (!nav || !indicator) {
+            return;
+        }
+
+        const links = Array.from(nav.querySelectorAll('a'));
+
+        const moveIndicator = (link) => {
+            const navRect = nav.getBoundingClientRect();
+            const linkRect = link.getBoundingClientRect();
+
+            const width = Math.max(linkRect.width - 14, 34);
+            const left =
+                linkRect.left -
+                navRect.left +
+                ((linkRect.width - width) / 2);
+
+            indicator.style.width = `${width}px`;
+            indicator.style.transform = `translateX(${left}px)`;
+
+            links.forEach(item => {
+                item.classList.toggle('tn21-active', item === link);
+            });
+        };
+
+        const initial =
+            nav.querySelector('.tn21-active') ||
+            links[0];
+
+        if (initial) {
+            requestAnimationFrame(() => {
+                moveIndicator(initial);
+            });
+        }
+
+        links.forEach(link => {
+            link.addEventListener('click', event => {
+                const destination = link.href;
+
+                event.preventDefault();
+
+                moveIndicator(link);
+
+                window.setTimeout(() => {
+                    window.location.href = destination;
+                }, 220);
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            const active =
+                nav.querySelector('.tn21-active') ||
+                links[0];
+
+            if (active) {
+                moveIndicator(active);
+            }
+        });
+    })();
+</script>
+
+@fluxScripts
+
 </body>
 </html>
+

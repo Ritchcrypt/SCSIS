@@ -1191,3 +1191,128 @@ function createPreviewContainer(input) {
 })();
 
 import './notification-sound';
+/*
+|--------------------------------------------------------------------------
+| TabangNow Global Popover / Dropdown Click-Away
+|--------------------------------------------------------------------------
+| Applies globally to native <details> menus such as:
+| - Theme Preference
+| - Notification bell
+| - Account/profile menu
+| - Future <details>-based popovers
+|
+| Behaviour:
+| - Click outside closes the open popover
+| - Opening one popover closes the others
+| - Escape closes all open popovers
+|--------------------------------------------------------------------------
+*/
+
+(function () {
+    const selector = 'details[open]';
+
+    function getOpenDetails() {
+        return Array.from(
+            document.querySelectorAll(selector)
+        );
+    }
+
+    function closeDetails(details) {
+        if (!(details instanceof HTMLDetailsElement)) {
+            return;
+        }
+
+        details.removeAttribute('open');
+    }
+
+    function closeAllExcept(exception = null) {
+        getOpenDetails().forEach((details) => {
+            if (details !== exception) {
+                closeDetails(details);
+            }
+        });
+    }
+
+    /*
+     * Capture phase lets this work consistently even when child controls,
+     * Livewire, or other scripts handle the regular click event.
+     */
+    document.addEventListener(
+        'pointerdown',
+        function (event) {
+            const target = event.target;
+
+            if (!(target instanceof Node)) {
+                return;
+            }
+
+            getOpenDetails().forEach((details) => {
+                if (!details.contains(target)) {
+                    closeDetails(details);
+                }
+            });
+        },
+        true
+    );
+
+    /*
+     * Native details fires "toggle" whenever opened/closed.
+     * Keep only one popover open at a time.
+     */
+    document.addEventListener(
+        'toggle',
+        function (event) {
+            const details = event.target;
+
+            if (
+                !(details instanceof HTMLDetailsElement)
+                || !details.open
+            ) {
+                return;
+            }
+
+            closeAllExcept(details);
+        },
+        true
+    );
+
+    /*
+     * Keyboard accessibility.
+     */
+    document.addEventListener(
+        'keydown',
+        function (event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+
+            const openDetails = getOpenDetails();
+
+            if (openDetails.length === 0) {
+                return;
+            }
+
+            const lastOpened =
+                openDetails[openDetails.length - 1];
+
+            const summary =
+                lastOpened.querySelector('summary');
+
+            closeAllExcept(null);
+
+            if (summary instanceof HTMLElement) {
+                summary.focus({
+                    preventScroll: true
+                });
+            }
+        }
+    );
+
+    /*
+     * Livewire may replace page fragments. Because the listeners are
+     * delegated from document, no re-binding is necessary.
+     */
+})();
+
+/* CAPSTONE21_GLOBAL_CLICKAWAY_END */
+
