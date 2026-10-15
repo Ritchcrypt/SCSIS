@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Concerns\RecordsOperationalActivity;
 use App\Http\Controllers\Controller;
+use App\Models\Barangay;
 use App\Models\Employee;
 use App\Models\Incident;
 use App\Models\Status;
@@ -12,6 +13,7 @@ use App\Models\TanodTaskResponse;
 use App\Models\User;
 use App\Models\UserNotification;
 use App\Services\TanodTaskAssignmentService;
+use App\Support\DaoBarangays;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +42,7 @@ class TanodTaskController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:3000'],
             'location' => ['nullable', 'string', 'max:500'],
+            'barangay_id' => ['required', 'integer'],
             'task_datetime' => ['nullable', 'date'],
             'due_at' => ['nullable', 'date', 'after_or_equal:task_datetime'],
             'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
@@ -54,6 +57,7 @@ class TanodTaskController extends Controller
                 'title' => trim($validated['title']),
                 'description' => $this->nullableText($validated['description'] ?? null),
                 'location' => $this->nullableText($validated['location'] ?? null),
+                'barangay_id' => (int) $validated['barangay_id'],
                 'task_datetime' => $validated['task_datetime'] ?? null,
                 'due_at' => $validated['due_at'] ?? null,
                 'priority' => $validated['priority'],
@@ -83,7 +87,7 @@ class TanodTaskController extends Controller
             throw new \RuntimeException('Tanod task creation completed without a persisted task record.');
         }
 
-        $task->load('createdBy')->loadCount([
+        $task->load(['createdBy', 'barangay'])->loadCount([
             'responses',
             'acceptedResponses',
             'declinedResponses',
@@ -105,7 +109,7 @@ class TanodTaskController extends Controller
         );
 
         return $this->json([
-            'message' => 'Tanod task created and assigned to all active tanods.',
+            'message' => 'Tanod task created. Selected-barangay tanods were assigned first, with fallback only when needed.',
             'data' => $this->serializeAdminTask($task),
         ], 201);
     }
@@ -116,6 +120,7 @@ class TanodTaskController extends Controller
 
         $tanodTask->load([
             'createdBy',
+            'barangay',
             'responses.employee.user',
             'responses.user',
         ])->loadCount([
@@ -309,7 +314,7 @@ class TanodTaskController extends Controller
             }
         }
 
-        $response->refresh()->load('task.createdBy');
+        $response->refresh()->load(['task.createdBy', 'task.barangay']);
 
         $this->recordOperationalActivity(
             event: 'tanod_task.response_submitted',
@@ -342,7 +347,7 @@ class TanodTaskController extends Controller
                 'declinedResponses',
                 'pendingResponses',
             ])
-            ->with('createdBy')
+            ->with(['createdBy', 'barangay'])
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -355,6 +360,9 @@ class TanodTaskController extends Controller
                 ->all(),
             'summary' => [
                 'active_tanod_count' => Employee::query()->tanods()->active()->count(),
+            ],
+            'options' => [
+                'barangays' => $this->barangayOptions(),
             ],
             'permissions' => [
                 'can_create' => true,
@@ -373,7 +381,7 @@ class TanodTaskController extends Controller
         $employee = $this->getTanodEmployee($request);
 
         $responses = TanodTaskResponse::query()
-            ->with('task.createdBy')
+            ->with(['task.createdBy', 'task.barangay'])
             ->where('employee_id', $employee->id)
             ->whereHas('task', fn ($query) => $query->whereIn('status', ['open', 'closed', 'cancelled']))
             ->latest()
@@ -645,11 +653,14 @@ class TanodTaskController extends Controller
 
     private function serializeAdminTask(TanodTask $task, bool $includeResponses = false): array
     {
-        $task->loadMissing('createdBy');
+        $task->loadMissing(['createdBy', 'barangay']);
 
         $data = [
             'id' => (int) $task->id,
             'incident_id' => $task->incident_id !== null ? (int) $task->incident_id : null,
+            'barangay_id' => $task->barangay_id !== null ? (int) $task->barangay_id : null,
+            'barangay_name' => $task->barangay?->barangay_name,
+            'fallback_used' => (bool) ($task->fallback_used ?? false),
             'title' => (string) $task->title,
             'description' => $task->description,
             'location' => $task->location,
@@ -706,7 +717,7 @@ class TanodTaskController extends Controller
 
     private function serializeTanodResponse(TanodTaskResponse $response): array
     {
-        $response->loadMissing('task.createdBy');
+        $response->loadMissing(['task.createdBy', 'task.barangay']);
         $task = $response->task;
         $responseStatus = strtolower((string) ($response->response_status ?? 'pending'));
 
@@ -723,6 +734,9 @@ class TanodTaskController extends Controller
             'task' => $task ? [
                 'id' => (int) $task->id,
                 'incident_id' => $task->incident_id !== null ? (int) $task->incident_id : null,
+                'barangay_id' => $task->barangay_id !== null ? (int) $task->barangay_id : null,
+                'barangay_name' => $task->barangay?->barangay_name,
+                'fallback_used' => (bool) ($task->fallback_used ?? false),
                 'title' => (string) $task->title,
                 'description' => $task->description,
                 'location' => $task->location,
@@ -806,6 +820,25 @@ class TanodTaskController extends Controller
             'from' => $paginator->firstItem(),
             'to' => $paginator->lastItem(),
         ];
+    }
+
+    private function barangayOptions(): array
+    {
+        return Barangay::query()
+            ->whereIn('barangay_name', DaoBarangays::names())
+            ->orderBy('barangay_name')
+            ->get([
+                'id',
+                'barangay_name',
+            ])
+            ->map(
+                fn (Barangay $barangay): array => [
+                    'value' => (int) $barangay->id,
+                    'label' => (string) $barangay->barangay_name,
+                ]
+            )
+            ->values()
+            ->all();
     }
 
     private function nullableText(mixed $value): ?string

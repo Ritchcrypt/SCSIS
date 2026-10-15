@@ -87,7 +87,13 @@ class ReportController extends Controller
     {
         Gate::authorize('viewReports');
 
-        return $this->reportData($request);
+        $data = $this->reportData($request);
+
+        $data['records'] = $this->recordsWithSelectionKeys(
+            $data['records'] ?? []
+        );
+
+        return $data;
     }
 
 

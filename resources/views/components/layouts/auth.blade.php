@@ -38,9 +38,24 @@
 @endphp
 
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
+      class="light"
+      data-theme="light"
+      style="color-scheme: light;">
 <head>
     @include('partials.head')
+    {{-- TABANGNOW_PUBLIC_AUTH_LIGHT_PREPAINT --}}
+    <script>
+        (() => {
+            const root = document.documentElement;
+
+            root.classList.remove('dark');
+            root.classList.add('light');
+
+            root.dataset.theme = 'light';
+            root.style.colorScheme = 'light';
+        })();
+    </script>
 
     <meta name="theme-color" content="#0f2f5f">
 </head>

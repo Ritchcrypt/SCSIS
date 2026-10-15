@@ -37,8 +37,19 @@ class ProfileController extends Controller
 
         $userRecord = User::query()->findOrFail($authUser->id);
 
+        $barangays = Schema::hasTable('barangays')
+            ? DB::table('barangays')
+                ->select([
+                    'id',
+                    'barangay_name',
+                ])
+                ->orderBy('barangay_name')
+                ->get()
+            : collect();
+
         return view('profile.edit', [
             'userRecord' => $userRecord,
+            'barangays' => $barangays,
         ]);
     }
 
@@ -77,6 +88,7 @@ class ProfileController extends Controller
             'email' => (string) $userRecord->email,
             'contact_number' => (string) ($userRecord->contact_number ?? ''),
             'address' => (string) ($userRecord->address ?? ''),
+            'barangay_id' => (int) ($userRecord->barangay_id ?? 0),
         ];
 
         $validated = $request->validate([
@@ -94,6 +106,11 @@ class ProfileController extends Controller
                 'regex:/^[0-9+()\-\s]*$/',
             ],
             'address' => ['nullable', 'string', 'max:1000'],
+            'barangay_id' => [
+                'nullable',
+                'integer',
+                'exists:barangays,id',
+            ],
             'profile_photo' => [
                 'nullable',
                 'image',
@@ -165,6 +182,42 @@ class ProfileController extends Controller
                 ) {
                     $userRecord->address =
                         $validated['address'] ?? null;
+                }
+                if (
+                    array_key_exists(
+                        'barangay_id',
+                        $validated
+                    )
+                    && Schema::hasColumn(
+                        'users',
+                        'barangay_id'
+                    )
+                ) {
+                    $barangayId =
+                        $validated['barangay_id'] ?? null;
+
+                    $userRecord->barangay_id =
+                        $barangayId !== null
+                            ? (int) $barangayId
+                            : null;
+                }
+                if (
+                    array_key_exists(
+                        'barangay_id',
+                        $validated
+                    )
+                    && Schema::hasColumn(
+                        'users',
+                        'barangay_id'
+                    )
+                ) {
+                    $barangayId =
+                        $validated['barangay_id'] ?? null;
+
+                    $userRecord->barangay_id =
+                        $barangayId !== null
+                            ? (int) $barangayId
+                            : null;
                 }
 
                 if (
@@ -243,6 +296,12 @@ class ProfileController extends Controller
             !== (string) ($userRecord->address ?? '')
         ) {
             $changedFields[] = 'address';
+        }
+        if (
+            $originalValues['barangay_id']
+            !== (int) ($userRecord->barangay_id ?? 0)
+        ) {
+            $changedFields[] = 'barangay_id';
         }
 
         if ($newProfilePhotoPath) {

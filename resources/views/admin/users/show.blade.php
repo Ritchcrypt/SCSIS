@@ -130,6 +130,15 @@
     {{ $userRecord->address ?? '—' }}
 </p>
 </div>
+<div class="rounded-xl border border-slate-200 bg-white p-4">
+    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+        Barangay of Residence
+    </p>
+
+    <p class="mt-1 text-sm font-semibold text-slate-900">
+        {{ $barangayName ?: '—' }}
+    </p>
+</div>
                 </div>
             </div>
         </div>

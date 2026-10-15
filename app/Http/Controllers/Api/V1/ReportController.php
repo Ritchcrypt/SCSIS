@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\ReportController as WebsiteReportController;
-use App\Models\CaseRecord;
 use App\Models\Incident;
 use App\Models\MobileEmergencyAlert;
 use App\Models\ResidentComplaint;
@@ -23,210 +22,67 @@ class ReportController extends Controller
     ): JsonResponse {
         $this->authorizeRequest($request);
 
-        $data = $websiteReports->apiReportData(
-            $request
-        );
+        $data = $websiteReports->apiReportData($request);
 
         return response()
             ->json([
                 'data' => [
-                    'period' =>
-                        (string) (
-                            $data['period']
-                            ?? 'week'
-                        ),
-                    'period_label' =>
-                        (string) (
-                            $data['periodLabel']
-                            ?? 'This Week'
-                        ),
-                    'start_date' =>
-                        isset($data['startDate'])
-                            ? $data['startDate']
-                                ->toIso8601String()
-                            : null,
-                    'end_date' =>
-                        isset($data['endDate'])
-                            ? $data['endDate']
-                                ->toIso8601String()
-                            : null,
-                    'generated_at' =>
-                        isset($data['generatedAt'])
-                            ? $data['generatedAt']
-                                ->toIso8601String()
-                            : null,
-                    'generated_by' =>
-                        (string) (
-                            $data['generatedBy']
-                            ?? 'System'
-                        ),
-
+                    'period' => (string) ($data['period'] ?? 'week'),
+                    'period_label' => (string) ($data['periodLabel'] ?? 'Last 7 Days'),
+                    'date_from' => (string) ($data['dateFrom'] ?? ''),
+                    'date_to' => (string) ($data['dateTo'] ?? ''),
+                    'is_custom_period' => (bool) ($data['isCustomPeriod'] ?? false),
+                    'is_historical_range' => (bool) ($data['isHistoricalRange'] ?? false),
+                    'start_date' => isset($data['startDate'])
+                        ? $data['startDate']->toIso8601String()
+                        : null,
+                    'end_date' => isset($data['endDate'])
+                        ? $data['endDate']->toIso8601String()
+                        : null,
+                    'generated_at' => isset($data['generatedAt'])
+                        ? $data['generatedAt']->toIso8601String()
+                        : null,
+                    'generated_by' => (string) ($data['generatedBy'] ?? 'System'),
+                    'selected_metric' => (string) ($data['selectedMetric'] ?? 'total'),
+                    'selected_metric_label' => (string) ($data['selectedMetricLabel'] ?? 'Total Incidents'),
+                    'selected_metric_count' => (int) ($data['selectedMetricCount'] ?? 0),
                     'summary' => [
-                        'total_incidents' =>
-                            (int) (
-                                $data[
-                                    'totalIncidents'
-                                ]
-                                ?? 0
-                            ),
-                        'active_incidents' =>
-                            (int) (
-                                $data[
-                                    'activeIncidents'
-                                ]
-                                ?? 0
-                            ),
-                        'resolved_incidents' =>
-                            (int) (
-                                $data[
-                                    'resolvedIncidents'
-                                ]
-                                ?? 0
-                            ),
-                        'cases_filed' =>
-                            (int) (
-                                $data[
-                                    'casesFiled'
-                                ]
-                                ?? 0
-                            ),
-                        'resident_complaints' =>
-                            (int) (
-                                $data[
-                                    'residentComplaints'
-                                ]
-                                ?? 0
-                            ),
-                        'distress_signals' =>
-                            (int) (
-                                $data[
-                                    'distressSignals'
-                                ]
-                                ?? 0
-                            ),
-                        'announcements' =>
-                            (int) (
-                                $data[
-                                    'announcements'
-                                ]
-                                ?? 0
-                            ),
+                        'total_incidents' => (int) ($data['totalIncidents'] ?? 0),
+                        'active_incidents' => (int) ($data['activeIncidents'] ?? 0),
+                        'critical_incidents' => (int) ($data['criticalIncidents'] ?? 0),
+                        'resolved_incidents' => (int) ($data['resolvedIncidents'] ?? 0),
+                        'distress_signals' => (int) ($data['distressSignals'] ?? 0),
+                        'tanod_on_duty' => (int) ($data['tanodOnDuty'] ?? 0),
+                        'resident_feedback' => (int) ($data['residentComplaints'] ?? 0),
+                        'announcements' => (int) ($data['announcements'] ?? 0),
                     ],
-
-                    'records' =>
-                        array_values(
-                            $data['records']
-                            ?? []
-                        ),
-
-                    'status_summary' =>
-                        array_values(
-                            $data[
-                                'statusSummary'
-                            ]
-                            ?? []
-                        ),
-
-                    'severity_summary' =>
-                        array_values(
-                            $data[
-                                'severitySummary'
-                            ]
-                            ?? []
-                        ),
-
-                    'barangay_summary' =>
-                        array_values(
-                            $data[
-                                'barangaySummary'
-                            ]
-                            ?? []
-                        ),
-
-                    'tanod_summary' =>
-                        collect(
-                            $data[
-                                'tanodSummary'
-                            ]
-                            ?? []
-                        )
-                            ->values()
-                            ->all(),
-
+                    'records' => array_values($data['records'] ?? []),
+                    'status_summary' => array_values($data['statusSummary'] ?? []),
+                    'severity_summary' => array_values($data['severitySummary'] ?? []),
+                    'barangay_summary' => array_values($data['barangaySummary'] ?? []),
                     'report_options' => [
-                        'incidents' =>
-                            collect(
-                                $data[
-                                    'incidentReportOptions'
-                                ]
-                                ?? []
-                            )
-                                ->values()
-                                ->all(),
-                        'cases' =>
-                            collect(
-                                $data[
-                                    'caseReportOptions'
-                                ]
-                                ?? []
-                            )
-                                ->values()
-                                ->all(),
-                        'complaints' =>
-                            collect(
-                                $data[
-                                    'complaintReportOptions'
-                                ]
-                                ?? []
-                            )
-                                ->values()
-                                ->all(),                        'sos' =>
-                            collect(
-                                $data[
-                                    'sosReportOptions'
-                                ]
-                                ?? []
-                            )
-                                ->values()
-                                ->all(),
+                        'incidents' => collect($data['incidentReportOptions'] ?? [])->values()->all(),
+                        'resident_feedback' => collect($data['complaintReportOptions'] ?? [])->values()->all(),
+                        'sos' => collect($data['sosReportOptions'] ?? [])->values()->all(),
                     ],
                 ],
-
                 'permissions' => [
                     'can_view_reports' => true,
                     'can_download_pdf' => true,
-                    'can_download_incident_pdf' =>
-                        true,
-                    'can_download_case_pdf' =>
-                        true,
-                    'can_download_complaint_pdf' =>
-                        true,                    'can_download_sos_pdf' =>
-                        true,
+                    'can_download_incident_pdf' => true,
+                    'can_download_resident_feedback_pdf' => true,
+                    'can_download_sos_pdf' => true,
+                    'can_download_selected_pdf' => true,
                 ],
-
                 'period_options' => [
-                    [
-                        'value' => 'today',
-                        'label' => 'Today',
-                    ],
-                    [
-                        'value' => 'week',
-                        'label' => 'This Week',
-                    ],
-                    [
-                        'value' => 'month',
-                        'label' => 'This Month',
-                    ],
-                    [
-                        'value' => 'year',
-                        'label' => 'This Year',
-                    ],
+                    ['value' => 'today', 'label' => 'Today'],
+                    ['value' => 'week', 'label' => 'Last 7 Days'],
+                    ['value' => 'month', 'label' => 'Last 30 Days'],
+                    ['value' => 'year', 'label' => 'This Year'],
+                    ['value' => 'custom', 'label' => 'Custom / Previous Dates'],
                 ],
             ])
-            ->header(
-                'Cache-Control',
-                'no-store, private'
-            );
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function downloadPdf(
@@ -237,6 +93,15 @@ class ReportController extends Controller
 
         return $websiteReports
             ->downloadPdf($request);
+    }
+
+    public function downloadSelectedPdf(
+        Request $request,
+        WebsiteReportController $websiteReports
+    ): Response {
+        $this->authorizeRequest($request);
+
+        return $websiteReports->downloadSelectedPdf($request);
     }
 
     public function downloadIncidentPdf(
@@ -250,20 +115,6 @@ class ReportController extends Controller
             ->downloadIncidentPdf(
                 $request,
                 $incident
-            );
-    }
-
-    public function downloadCasePdf(
-        Request $request,
-        CaseRecord $caseRecord,
-        WebsiteReportController $websiteReports
-    ): Response {
-        $this->authorizeRequest($request);
-
-        return $websiteReports
-            ->downloadCasePdf(
-                $request,
-                $caseRecord
             );
     }
 

@@ -1143,9 +1143,17 @@ class UserManagementController extends Controller
         'user_id' => $user->id,
     ];
 
-    if (Schema::hasColumn('employees', 'barangay_id')) {
-        $data['barangay_id'] = $user->barangay_id ?? null;
-    }
+    /*
+    |----------------------------------------------------------------------
+    | Residential barangay is NOT an employee assignment
+    |----------------------------------------------------------------------
+    |
+    | users.barangay_id stores where the user currently lives.
+    | employees.barangay_id is reserved for operational assignment.
+    | Changing a profile residence must never silently reassign an
+    | official or tanod.
+    |
+    */
 
     if (Schema::hasColumn('employees', 'employee_type')) {
         $data['employee_type'] = $user->role;
