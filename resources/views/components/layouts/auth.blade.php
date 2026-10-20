@@ -347,6 +347,39 @@
             }
         }
 
+
+        /* Only the public signup page uses the wider, landscape card. */
+        .tn21-register-hero .tn21-card {
+            width: min(100%, 1040px);
+            padding: 30px 38px;
+        }
+
+        .tn21-register-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 26px;
+        }
+
+        .tn21-register-column {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        @media (min-width: 900px) {
+            .tn21-register-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 32px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .tn21-register-hero .tn21-card {
+                padding: 26px 20px;
+            }
+        }
+
 /* CAPSTONE21_AUTH_INTERACTION_START */
 
 /*
@@ -522,7 +555,7 @@
 
 
 
-    <main class="tn21-hero">
+    <main class="tn21-hero{{ request()->routeIs('register') ? ' tn21-register-hero' : '' }}">
 
         <div
             class="tn21-background"
