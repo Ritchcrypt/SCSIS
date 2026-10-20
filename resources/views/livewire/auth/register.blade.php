@@ -312,10 +312,13 @@ $this->address = (string) preg_replace(
 }; ?>
 
 <div class="flex flex-col gap-6">
-    <x-auth-header
-        title="Create a resident account"
-        description="Register for access to TabangNow community services"
-    />
+    <div class="tn-auth-header">
+        <h1>
+            Create a
+            <span class="block whitespace-nowrap">resident account</span>
+        </h1>
+        <p>Register for access to TabangNow community services</p>
+    </div>
 
     <x-auth-session-status
         class="text-center"
