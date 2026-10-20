@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Barangay;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Auth\Events\Registered;
@@ -21,6 +22,8 @@ public string $contact_number = '';
 
 public string $address = '';
 
+public string $barangay_id = '';
+
 public string $date_of_birth = '';
 
 public bool $age_confirmation = false;
@@ -28,6 +31,18 @@ public bool $age_confirmation = false;
 public string $password = '';
 
     public string $password_confirmation = '';
+
+    /**
+     * Provide the current barangay list to the public registration view.
+     */
+    public function with(): array
+    {
+        return [
+            'barangays' => Barangay::query()
+                ->orderBy('barangay_name')
+                ->get(['id', 'barangay_name']),
+        ];
+    }
 
     /**
      * Register a new resident account.
@@ -110,6 +125,12 @@ $this->address = (string) preg_replace(
                 'max:500',
             ],
 
+                'barangay_id' => [
+                'required',
+                'integer',
+                'exists:barangays,id',
+            ],
+
                 'password' => [
                 'required',
                 'string',
@@ -122,6 +143,8 @@ $this->address = (string) preg_replace(
                 'contact_number.regex' => 'Enter a valid Philippine mobile number, such as 09123456789.',
                 'address.required' => 'Complete address is required.',
                 'address.max' => 'Address must not exceed 500 characters.',
+                'barangay_id.required' => 'Select your barangay of residence.',
+                'barangay_id.exists' => 'Choose a valid barangay from the list.',
             ]);
 
         /*
@@ -138,6 +161,7 @@ $this->address = (string) preg_replace(
     'email' => $validated['email'],
     'contact_number' => $validated['contact_number'],
     'address' => $validated['address'],
+    'barangay_id' => (int) $validated['barangay_id'],
     'date_of_birth' => $this->date_of_birth,
     'age_attested_at' => now(),
     'password' => Hash::make($validated['password']),
@@ -425,6 +449,34 @@ $this->address = (string) preg_replace(
         />
     </div>
 </div>
+
+    {{-- Barangay of Residence: used for targeted community announcements --}}
+    <div class="grid gap-2">
+        <label for="barangay_id" class="text-sm font-semibold text-slate-800">
+            Barangay of Residence <span class="text-red-600" aria-hidden="true">*</span>
+        </label>
+
+        <select
+            wire:model="barangay_id"
+            id="barangay_id"
+            name="barangay_id"
+            required
+            class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        >
+            <option value="">Select the barangay where you currently live</option>
+            @foreach ($barangays as $barangay)
+                <option value="{{ $barangay->id }}">{{ $barangay->barangay_name }}</option>
+            @endforeach
+        </select>
+
+        <p class="text-xs leading-5 text-slate-500">
+            Your barangay determines which location-specific community announcements and notices you receive.
+        </p>
+
+        @error('barangay_id')
+            <p class="text-sm font-medium text-red-600">{{ $message }}</p>
+        @enderror
+    </div>
 
     {{-- Resident Age Restriction --}}
     <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
