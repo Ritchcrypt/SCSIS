@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Barangay;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
@@ -29,6 +30,11 @@ class ResidentAgeRestrictionV3Test extends TestCase
                 ->subDay()
                 ->toDateString();
 
+        $barangay = Barangay::query()->firstOrCreate(
+            ['barangay_name' => 'Poblacion Ilaya'],
+            ['location' => 'Dao, Capiz']
+        );
+
         Volt::test('auth.register')
             ->set('name', 'Adult Resident')
             ->set(
@@ -43,6 +49,7 @@ class ResidentAgeRestrictionV3Test extends TestCase
                 'address',
                 'Dao, Capiz'
             )
+            ->set('barangay_id', (string) $barangay->id)
             ->set(
                 'date_of_birth',
                 $dateOfBirth
@@ -82,6 +89,8 @@ class ResidentAgeRestrictionV3Test extends TestCase
         $this->assertNotNull(
             $user->age_attested_at
         );
+
+        $this->assertSame($barangay->id, (int) $user->barangay_id);
 
         $this->assertSame(
             'resident',
