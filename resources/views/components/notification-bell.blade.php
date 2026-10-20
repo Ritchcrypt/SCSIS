@@ -95,7 +95,7 @@
                                 </p>
 
                                 <span class="text-[11px] font-bold text-blue-700">
-                                    Open →
+                                    Open
                                 </span>
                             </div>
                         </button>
@@ -117,7 +117,7 @@
                             </p>
 
                             <span class="text-[11px] font-bold text-blue-700">
-                                Open →
+                                Open
                             </span>
                         </div>
                     </a>

@@ -68,7 +68,7 @@
 </div>
 
 <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-5">
-    <div class="rounded-2xl border border-blue-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-blue-500 hover:shadow-lg">
+    <a href="{{ route('official.incidents.index') }}" class="group block cursor-pointer rounded-2xl border border-blue-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-blue-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-400">
         <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
             📄
         </div>
@@ -80,9 +80,9 @@
         <p class="mt-2 text-sm font-medium text-slate-600">
             Total Incidents
         </p>
-    </div>
+    </a>
 
-    <div class="rounded-2xl border border-amber-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg">
+    <a href="{{ route('official.incidents.index') }}" class="group block cursor-pointer rounded-2xl border border-amber-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-amber-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-400">
         <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
             🕒
         </div>
@@ -94,9 +94,9 @@
         <p class="mt-2 text-sm font-medium text-slate-600">
             Active Incidents
         </p>
-    </div>
+    </a>
 
-    <div class="rounded-2xl border border-red-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg">
+    <a href="{{ route('official.incidents.index') }}" class="group block cursor-pointer rounded-2xl border border-red-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-red-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-400">
         <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
             ⚠️
         </div>
@@ -108,9 +108,9 @@
         <p class="mt-2 text-sm font-medium text-slate-600">
             Critical
         </p>
-    </div>
+    </a>
 
-    <div class="rounded-2xl border border-emerald-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg">
+    <a href="{{ route('official.incidents.index') }}" class="group block cursor-pointer rounded-2xl border border-emerald-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-emerald-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-400">
         <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-green-600">
             ✅
         </div>
@@ -122,9 +122,9 @@
         <p class="mt-2 text-sm font-medium text-slate-600">
             Resolved
         </p>
-    </div>
+    </a>
 
-    <div class="rounded-2xl border border-violet-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg">
+    <a href="{{ route('official.tanods.index') }}" class="group block cursor-pointer rounded-2xl border border-violet-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-violet-500 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-violet-400">
         <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-blue-950">
             👥
         </div>
@@ -136,7 +136,7 @@
         <p class="mt-2 text-sm font-medium text-slate-600">
             Tanod On Duty
         </p>
-    </div>
+    </a>
 </section>
 
 <section class="mt-8">

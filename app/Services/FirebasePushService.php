@@ -202,7 +202,7 @@ class FirebasePushService
             'tanod_task_assigned',
             'task_assigned',
         ], true)) {
-            return $this->tanodTaskAlertTier($sourceId);
+            return 'critical';
         }
 
         if (in_array($type, [

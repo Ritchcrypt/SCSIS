@@ -4,7 +4,7 @@
 
     $distressNavLabel = in_array(
         $distressRole,
-        ['resident', 'tanod'],
+        ['resident'],
         true
     )
         ? 'Send Distress Signal'
@@ -17,7 +17,7 @@
         'official', 'dao' => \Illuminate\Support\Facades\Route::has('official.mobile-sos.index')
             ? 'official.mobile-sos.index'
             : null,
-        'resident', 'tanod' => \Illuminate\Support\Facades\Route::has('distress-signal.create')
+        'resident' => \Illuminate\Support\Facades\Route::has('distress-signal.create')
             ? 'distress-signal.create'
             : null,
         default => null,
@@ -40,7 +40,7 @@
     };
 @endphp
 
-@if ($distressRouteName && $incidentRouteName)
+@if (in_array($distressRole, ['admin', 'official', 'dao'], true) && $distressRouteName && $incidentRouteName)
     <script>
         (() => {
             if (window.__tabangNowDistressSignalNavInstalled) {

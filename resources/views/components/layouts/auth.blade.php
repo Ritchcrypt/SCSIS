@@ -41,6 +41,7 @@
 
     <script>
         (() => {
+            // TABANGNOW_PUBLIC_AUTH_LIGHT_PREPAINT: set light theme before first paint.
             const root = document.documentElement;
 
             root.classList.remove('dark');

@@ -28,7 +28,7 @@
 
     <label for="reportTimelineSelect"
            class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
-        Timeline
+        RANGE
     </label>
 
     <select id="reportTimelineSelect"
@@ -44,7 +44,7 @@
 
     <div id="reportCustomDateDropdown"
          class="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
-         style="display: none; position: absolute; top: 68px; right: 0; width: 330px; z-index: 9999;">
+         style="display: {{ $period === 'custom' ? 'block' : 'none' }}; position: absolute; top: 68px; right: 0; width: 330px; z-index: 9999;">
         <div class="grid grid-cols-2 gap-3">
             <div>
                 <label for="reportDateFrom"
@@ -218,9 +218,7 @@
                             {{ $metricCard['label'] }}
                         </p>
 
-                        <span class="reports-metric-arrow text-sm">
-                            →
-                        </span>
+
                     </div>
 
                     <p class="reports-metric-value mt-3 text-3xl font-bold">
@@ -1472,7 +1470,12 @@ bindSpecificReportForm(
             return;
         }
 
-        dropdown.style.display = open ? 'block' : 'none';
+        const select = document.getElementById('reportTimelineSelect');
+
+        // Custom date fields remain visible until another range is selected.
+        dropdown.style.display = (open || select?.value === 'custom')
+            ? 'block'
+            : 'none';
     }
 
     function handleReportsTimelineChange(select) {
@@ -1533,10 +1536,10 @@ bindSpecificReportForm(
         const select = document.getElementById('reportTimelineSelect');
 
         /*
-         * Do not automatically open the dropdown after a page load.
-         * It behaves like the notification bell: the user explicitly opens it.
+         * Preserve visibility of the custom date range after Apply,
+         * page refresh, or returning to this report.
          */
-        setReportsCustomDateDropdown(false);
+        setReportsCustomDateDropdown(select?.value === 'custom');
 
         if (
             select

@@ -1072,6 +1072,13 @@ function createPreviewContainer(input) {
                 return;
             }
 
+            // CAPSTONE21_CONFIRM_FORM_CLICK_GUARD
+            // Form confirmations belong to the submit handler.
+            // Calling form.click() does not submit the form.
+            if (element instanceof HTMLFormElement) {
+                return;
+            }
+
             const isSubmitControl =
                 (
                     element instanceof HTMLButtonElement
