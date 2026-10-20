@@ -77,121 +77,10 @@
             min-height: 100vh;
         }
 
-        .tn21-header {
-            position: relative;
-            z-index: 30;
-            height: 96px;
-            background: rgba(255, 255, 255, .97);
-            border-bottom: 1px solid rgba(8, 42, 96, .10);
-            box-shadow: 0 4px 20px rgba(12, 49, 91, .08);
-        }
-
-        .tn21-header-inner {
-            width: min(1480px, calc(100% - 64px));
-            height: 100%;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 32px;
-        }
-
-        .tn21-brand {
-            display: flex;
-            align-items: center;
-            gap: 17px;
-            min-width: 0;
-            color: inherit;
-            text-decoration: none;
-        }
-
-        .tn21-header-logo {
-            width: 69px;
-            height: 69px;
-            flex: 0 0 auto;
-            object-fit: contain;
-        }
-
-        .tn21-brand-fallback {
-            width: 69px;
-            height: 69px;
-            flex: 0 0 auto;
-            display: grid;
-            place-items: center;
-            border: 3px solid #173c76;
-            border-radius: 50%;
-            background: white;
-            color: #173c76;
-            font-size: 11px;
-            font-weight: 800;
-            text-align: center;
-        }
-
-        .tn21-title {
-            margin: 0;
-            color: #082b68;
-            font-family: Georgia, "Times New Roman", serif;
-            font-size: clamp(26px, 2.15vw, 42px);
-            font-weight: 800;
-            line-height: .96;
-            letter-spacing: .025em;
-            white-space: nowrap;
-        }
-
-        .tn21-subtitle {
-            margin-top: 8px;
-            color: #082b68;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: .42em;
-            white-space: nowrap;
-        }
-
-        .tn21-nav {
-            height: 100%;
-            display: flex;
-            align-items: stretch;
-            gap: 32px;
-        }
-
-        .tn21-nav a {
-            position: relative;
-            display: flex;
-            align-items: center;
-            padding: 0 8px;
-            color: #172d58;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 700;
-            transition: color .15s ease;
-        }
-
-        .tn21-nav a:hover {
-            color: #0c57a7;
-        }
-
-        .tn21-nav {
-            position: relative;
-        }
-
-        .tn21-nav-indicator {
-            position: absolute;
-            bottom: 21px;
-            left: 0;
-            width: 0;
-            height: 4px;
-            border-radius: 999px;
-            background: #f7ad1b;
-            pointer-events: none;
-
-            transition:
-                transform .24s cubic-bezier(.22,.61,.36,1),
-                width .24s cubic-bezier(.22,.61,.36,1);
-        }
-
         .tn21-hero {
             position: relative;
-            min-height: calc(100vh - 96px);
+            min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -204,7 +93,7 @@
             inset: 0;
             z-index: 0;
             overflow: hidden;
-            background: #8ebfdd;
+            background: linear-gradient(165deg, #7cb8e7 0%, #b3d2e6 47%, #264968 100%);
         }
 
         .tn21-background::before {
@@ -214,13 +103,13 @@
             background:
                 linear-gradient(
                     rgba(255,255,255,.02),
-                    rgba(17,50,81,.10)
+                    rgba(17,50,81,.16)
                 ),
                 url('/images/auth/dao-login-landscape.svg')
                 center center / cover no-repeat;
 
-            filter: blur(4px);
-            transform: scale(1.035);
+            filter: blur(7px) saturate(1.08);
+            transform: scale(1.055);
         }
 
         .tn21-background::after {
@@ -230,15 +119,15 @@
             background:
                 linear-gradient(
                     90deg,
-                    rgba(255,255,255,.03),
-                    rgba(10,38,72,.04)
+                    rgba(255,255,255,.14),
+                    rgba(10,38,72,.08)
                 );
         }
 
         .tn21-card {
             position: relative;
             z-index: 10;
-            width: min(100%, 500px);
+            width: min(100%, 520px);
             padding: 30px 38px 31px;
             border: 1px solid rgba(255,255,255,.88);
             border-radius: 20px;
@@ -258,8 +147,8 @@
         }
 
         .tn21-card-logo {
-            width: 132px;
-            height: 132px;
+            width: 116px;
+            height: 116px;
             object-fit: contain;
         }
 
@@ -274,6 +163,43 @@
             background: white;
             font-weight: 800;
             text-align: center;
+        }
+
+        .tn21-card-branding {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .tn21-card-name {
+            color: #092c67;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: clamp(25px, 3vw, 34px);
+            font-weight: 800;
+            line-height: 1.14;
+            letter-spacing: .025em;
+        }
+
+        .tn21-card-subtitle {
+            margin-top: 4px;
+            color: #244273;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+        }
+
+        .tn21-card-gold-accent {
+            width: 52px;
+            height: 4px;
+            margin: 13px auto 0;
+            border-radius: 999px;
+            background: #e9a51c;
+        }
+
+        /* Maintain readable authentication field labels. */
+        .tn21-card label,
+        .tn21-card [data-flux-label] {
+            color: #254266 !important;
         }
 
         .tn21-login-title {
@@ -391,70 +317,36 @@
         }
 
         @media (max-width: 900px) {
-            .tn21-header {
-                height: 82px;
-            }
-
-            .tn21-header-inner {
-                width: calc(100% - 30px);
-            }
-
-            .tn21-header-logo,
-            .tn21-brand-fallback {
-                width: 54px;
-                height: 54px;
-            }
-
-            .tn21-title {
-                font-size: 23px;
-            }
-
-            .tn21-subtitle {
-                font-size: 9px;
-                letter-spacing: .25em;
-            }
-
-            .tn21-nav {
-                display: none;
-            }
-
             .tn21-hero {
-                min-height: calc(100vh - 82px);
-                padding: 32px 18px;
+                padding: 30px 18px;
             }
         }
 
         @media (max-width: 520px) {
-            .tn21-title {
-                font-size: 18px;
-            }
-
-            .tn21-subtitle {
-                font-size: 7px;
-                letter-spacing: .16em;
-            }
-
-            .tn21-header-logo,
-            .tn21-brand-fallback {
-                width: 46px;
-                height: 46px;
+            .tn21-hero {
+                padding: 22px 14px;
             }
 
             .tn21-card {
-                padding: 27px 22px;
+                padding: 26px 22px;
                 border-radius: 18px;
             }
 
             .tn21-card-logo {
-                width: 102px;
-                height: 102px;
+                width: 100px;
+                height: 100px;
+            }
+
+            .tn21-card-subtitle {
+                font-size: 9px;
+                letter-spacing: .13em;
             }
 
             .tn21-login-title {
                 font-size: 31px;
             }
         }
-    
+
 /* CAPSTONE21_AUTH_INTERACTION_START */
 
 /*
@@ -628,77 +520,7 @@
 
 <div class="tn21-page">
 
-    <header class="tn21-header">
 
-        <div class="tn21-header-inner">
-
-            <a
-                href="{{ route('home') }}"
-                class="tn21-brand"
-            >
-
-                @if ($logoUrl)
-
-                    <img
-                        src="{{ $logoUrl }}"
-                        alt="{{ $systemName }} logo"
-                        class="tn21-header-logo"
-                    >
-
-                @else
-
-                    <div class="tn21-brand-fallback">
-                        DAO
-                    </div>
-
-                @endif
-
-                <div>
-
-                    <h1 class="tn21-title">
-                        BAYAN NG DAO
-                    </h1>
-
-                    <div class="tn21-subtitle">
-                        LALAWIGAN NG CAPIZ
-                    </div>
-
-                </div>
-
-            </a>
-
-            <nav
-                class="tn21-nav"
-                aria-label="Public navigation"
-            >
-                <a
-                    href="{{ route('home') }}"
-                    class="tn21-active"
-                >
-                    HOME
-                </a>
-
-                <a href="{{ route('home') }}#about">
-                    ABOUT
-                </a>
-
-                <a href="{{ route('home') }}#services">
-                    SERVICES
-                </a>
-
-                <a href="{{ route('home') }}#contact">
-                    CONTACT
-                </a>
-
-                <span
-                    class="tn21-nav-indicator"
-                    aria-hidden="true"
-                ></span>
-            </nav>
-
-        </div>
-
-    </header>
 
     <main class="tn21-hero">
 
@@ -729,6 +551,14 @@
 
             </div>
 
+            @if (request()->routeIs('login'))
+                <div class="tn21-card-branding">
+                    <div class="tn21-card-name">{{ $systemName }}</div>
+                    <div class="tn21-card-subtitle">{{ $systemSubtitle }}</div>
+                    <div class="tn21-card-gold-accent" aria-hidden="true"></div>
+                </div>
+            @endif
+
             {{ $slot }}
 
         </section>
@@ -736,71 +566,6 @@
     </main>
 
 </div>
-
-<script>
-    (() => {
-        const nav = document.querySelector('.tn21-nav');
-        const indicator = document.querySelector('.tn21-nav-indicator');
-
-        if (!nav || !indicator) {
-            return;
-        }
-
-        const links = Array.from(nav.querySelectorAll('a'));
-
-        const moveIndicator = (link) => {
-            const navRect = nav.getBoundingClientRect();
-            const linkRect = link.getBoundingClientRect();
-
-            const width = Math.max(linkRect.width - 14, 34);
-            const left =
-                linkRect.left -
-                navRect.left +
-                ((linkRect.width - width) / 2);
-
-            indicator.style.width = `${width}px`;
-            indicator.style.transform = `translateX(${left}px)`;
-
-            links.forEach(item => {
-                item.classList.toggle('tn21-active', item === link);
-            });
-        };
-
-        const initial =
-            nav.querySelector('.tn21-active') ||
-            links[0];
-
-        if (initial) {
-            requestAnimationFrame(() => {
-                moveIndicator(initial);
-            });
-        }
-
-        links.forEach(link => {
-            link.addEventListener('click', event => {
-                const destination = link.href;
-
-                event.preventDefault();
-
-                moveIndicator(link);
-
-                window.setTimeout(() => {
-                    window.location.href = destination;
-                }, 220);
-            });
-        });
-
-        window.addEventListener('resize', () => {
-            const active =
-                nav.querySelector('.tn21-active') ||
-                links[0];
-
-            if (active) {
-                moveIndicator(active);
-            }
-        });
-    })();
-</script>
 
 @fluxScripts
 
