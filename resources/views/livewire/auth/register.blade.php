@@ -389,6 +389,9 @@ $this->address = (string) preg_replace(
         }
     }"
 >
+    {{-- Desktop: landscape registration fields; mobile: stacked fields. --}}
+    <div class="tn21-register-grid">
+        <div class="tn21-register-column">
     {{-- Full Name --}}
     <div class="grid gap-2">
         <flux:input
@@ -478,6 +481,9 @@ $this->address = (string) preg_replace(
         @enderror
     </div>
 
+        </div>
+
+        <div class="tn21-register-column">
     {{-- Resident Age Restriction --}}
     <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
         <div class="grid gap-4">
@@ -706,6 +712,9 @@ $this->address = (string) preg_replace(
                         : 'Passwords do not match'"
                 ></span>
             </div>
+        </div>
+    </div>
+
         </div>
     </div>
 
