@@ -27,6 +27,7 @@ class User extends Authenticatable
         'date_of_birth',
         'age_attested_at',
         'is_active',
+        'registration_review_status',
         'theme_mode',
         'theme_custom_color',
     ];

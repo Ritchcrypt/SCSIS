@@ -1,6 +1,8 @@
 <?php
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 
@@ -16,7 +18,24 @@ new #[Layout('components.layouts.auth')] class extends Component {
             'email' => ['required', 'string', 'email'],
         ]);
 
-        Password::sendResetLink($this->only('email'));
+        try {
+            Password::sendResetLink($this->only('email'));
+        } catch (TransportExceptionInterface $exception) {
+            // PASSWORD_RESET_EMAIL_FAILURE_HANDLED: do not expose provider diagnostics to visitors.
+            try {
+                Log::warning('Password reset email delivery failed.', [
+                    'mailer' => (string) config('mail.default'),
+                    'exception_type' => get_class($exception),
+                    'exception_code' => (string) $exception->getCode(),
+                ]);
+            } catch (\Throwable) {
+                // A logging outage must not trigger an HTTP 500 either.
+            }
+
+            session()->flash('mail_error', __('We could not send the password reset email right now. Please try again later.'));
+
+            return;
+        }
 
         session()->flash('status', __('A reset link will be sent if the account exists.'));
     }
@@ -27,6 +46,12 @@ new #[Layout('components.layouts.auth')] class extends Component {
 
     <!-- Session Status -->
     <x-auth-session-status class="text-center" :status="session('status')" />
+
+    @if (session('mail_error'))
+        <div role="alert" class="rounded-lg border border-red-400/40 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+            {{ session('mail_error') }}
+        </div>
+    @endif
 
     <form wire:submit="sendPasswordResetLink" class="flex flex-col gap-6">
         <!-- Email Address -->

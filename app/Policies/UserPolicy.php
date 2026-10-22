@@ -45,6 +45,14 @@ class UserPolicy
         return $user->isAdmin() && $this->isManageable($target);
     }
 
+    public function declineRegistration(User $user, User $target): bool
+    {
+        return $user->isAdmin()
+            && $target->isResident()
+            && ! $target->isActive()
+            && $this->isManageable($target);
+    }
+
     public function deactivate(User $user, User $target): bool
     {
         return $user->isAdmin()

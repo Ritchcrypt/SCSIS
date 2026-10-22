@@ -167,6 +167,7 @@ $this->address = (string) preg_replace(
     'password' => Hash::make($validated['password']),
     'role' => 'resident',
     'is_active' => false,
+    'registration_review_status' => 'pending',
     'status' => false,
 ]);
 

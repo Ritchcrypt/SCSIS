@@ -309,6 +309,16 @@
                                         {{ $isOnline ? 'Online' : 'Offline' }}
                                     </span>
                                 </span>
+                                @if (strtolower((string) $userRecord->role) === 'resident')
+                                    @php $reviewStatus = strtolower(trim((string) ($userRecord->registration_review_status ?? ''))); @endphp
+                                    @if (! $userRecord->isActive() && in_array($reviewStatus, ['', 'pending'], true))
+                                        <span class="mt-2 block text-xs font-semibold text-amber-700">Registration: Pending review</span>
+                                    @elseif ($reviewStatus === 'declined')
+                                        <span class="mt-2 block text-xs font-semibold text-red-700">Registration: Declined</span>
+                                    @elseif ($reviewStatus === 'approved')
+                                        <span class="mt-2 block text-xs font-semibold text-emerald-700">Registration: Approved</span>
+                                    @endif
+                                @endif
                             </td>
 
                             <td class="px-5 py-4 text-sm text-slate-700">
@@ -326,6 +336,13 @@
                    :href="route('admin.users.edit', $userRecord)"
                    label="Edit user"
                    data-user-management-return />
+    @if (strtolower((string) $userRecord->role) === 'resident'
+         && ! $userRecord->isActive()
+         && in_array(strtolower((string) ($userRecord->registration_review_status ?? '')), ['', 'pending'], true))
+        <a href="{{ route('admin.users.edit', $userRecord) }}"
+           class="whitespace-nowrap text-xs font-bold text-amber-700 underline hover:text-amber-900"
+           data-user-management-return>Review registration</a>
+    @endif
 </div>
                             </td>
                         </tr>

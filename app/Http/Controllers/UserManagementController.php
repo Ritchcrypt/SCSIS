@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\RegistrationDecisionMail;
 use App\Models\Employee;
 use App\Models\User;
 use App\Rules\SecureUploadedFile;
@@ -13,6 +14,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password as PasswordBroker;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -505,11 +508,23 @@ class UserManagementController extends Controller
         Gate::authorize('activate', $user);
         $this->ensureNotDeletedPlaceholder($user);
 
-        DB::transaction(function () use ($user): void {
+        $sendApprovalEmail = false;
+
+        DB::transaction(function () use ($user, &$sendApprovalEmail): void {
             $lockedUser = User::query()
                 ->whereKey($user->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            $previousReview = strtolower(trim((string) ($lockedUser->registration_review_status ?? '')));
+            $isPendingApplicant = ! $lockedUser->isActive()
+                && $lockedUser->isResident()
+                && in_array($previousReview, ['', 'pending', 'declined'], true);
+
+            if ($isPendingApplicant) {
+                $lockedUser->registration_review_status = 'approved';
+                $sendApprovalEmail = true;
+            }
 
             $this->setUserActiveState($lockedUser, true);
             $lockedUser->save();
@@ -519,6 +534,9 @@ class UserManagementController extends Controller
         });
 
         $user->refresh();
+
+        $mailSent = ! $sendApprovalEmail
+            || $this->sendRegistrationDecisionEmail($user, 'approved');
 
         $this->activityLogger->record(
             event: 'user_management.activated',
@@ -532,10 +550,153 @@ class UserManagementController extends Controller
             request: $request,
         );
 
-        return back()->with(
-            'success',
-            'User account activated successfully.'
+        $response = back()->with('success', 'User account activated successfully.');
+
+        if (! $mailSent) {
+            $response->with('mail_warning', 'Account activated, but approval email failed. Check the mail configuration and logs.');
+        }
+
+        return $response;
+    }
+
+    public function declineRegistration(Request $request, User $user): RedirectResponse
+    {
+        Gate::authorize('declineRegistration', $user);
+        $this->ensureNotDeletedPlaceholder($user);
+
+        $declinedNow = DB::transaction(function () use ($user): bool {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! $lockedUser->isResident() || $lockedUser->isActive()) {
+                abort(403, 'Only pending resident registrations can be declined.');
+            }
+
+            $review = strtolower(trim((string) ($lockedUser->registration_review_status ?? '')));
+            if ($review === 'declined') {
+                return false;
+            }
+
+            if ($review === 'approved') {
+                abort(403, 'Previously approved accounts must use Deactivate Account.');
+            }
+
+            $lockedUser->registration_review_status = 'declined';
+            $lockedUser->save();
+
+            return true;
+        });
+
+        if (! $declinedNow) {
+            return back()->with('success', 'This registration has already been declined.');
+        }
+
+        $user->refresh();
+
+        $this->activityLogger->record(
+            event: 'user_management.registration_declined',
+            category: 'user_management',
+            description: 'Administrator declined a resident registration.',
+            actor: $request->user(),
+            target: $user,
+            metadata: ['registration_review_status' => 'declined'],
+            request: $request,
         );
+
+        try {
+            Log::info('Resident registration decline decision recorded.', [
+                'user_id' => (int) $user->id,
+                'actor_id' => (int) $request->user()->id,
+            ]);
+        } catch (\Throwable) {
+            // Logging outages must not suppress an account decision or email.
+        }
+
+        $mailSent = $this->sendRegistrationDecisionEmail($user, 'declined');
+        $response = back()->with('success', 'Resident registration declined. The account remains inactive.');
+
+        if (! $mailSent) {
+            $response->with('mail_warning', 'Registration declined, but the decision email failed. Check the mail configuration and logs.');
+        }
+
+        return $response;
+    }
+
+    /**
+     * Only administrators can retry an email for an already-declined
+     * inactive resident registration. No account state is changed.
+     */
+    public function resendDeclineEmail(Request $request, User $user): RedirectResponse
+    {
+        Gate::authorize('declineRegistration', $user);
+        $this->ensureNotDeletedPlaceholder($user);
+        $user->refresh();
+
+        $reviewStatus = strtolower(trim((string) ($user->registration_review_status ?? '')));
+
+        if (! $user->isResident() || $user->isActive() || $reviewStatus !== 'declined') {
+            abort(403, 'Only a declined resident registration can receive a resend.');
+        }
+
+        $mailAccepted = $this->sendRegistrationDecisionEmail($user, 'declined');
+
+        $this->activityLogger->record(
+            event: 'user_management.registration_decline_email_resent',
+            category: 'user_management',
+            description: 'Administrator requested a registration-declined email resend.',
+            actor: $request->user(),
+            target: $user,
+            metadata: ['mail_transport_accepted' => $mailAccepted],
+            request: $request,
+        );
+
+        if (! $mailAccepted) {
+            return back()->with('mail_warning',
+                'Decline email could not be sent. See storage/logs for the mail transport error; the registration remains declined.'
+            );
+        }
+
+        return back()->with('success',
+            'Decline email accepted by the configured mail transport. Check the recipient inbox and spam folder; delivery is not guaranteed.'
+        );
+    }
+
+    private function sendRegistrationDecisionEmail(User $user, string $decision): bool
+    {
+        try {
+            Mail::to((string) $user->email)->send(
+                new RegistrationDecisionMail((string) $user->name, $decision)
+            );
+        } catch (\Throwable $exception) {
+            // Never record SMTP passwords, tokens, or raw exception messages.
+            try {
+                Log::warning('Registration decision email delivery failed.', [
+                    'user_id' => (int) $user->id,
+                    'decision' => $decision,
+                    'mailer' => (string) config('mail.default'),
+                    'exception_type' => get_class($exception),
+                    'exception_code' => (string) $exception->getCode(),
+                ]);
+            } catch (\Throwable) {
+                // Failure to write a log must not change the account status.
+            }
+
+            return false;
+        }
+
+        try {
+            Log::info('Registration decision email accepted by mail transport.', [
+                'user_id' => (int) $user->id,
+                'decision' => $decision,
+                'mailer' => (string) config('mail.default'),
+            ]);
+        } catch (\Throwable) {
+            // SMTP accepted the message even if logging is unavailable.
+        }
+
+        return true;
     }
 
     public function deactivate(

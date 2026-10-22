@@ -1414,6 +1414,10 @@ if ($authUser) {
     </header>
 
     <main class="p-8">
+        @if (request()->routeIs('admin.dashboard', 'official.dashboard', 'tanod.dashboard', 'resident.dashboard'))
+            @include('components.dashboard.welcome-banner')
+        @endif
+
         @yield('content')
     </main>
 </div>

@@ -138,6 +138,7 @@ class AuthController extends Controller
             'password' => Hash::make($validated['password']),
             'role' => 'resident',
             'is_active' => false,
+            'registration_review_status' => 'pending',
             'status' => false,
         ]);
 

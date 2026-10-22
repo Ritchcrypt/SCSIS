@@ -227,6 +227,13 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::patch('/users/{user}/activate', [UserManagementController::class, 'activate'])
             ->name('users.activate');
 
+        Route::patch('/users/{user}/decline-registration', [UserManagementController::class, 'declineRegistration'])
+            ->name('users.decline-registration');
+
+        Route::patch('/users/{user}/resend-decline-email', [UserManagementController::class, 'resendDeclineEmail'])
+            ->middleware('throttle:3,10')
+            ->name('users.resend-decline-email');
+
         Route::patch('/users/{user}/deactivate', [UserManagementController::class, 'deactivate'])
             ->name('users.deactivate');
 
