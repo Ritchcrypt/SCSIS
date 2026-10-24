@@ -15,7 +15,6 @@ class ReportDownloadSelectionFilterContractTest extends TestCase
         );
 
         foreach ([
-            'CAPSTONE18_TOTAL_INCIDENTS_SELECTION_FILTERS_V2',
             'reportTotalIncidentFilters',
             'reportTotalIncidentSearch',
             'reportTotalIncidentSeverity',

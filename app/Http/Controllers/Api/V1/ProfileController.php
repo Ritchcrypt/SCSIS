@@ -22,8 +22,6 @@ use Throwable;
 
 class ProfileController extends Controller
 {
-    /* TABANGNOW_MOBILE_SELF_PROFILE_V2 */
-
     public function __construct(
         private readonly ActivityLogger $activityLogger,
         private readonly SecureUploadService $secureUploads
@@ -46,7 +44,8 @@ class ProfileController extends Controller
             ],
             'options' => [
                 'barangays' => $this->barangayOptions(),
-            ],            'password_policy' => [
+            ],
+            'password_policy' => [
                 'minimum_length' => 12,
                 'mixed_case' => true,
                 'numbers' => true,

@@ -98,8 +98,6 @@
             background: linear-gradient(165deg, #7cb8e7 0%, #b3d2e6 47%, #264968 100%);
         }
 
-
-
         .tn21-background-photo {
             position: absolute;
             inset: 0;
