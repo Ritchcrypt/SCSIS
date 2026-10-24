@@ -1,4 +1,3 @@
-{{-- TabangNow C21: Shared website dashboard welcome banner (all four authenticated roles). --}}
 @php
     $dashboardWelcomeName = trim((string) (auth()->user()?->name ?? 'User'));
     $dashboardWelcomeName = $dashboardWelcomeName !== '' ? $dashboardWelcomeName : 'User';
@@ -22,12 +21,10 @@
         position: absolute;
         inset: 0;
         z-index: -2;
-        background-image:
-            url("{{ asset('images/dashboard/dao-dashboard-scene-20261022_170912_300.jpg') }}"),
-            url("{{ asset('images/dashboard/dao-dashboard-scene-20261022_170912_300.jpg') }}");
-        background-position: right center, center 55%;
-        background-repeat: no-repeat, no-repeat;
-        background-size: auto 100%, cover;
+        background-image: url("{{ asset('images/dashboard/dao-welcome-scene-20261022_173013_735.jpg') }}");
+        background-position: center 44%;
+        background-repeat: no-repeat;
+        background-size: cover;
     }
 
     .tn-c21-dashboard-welcome::after {
@@ -68,22 +65,6 @@
         letter-spacing: -0.035em;
     }
 
-    .tn-c21-dashboard-welcome__accent {
-        display: block;
-        width: 49px;
-        height: 4px;
-        margin: 14px 0 16px;
-        border-radius: 99px;
-        background-color: #c89517;
-    }
-
-    .tn-c21-dashboard-welcome__subtitle {
-        margin: 0;
-        font-size: 14px;
-        line-height: 1.55;
-        color: #34445d;
-    }
-
     html[data-theme='dark'] .tn-c21-dashboard-welcome {
         background-color: #0f172a;
     }
@@ -101,10 +82,6 @@
         color: #f8fafc;
     }
 
-    html[data-theme='dark'] .tn-c21-dashboard-welcome__subtitle {
-        color: #dbeafe;
-    }
-
     @media (prefers-color-scheme: dark) {
         html[data-theme='system'] .tn-c21-dashboard-welcome {
             background-color: #0f172a;
@@ -119,9 +96,6 @@
         }
         html[data-theme='system'] .tn-c21-dashboard-welcome__text {
             color: #f8fafc;
-        }
-        html[data-theme='system'] .tn-c21-dashboard-welcome__subtitle {
-            color: #dbeafe;
         }
     }
 
@@ -155,28 +129,13 @@
         }
     }
 
-        /* TABANGNOW_WELCOME_SCENE_V6 */
-
-    .tn-c21-dashboard-welcome::before {
-        background-image: url("{{ asset('images/dashboard/dao-welcome-scene-20261022_173013_735.jpg') }}") !important;
-        background-size: cover !important;
-        background-position: center 44% !important;
-        background-repeat: no-repeat !important;
-    }
-
-    .tn-c21-dashboard-welcome__accent,
-    .tn-c21-dashboard-welcome__subtitle {
-        display: none !important;
-    }
-
-    /* END TABANGNOW_WELCOME_SCENE_V6 */
+        
 </style>
 
 <section class="tn-c21-dashboard-welcome" aria-label="Dashboard welcome">
     <div class="tn-c21-dashboard-welcome__text">
         <p class="tn-c21-dashboard-welcome__intro">Welcome back,</p>
         <h1 class="tn-c21-dashboard-welcome__name">{{ $dashboardWelcomeName }}</h1>
-
 
     </div>
 </section>
