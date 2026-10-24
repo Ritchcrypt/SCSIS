@@ -347,7 +347,6 @@
             }
         }
 
-/* CAPSTONE21_AUTH_INTERACTION_START */
 
 /*
 |--------------------------------------------------------------------------
@@ -511,10 +510,8 @@
     color: #65728a !important;
 }
 
-/* CAPSTONE21_AUTH_INTERACTION_END */
 
 
-/* CAPSTONE21_AUTH_BG_V4_REPLACE */
 body.tn21-auth .tn21-background::before {
     inset: 0;
     background-image: url('/images/auth/auth-background-20261022_121831_429.jpg') !important;
@@ -528,14 +525,12 @@ body.tn21-auth .tn21-background::before {
 body.tn21-auth .tn21-background::after {
     background: none !important;
 }
-/* END CAPSTONE21_AUTH_BG_V4_REPLACE */
 
 
     
 
     
 
-/* TABANGNOW_AUTH_ALL_PAGES_BG_C21_START */
 @if (request()->routeIs('login', 'register', 'password.request', 'password.reset'))
 body.tn21-auth main.tn21-hero > .tn21-background::before,
 body.tn21-auth main.tn21-hero > div.tn21-background::before {
@@ -544,7 +539,6 @@ body.tn21-auth main.tn21-hero > div.tn21-background::before {
         center center / cover no-repeat !important;
 }
 @endif
-/* TABANGNOW_AUTH_ALL_PAGES_BG_C21_END */
 
 </style>
 </head>
@@ -603,4 +597,3 @@ body.tn21-auth main.tn21-hero > div.tn21-background::before {
 
 </body>
 </html>
-

@@ -1,4 +1,3 @@
-{{-- TabangNow C21: Shared website dashboard welcome banner (all four authenticated roles). --}}
 @php
     $dashboardWelcomeName = trim((string) (auth()->user()?->name ?? 'User'));
     $dashboardWelcomeName = $dashboardWelcomeName !== '' ? $dashboardWelcomeName : 'User';
