@@ -27,6 +27,7 @@
             . '?v='
             . optional($setting->updated_at)->timestamp;
     }
+    $authBackgroundUrl = asset('images/auth/dao-auth-photo-20261022_181835_038.jpg');
 @endphp
 
 <!DOCTYPE html>
@@ -52,6 +53,7 @@
     </script>
 
     <meta name="theme-color" content="#ffffff">
+    <link rel="preload" as="image" href="{{ $authBackgroundUrl }}" fetchpriority="high">
 
     <style>
         * {
@@ -96,32 +98,22 @@
             background: linear-gradient(165deg, #7cb8e7 0%, #b3d2e6 47%, #264968 100%);
         }
 
-        .tn21-background::before {
-            content: "";
-            position: absolute;
-            inset: -18px;
-            background:
-                linear-gradient(
-                    rgba(255,255,255,.02),
-                    rgba(17,50,81,.16)
-                ),
-                url('/images/auth/dao-login-landscape.svg')
-                center center / cover no-repeat;
 
-            filter: blur(7px) saturate(1.08);
-            transform: scale(1.055);
-        }
 
-        .tn21-background::after {
-            content: "";
+        .tn21-background-photo {
             position: absolute;
             inset: 0;
-            background:
-                linear-gradient(
-                    90deg,
-                    rgba(255,255,255,.14),
-                    rgba(10,38,72,.08)
-                );
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .tn21-background-photo.is-ready {
+            opacity: 1;
         }
 
         .tn21-card {
@@ -512,33 +504,14 @@
 
 
 
-body.tn21-auth .tn21-background::before {
-    inset: 0;
-    background-image: url('/images/auth/auth-background-20261022_121831_429.jpg') !important;
-    background-position: center center !important;
-    background-size: cover !important;
-    background-repeat: no-repeat !important;
-    filter: none !important;
-    transform: none !important;
-}
 
-body.tn21-auth .tn21-background::after {
-    background: none !important;
-}
 
 
     
 
     
 
-@if (request()->routeIs('login', 'register', 'password.request', 'password.reset'))
-body.tn21-auth main.tn21-hero > .tn21-background::before,
-body.tn21-auth main.tn21-hero > div.tn21-background::before {
-    background:
-        url("{{ asset('images/auth/dao-auth-photo-20261022_181835_038.jpg') }}")
-        center center / cover no-repeat !important;
-}
-@endif
+
 
 </style>
 </head>
@@ -550,10 +523,16 @@ body.tn21-auth main.tn21-hero > div.tn21-background::before {
 
     <main class="tn21-hero">
 
-        <div
-            class="tn21-background"
-            aria-hidden="true"
-        ></div>
+        <div class="tn21-background" aria-hidden="true">
+            <img
+                class="tn21-background-photo"
+                src="{{ $authBackgroundUrl }}"
+                alt=""
+                loading="eager"
+                decoding="async"
+                fetchpriority="high"
+            >
+        </div>
 
         <section class="tn21-card">
 
@@ -592,6 +571,42 @@ body.tn21-auth main.tn21-hero > div.tn21-background::before {
     </main>
 
 </div>
+
+<script>
+    (() => {
+        const image = document.querySelector('.tn21-background-photo');
+
+        if (!image) {
+            return;
+        }
+
+        const reveal = () => {
+            if (image.complete && image.naturalWidth > 0) {
+                image.classList.add('is-ready');
+            }
+        };
+
+        const revealDecoded = () => {
+            if (typeof image.decode === 'function') {
+                image.decode()
+                    .then(reveal)
+                    .catch(reveal);
+            } else {
+                reveal();
+            }
+        };
+
+        if (image.complete) {
+            revealDecoded();
+        } else {
+            image.addEventListener(
+                'load',
+                revealDecoded,
+                { once: true }
+            );
+        }
+    })();
+</script>
 
 @fluxScripts
 
