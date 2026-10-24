@@ -514,43 +514,6 @@
 /* CAPSTONE21_AUTH_INTERACTION_END */
 
 
-/* CAPSTONE21_LOGIN_SIGNUP_BG_START */
-body.tn21-auth--municipal .tn21-background::before {
-    background:
-        linear-gradient(
-            rgba(10, 35, 70, .06),
-            rgba(10, 35, 70, .17)
-        ),
-        url('/images/auth/dao-municipal-hall-login-signup.png')
-        center center / cover no-repeat;
-
-    filter: blur(3px) saturate(.94);
-    transform: scale(1.055);
-}
-/* CAPSTONE21_LOGIN_SIGNUP_BG_END */
-
-
-/* CAPSTONE21_DAO_PHOTO_V3 */
-@if (request()->routeIs('login', 'register'))
-
-body.tn21-auth .tn21-background::before {
-    inset: 0;
-    background-image: url('/images/auth/dao-municipal-auth-v3-20261022_120842_333.jpg');
-    background-position: center center;
-    background-size: cover;
-    background-repeat: no-repeat;
-    filter: none;
-    transform: none;
-}
-
-body.tn21-auth .tn21-background::after {
-    background: none;
-}
-
-@endif
-/* END CAPSTONE21_DAO_PHOTO_V3 */
-
-
 /* CAPSTONE21_AUTH_BG_V4_REPLACE */
 body.tn21-auth .tn21-background::before {
     inset: 0;
@@ -568,24 +531,9 @@ body.tn21-auth .tn21-background::after {
 /* END CAPSTONE21_AUTH_BG_V4_REPLACE */
 
 
-    /* TABANGNOW_AUTH_MATCH_DASHBOARD_C21 */
-    @if (request()->routeIs('login', 'register'))
-    body.tn21-auth main.tn21-hero > .tn21-background::before {
-        background: url("{{ asset('images/auth/dao-auth-dashboard-photo-20261022_175456_475.jpg') }}")
-                    center center / cover no-repeat !important;
-    }
-    @endif
-    /* END TABANGNOW_AUTH_MATCH_DASHBOARD_C21 */
+    
 
-    /* TABANGNOW_AUTH_PHOTO_1810_FIX */
-    @if (request()->routeIs('login', 'register'))
-    body.tn21-auth main.tn21-hero > div.tn21-background::before {
-        background:
-            url("{{ asset('images/auth/dao-auth-photo-20261022_181835_038.jpg') }}")
-            center center / cover no-repeat !important;
-    }
-    @endif
-    /* END TABANGNOW_AUTH_PHOTO_1810_FIX */
+    
 
 /* TABANGNOW_AUTH_ALL_PAGES_BG_C21_START */
 @if (request()->routeIs('login', 'register', 'password.request', 'password.reset'))
@@ -604,7 +552,6 @@ body.tn21-auth main.tn21-hero > div.tn21-background::before {
 <body class="tn21-auth antialiased {{ request()->routeIs('login', 'register') ? 'tn21-auth--municipal' : '' }}">
 
 <div class="tn21-page">
-
 
 
     <main class="tn21-hero">
