@@ -9,7 +9,6 @@ use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\BarangayMapController;
 use App\Http\Controllers\Api\V1\ResidentComplaintController;
 use App\Http\Controllers\Api\V1\DevSessionController;
-use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DashboardParityController;
 use App\Http\Controllers\Api\V1\EmergencyHotlineController;
 use App\Http\Controllers\Api\V1\IncidentController;

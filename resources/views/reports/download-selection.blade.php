@@ -81,7 +81,6 @@
             {{ $errors->first() }}
         </div>
     @endif
-{{-- CAPSTONE18_TOTAL_INCIDENTS_SELECTION_FILTERS_V2 --}}
 <div
     id="reportTotalIncidentFilters"
     class="mb-5 hidden rounded-2xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm"
