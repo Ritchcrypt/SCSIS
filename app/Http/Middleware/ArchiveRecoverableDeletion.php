@@ -27,9 +27,14 @@ class ArchiveRecoverableDeletion
             throw $exception;
         }
 
-        if ($response->getStatusCode() >= 400) {
-            $this->archives->discardIfOriginalStillExists($archiveIds);
-        }
+        /*
+         * Always reconcile provisional archives after a completed request.
+         * A real deletion leaves the original missing, so its archive remains.
+         * A successful no-op or rejected deletion leaves the original present,
+         * so the provisional archive is discarded instead of becoming bogus
+         * recovery data.
+         */
+        $this->archives->discardIfOriginalStillExists($archiveIds);
 
         return $response;
     }
