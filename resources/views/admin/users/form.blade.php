@@ -3,6 +3,11 @@
 @section('title', ($userRecord ? 'Edit User' : 'Add User') . ' | TabangNow')
 
 @section('content')
+@if (session('mail_warning'))
+    <div role="alert" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-900">
+        {{ session('mail_warning') }}
+    </div>
+@endif
 @php
     $isEdit = (bool) $userRecord;
 
@@ -424,6 +429,47 @@
                 </div>
             </div>
 
+            <div>
+                    <label for="barangay_id"
+                           class="mb-2 block text-sm font-semibold text-slate-700">
+                        Barangay of Residence
+                    </label>
+
+                    <select id="barangay_id"
+                            name="barangay_id"
+                            required
+                            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                        <option value="">
+                            Select barangay
+                        </option>
+
+                        @foreach ($barangays as $barangay)
+                            <option
+                                value="{{ $barangay->id }}"
+                                @selected(
+                                    (string) old(
+                                        'barangay_id',
+                                        $userRecord->barangay_id ?? ''
+                                    )
+                                    === (string) $barangay->id
+                                )
+                            >
+                                {{ $barangay->barangay_name }}
+                            </option>
+                        @endforeach
+                    </select>
+
+                    <p class="mt-2 text-xs text-slate-500">
+                        Current residential barangay. Used for barangay-targeted
+                        announcements, community notices, and related messages.
+                    </p>
+
+                    @error('barangay_id')
+                        <p class="mt-2 text-sm font-medium text-red-600">
+                            {{ $message }}
+                        </p>
+                    @enderror
+                </div>
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label for="role"
@@ -547,6 +593,16 @@
         @if ($isEdit)
             <div class="border-t border-slate-200 px-6 py-5">
                 <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                    @if (strtolower((string) ($userRecord->role ?? '')) === 'resident')
+                        @php $reviewStatus = strtolower(trim((string) ($userRecord->registration_review_status ?? ''))); @endphp
+                        @if (! $accountIsActive && in_array($reviewStatus, ['', 'pending'], true))
+                            <span class="inline-flex items-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900">Registration: Pending review</span>
+                        @elseif ($reviewStatus === 'declined')
+                            <span class="inline-flex items-center rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-800">Registration: Declined</span>
+                        @elseif ($reviewStatus === 'approved')
+                            <span class="inline-flex items-center rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800">Registration: Approved</span>
+                        @endif
+                    @endif
                     @if ($accountIsActive)
                         @can('deactivate', $userRecord)
                             <button type="button"
@@ -647,6 +703,57 @@
                                 </div>
                             </div>
                         @endcan
+
+                        @if (strtolower((string) $userRecord->role) === 'resident'
+                            && ! in_array(strtolower((string) ($userRecord->registration_review_status ?? '')), ['approved', 'declined'], true))
+                            @can('declineRegistration', $userRecord)
+                                <button type="button"
+                                        popovertarget="decline-registration-popover-{{ $userRecord->id }}"
+                                        popovertargetaction="show"
+                                        class="inline-flex w-full items-center justify-center rounded-xl border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-800 hover:bg-red-100 sm:w-auto">
+                                    Decline Registration
+                                </button>
+                                <div id="decline-registration-popover-{{ $userRecord->id }}"
+                                     class="tn-account-popover" popover>
+                                    <div class="tn-account-popover-content">
+                                        <div>
+                                            <h2 class="tn-account-popover-title">Decline resident registration?</h2>
+                                            <p class="tn-account-popover-message">
+                                                This pending resident registration will be declined. The account will remain inactive, and TabangNow will attempt to email the applicant. This is different from Deactivate Account.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="tn-account-popover-actions">
+                                        <button type="button"
+                                                popovertarget="decline-registration-popover-{{ $userRecord->id }}"
+                                                popovertargetaction="hide"
+                                                class="tn-account-popover-button tn-account-popover-button--cancel">Cancel</button>
+                                        <form method="POST" action="{{ route('admin.users.decline-registration', $userRecord) }}">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button type="submit" class="tn-account-popover-button tn-account-popover-button--deactivate">
+                                                Confirm Decline
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            @endcan
+                        @endif
+
+                        @if (strtolower((string) $userRecord->role) === 'resident'
+                            && strtolower((string) ($userRecord->registration_review_status ?? '')) === 'declined')
+                            @can('declineRegistration', $userRecord)
+                                <form method="POST"
+                                      action="{{ route('admin.users.resend-decline-email', $userRecord) }}">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit"
+                                            class="inline-flex w-full items-center justify-center rounded-xl border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-800 hover:bg-red-100 sm:w-auto">
+                                        Resend Decline Email
+                                    </button>
+                                </form>
+                            @endcan
+                        @endif
                     @endif
 
                     <form method="POST"

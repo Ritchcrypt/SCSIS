@@ -16,6 +16,9 @@ use App\Models\Incident;
 use App\Models\Status;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Models\Barangay;
+use App\Services\TanodTaskAssignmentService;
+use App\Support\DaoBarangays;
 use Illuminate\Support\Facades\Schema;
 
 class TanodTaskController extends Controller
@@ -54,8 +57,20 @@ class TanodTaskController extends Controller
             ->orderBy('id')
             ->get();
 
+        $barangays = Barangay::query()
+            ->whereIn(
+                'barangay_name',
+                DaoBarangays::names()
+            )
+            ->orderBy('barangay_name')
+            ->get([
+                'id',
+                'barangay_name',
+            ]);
+
         return view('tanod-tasks.create', [
             'tanods' => $tanods,
+            'barangays' => $barangays,
         ]);
     }
 
@@ -67,8 +82,24 @@ class TanodTaskController extends Controller
         'title' => ['required', 'string', 'max:255'],
         'description' => ['nullable', 'string', 'max:3000'],
         'location' => ['nullable', 'string', 'max:500'],
+        'barangay_id' => [
+            'required',
+            'integer',
+            Rule::exists('barangays', 'id')
+                ->where(
+                    fn ($query) =>
+                        $query->whereIn(
+                            'barangay_name',
+                            DaoBarangays::names()
+                        )
+                ),
+        ],
         'task_datetime' => ['nullable', 'date'],
-        'due_at' => ['nullable', 'date', 'after_or_equal:task_datetime'],
+        'due_at' => [
+            'nullable',
+            'date',
+            'after_or_equal:task_datetime',
+        ],
         'priority' => [
             'required',
             Rule::in([
@@ -82,42 +113,55 @@ class TanodTaskController extends Controller
 
     $task = null;
     $assignedTanodCount = 0;
+    $fallbackUsed = false;
 
     DB::transaction(function () use (
         $request,
         $validated,
         &$task,
-        &$assignedTanodCount
+        &$assignedTanodCount,
+        &$fallbackUsed
     ): void {
         $task = TanodTask::create([
-            'created_by' => $request->user()->id,
+            'created_by' =>
+                $request->user()->id,
+            'barangay_id' =>
+                (int) $validated['barangay_id'],
+            'fallback_used' => false,
             'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'location' => $validated['location'] ?? null,
-            'task_datetime' => $validated['task_datetime'] ?? null,
-            'due_at' => $validated['due_at'] ?? null,
-            'priority' => $validated['priority'],
+            'description' =>
+                $validated['description']
+                    ?? null,
+            'location' =>
+                $validated['location']
+                    ?? null,
+            'task_datetime' =>
+                $validated['task_datetime']
+                    ?? null,
+            'due_at' =>
+                $validated['due_at']
+                    ?? null,
+            'priority' =>
+                $validated['priority'],
             'status' => 'open',
         ]);
 
-        $tanods = Employee::query()
-            ->with('user')
-            ->tanods()
-            ->active()
-            ->get();
+        $assignment = app(
+            TanodTaskAssignmentService::class
+        )->assignInitialResponses($task);
 
-        $assignedTanodCount = $tanods->count();
+        $assignedTanodCount =
+            $assignment['tanods']->count();
 
-        foreach ($tanods as $tanod) {
-            TanodTaskResponse::create([
-                'tanod_task_id' => $task->id,
-                'employee_id' => $tanod->id,
-                'user_id' => $tanod->user_id,
-                'response_status' => 'pending',
-                'response_note' => null,
-                'responded_at' => null,
-            ]);
+        $fallbackUsed =
+            (bool) $assignment[
+                'fallback_used'
+            ];
 
+        foreach (
+            $assignment['tanods']
+            as $tanod
+        ) {
             if ($tanod->user_id) {
                 $this->notifyTanodAboutNewTask(
                     $task,
@@ -127,7 +171,10 @@ class TanodTaskController extends Controller
         }
     });
 
-    if (! $task instanceof TanodTask || ! $task->exists) {
+    if (
+        ! $task instanceof TanodTask
+        || ! $task->exists
+    ) {
         throw new \RuntimeException(
             'Tanod task creation completed without a persisted task record.'
         );
@@ -136,23 +183,36 @@ class TanodTaskController extends Controller
     $this->recordOperationalActivity(
         event: 'tanod_task.created',
         category: 'tanod_task',
-        description: 'A tanod task was created.',
+        description:
+            'A barangay-routed tanod task was created.',
         metadata: [
-            'tanod_task_id' => (int) $task->id,
-            'incident_id' => $task->incident_id,
-            'priority' => $task->priority,
-            'status' => $task->status,
-            'assigned_tanod_count' => $assignedTanodCount,
+            'tanod_task_id' =>
+                (int) $task->id,
+            'incident_id' =>
+                $task->incident_id,
+            'barangay_id' =>
+                $task->barangay_id,
+            'priority' =>
+                $task->priority,
+            'status' =>
+                $task->status,
+            'assigned_tanod_count' =>
+                $assignedTanodCount,
+            'fallback_used' =>
+                $fallbackUsed,
         ],
         request: $request,
     );
 
+    $message = $fallbackUsed
+        ? 'No active tanods were available in the selected barangay, so the task was offered to active tanods from other Dao barangays.'
+        : 'Tanod task created and offered to active tanods assigned to the selected barangay.';
+
     return redirect()
-        ->route('admin.tanod-tasks.index')
-        ->with(
-            'success',
-            'Tanod task created and assigned to all active tanods.'
-        );
+        ->route(
+            'admin.tanod-tasks.index'
+        )
+        ->with('success', $message);
 }
 
     public function show(Request $request, TanodTask $tanodTask): View
@@ -183,10 +243,7 @@ public function destroy(Request $request, TanodTask $tanodTask): RedirectRespons
 
     DB::transaction(function () use ($tanodTask): void {
         if (Schema::hasTable('notifications')) {
-            UserNotification::query()
-                ->where('source_id', $tanodTask->id)
-                ->where('type', 'tanod_task')
-                ->delete();
+            // Recipient-owned notification receipts are intentionally preserved for this task.
         }
 
         if (method_exists($tanodTask, 'responses')) {
@@ -551,6 +608,28 @@ public function respond(
         );
     });
 
+    if ($validated['response_status'] === 'declined') {
+        $fallbackTask = TanodTask::query()
+            ->find($response->tanod_task_id);
+
+        if ($fallbackTask) {
+            $fallbackTanods = app(
+                TanodTaskAssignmentService::class
+            )->expandFallbackIfNeeded(
+                $fallbackTask
+            );
+
+            foreach ($fallbackTanods as $fallbackTanod) {
+                if ($fallbackTanod->user_id) {
+                    $this->notifyTanodAboutNewTask(
+                        $fallbackTask,
+                        (int) $fallbackTanod->user_id
+                    );
+                }
+            }
+        }
+    }
+
     $this->recordOperationalActivity(
         event: 'tanod_task.response_submitted',
         category: 'tanod_task',
@@ -673,8 +752,8 @@ private function notifyAdminsAboutTanodTaskResponse(
     foreach ($receiverIds as $userId) {
         UserNotification::create([
             'user_id' => $userId,
-            'type' => 'dispatch',
-            'source_id' => $incident?->id,
+            'type' => 'tanod_task_response',
+            'source_id' => $task->id,
             'title' => $title,
             'message' => $message,
             'is_read' => false,

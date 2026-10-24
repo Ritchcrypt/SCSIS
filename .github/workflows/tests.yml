@@ -15,6 +15,31 @@ jobs:
     runs-on: ubuntu-latest
     environment: Testing
 
+    # Ephemeral CI database. Never connects to Railway production.
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: tabangnow_test
+      DB_USERNAME: tabangnow_ci
+      DB_PASSWORD: c21_test_db_only
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: c21_ci_root_only
+          MYSQL_DATABASE: tabangnow_test
+          MYSQL_USER: tabangnow_ci
+          MYSQL_PASSWORD: c21_test_db_only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pc21_ci_root_only"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

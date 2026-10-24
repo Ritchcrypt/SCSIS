@@ -257,14 +257,7 @@ class IncidentController extends Controller
             'escalations.escalatedBy',
             'messages.user',
         ]);
-
-        if ($request->user()->isAdmin() || $request->user()->isOfficial()) {
-            $incident->load('caseRecords.creator');
-        } else {
-            $incident->setRelation('caseRecords', collect());
-        }
-
-        $statuses = Status::active()
+$statuses = Status::active()
             ->ordered()
             ->get();
 
@@ -312,8 +305,9 @@ class IncidentController extends Controller
 
         $user = $request->user();
 
+        $canAssessSeverity = $user->isAdmin() || $user->isOfficial();
+
         $validated = $request->validate([
-            'incident_title' => ['required', 'string', 'max:255'],
             'incident_description' => ['required', 'string', 'max:3000'],
             'category_id' => [
                 'required',
@@ -329,10 +323,12 @@ class IncidentController extends Controller
                 ),
             ],
             'barangay_id' => ['required', 'exists:barangays,id'],
-            'priority' => ['required', Rule::in(array_keys($this->severityOptions()))],
+            'priority' => $canAssessSeverity
+                ? ['nullable', Rule::in(array_keys($this->severityOptions()))]
+                : ['prohibited'],
             'location_address' => ['required', 'string', 'max:500'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
             'evidence' => ['nullable', 'array', 'max:5'],
             'evidence.*' => [
                 'nullable',
@@ -350,7 +346,19 @@ class IncidentController extends Controller
             'evidence.*.max' => 'Each evidence file must not exceed 10MB.',
         ]);
 
-        $initialStatus = Status::query()
+
+        $validated['_severity_assessed'] =
+            $canAssessSeverity
+            && ! empty(
+                $validated['priority']
+                ?? null
+            );
+
+        $validated['_stored_priority'] =
+            $validated['_severity_assessed']
+                ? $validated['priority']
+                : 'low';
+$initialStatus = Status::query()
             ->active()
             ->whereRaw('LOWER(status_name) = ?', ['reported'])
             ->first();
@@ -421,12 +429,18 @@ try {
             $incident->status = $initialStatus->status_name ?? 'pending';
         }
 
+        $generatedIncidentTitle =
+            $selectedCategoryName
+            ?: 'Incident';
+
         if (Schema::hasColumn('incidents', 'incident_title')) {
-            $incident->incident_title = $validated['incident_title'];
+            $incident->incident_title =
+                $generatedIncidentTitle;
         }
 
         if (Schema::hasColumn('incidents', 'title')) {
-            $incident->title = $validated['incident_title'];
+            $incident->title =
+                $generatedIncidentTitle;
         }
 
         if (Schema::hasColumn('incidents', 'incident_description')) {
@@ -440,7 +454,42 @@ try {
         }
 
         if (Schema::hasColumn('incidents', 'priority')) {
-            $incident->priority = $validated['priority'];
+            $incident->priority =
+                $validated['_stored_priority'];
+        }
+
+        if (
+            Schema::hasColumn(
+                'incidents',
+                'severity_needs_assessment'
+            )
+        ) {
+            $incident->severity_needs_assessment =
+                ! $validated['_severity_assessed'];
+        }
+
+        if (
+            Schema::hasColumn(
+                'incidents',
+                'severity_assessed_by'
+            )
+        ) {
+            $incident->severity_assessed_by =
+                $validated['_severity_assessed']
+                    ? $request->user()->id
+                    : null;
+        }
+
+        if (
+            Schema::hasColumn(
+                'incidents',
+                'severity_assessed_at'
+            )
+        ) {
+            $incident->severity_assessed_at =
+                $validated['_severity_assessed']
+                    ? now()
+                    : null;
         }
 
         if (Schema::hasColumn('incidents', 'incident_datetime')) {
@@ -555,17 +604,38 @@ $this->recordOperationalActivity(
             return;
         }
 
-        $incident->loadMissing(['category', 'barangay']);
+        $incident->loadMissing([
+            'category',
+            'barangay',
+        ]);
 
         $task = \App\Models\TanodTask::create([
             'incident_id' => $incident->id,
-            'created_by' => $request->user()->id,
-            'title' => $incident->incident_title ?? $incident->title ?? 'Incident Response Task',
-            'description' => $incident->incident_description ?? $incident->description ?? null,
-            'location' => $incident->location_address ?? $incident->location ?? null,
+            'barangay_id' =>
+                $incident->barangay_id,
+            'fallback_used' => false,
+            'created_by' =>
+                $request->user()->id,
+            'title' =>
+                $incident->incident_title
+                ?? $incident->title
+                ?? 'Incident Response Task',
+            'description' =>
+                $incident->incident_description
+                ?? $incident->description
+                ?? null,
+            'location' =>
+                $incident->location_address
+                ?? $incident->location
+                ?? null,
             'task_datetime' => now(),
             'due_at' => null,
-            'priority' => match ($incident->priority ?? 'normal') {
+            'priority' => (bool) (
+                $incident->severity_needs_assessment
+                ?? false
+            )
+                ? 'normal'
+                : match ($incident->priority ?? 'normal') {
                 'critical' => 'urgent',
                 'high' => 'high',
                 'moderate' => 'normal',
@@ -575,28 +645,23 @@ $this->recordOperationalActivity(
             'status' => 'open',
         ]);
 
-        $tanods = Employee::query()
-            ->with('user')
-            ->tanods()
-            ->active()
-            ->get();
+        $assignment = app(
+            \App\Services\TanodTaskAssignmentService::class
+        )->assignInitialResponses($task);
 
-        foreach ($tanods as $tanod) {
-            \App\Models\TanodTaskResponse::create([
-                'tanod_task_id' => $task->id,
-                'employee_id' => $tanod->id,
-                'user_id' => $tanod->user_id,
-                'response_status' => 'pending',
-                'response_note' => null,
-                'responded_at' => null,
-            ]);
-
+        foreach (
+            $assignment['tanods']
+            as $tanod
+        ) {
             if ($tanod->user_id) {
-                $this->notifyTanodAboutIncidentTask($task, $incident, (int) $tanod->user_id);
+                $this->notifyTanodAboutIncidentTask(
+                    $task,
+                    $incident,
+                    (int) $tanod->user_id
+                );
             }
         }
     }
-
     public function updateStatus(
         Request $request,
         Incident $incident
@@ -604,6 +669,8 @@ $this->recordOperationalActivity(
         Gate::authorize('update', $incident);
 
         $user = $request->user();
+
+        $canAssessSeverity = $user->isAdmin() || $user->isOfficial();
 
         $rules = [
             'status_id' => [
@@ -634,7 +701,24 @@ $this->recordOperationalActivity(
             ];
         }
 
-        $validated = $request->validate($rules);
+                $rules['priority'] =
+            $canAssessSeverity
+                ? [
+                    'nullable',
+                    Rule::in(
+                        array_keys(
+                            $this->severityOptions()
+                        )
+                    ),
+                ]
+                : ['prohibited'];
+$validated = $request->validate($rules);
+        $validated['_severity_submitted'] =
+            $canAssessSeverity
+            && ! empty(
+                $validated['priority']
+                ?? null
+            );
 
         $status = Status::query()
             ->active()
@@ -706,6 +790,60 @@ $this->recordOperationalActivity(
                 $incidentUpdateData['status'] = $status->status_name;
             }
 
+            if (
+                $validated['_severity_submitted']
+                ?? false
+            ) {
+                if (
+                    Schema::hasColumn(
+                        'incidents',
+                        'priority'
+                    )
+                ) {
+                    $incidentUpdateData['priority'] =
+                        $validated['priority'];
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'incidents',
+                        'map_severity'
+                    )
+                ) {
+                    $incidentUpdateData['map_severity'] =
+                        $validated['priority'];
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'incidents',
+                        'severity_needs_assessment'
+                    )
+                ) {
+                    $incidentUpdateData['severity_needs_assessment'] =
+                        false;
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'incidents',
+                        'severity_assessed_by'
+                    )
+                ) {
+                    $incidentUpdateData['severity_assessed_by'] =
+                        $request->user()->id;
+                }
+
+                if (
+                    Schema::hasColumn(
+                        'incidents',
+                        'severity_assessed_at'
+                    )
+                ) {
+                    $incidentUpdateData['severity_assessed_at'] =
+                        now();
+                }
+            }
             if (Schema::hasColumn('incidents', 'assigned_to')) {
                 $incidentUpdateData['assigned_to'] = $newAssignedTo;
             }
@@ -888,7 +1026,11 @@ $this->recordOperationalActivity(
             'message' => $validated['message'],
         ]);
 
-        $this->recordOperationalActivity(
+                $this->notifyIncidentMessageRecipients(
+            incident: $incident,
+            sender: $request->user()
+        );
+$this->recordOperationalActivity(
             event: 'incident.message_added',
             category: 'incident',
             description: 'A message was added to an incident.',
@@ -905,6 +1047,118 @@ $this->recordOperationalActivity(
         );
     }
 
+
+    public function quickStoreCategory(
+        Request $request
+    ): RedirectResponse {
+        Gate::authorize(
+            'manageIncidentCategories'
+        );
+
+        $validated = $request->validate([
+            'category_name' => [
+                'required',
+                'string',
+                'max:100',
+            ],
+        ]);
+
+        $categoryName = trim(
+            $validated['category_name']
+        );
+
+        $existing = IncidentCategory::query()
+            ->whereRaw(
+                'LOWER(category_name) = ?',
+                [mb_strtolower($categoryName)]
+            )
+            ->first();
+
+        if ($existing) {
+            $existing->forceFill([
+                'category_name' =>
+                    $categoryName,
+                'is_active' => true,
+            ])->save();
+
+            $category = $existing;
+        } else {
+            $category =
+                IncidentCategory::query()
+                    ->create([
+                        'category_name' =>
+                            $categoryName,
+                        'description' => null,
+                        'is_active' => true,
+                    ]);
+        }
+
+        $this->recordOperationalActivity(
+            event:
+                'incident_category.saved',
+            category:
+                'incident_category',
+            description:
+                'An incident category was added or reactivated.',
+            metadata: [
+                'incident_category_id' =>
+                    (int) $category->id,
+                'category_name' =>
+                    $category->category_name,
+            ],
+            request: $request,
+        );
+
+        return back()->with(
+            'success',
+            'Incident category saved successfully.'
+        );
+    }
+
+    public function quickDeleteCategory(
+        Request $request,
+        int $categoryId
+    ): RedirectResponse {
+        Gate::authorize(
+            'manageIncidentCategories'
+        );
+
+        $category =
+            IncidentCategory::query()
+                ->find($categoryId);
+
+        if (! $category) {
+            return back()->with(
+                'error',
+                'Incident category was not found.'
+            );
+        }
+
+        $category->forceFill([
+            'is_active' => false,
+        ])->save();
+
+        $this->recordOperationalActivity(
+            event:
+                'incident_category.removed',
+            category:
+                'incident_category',
+            description:
+                'An incident category was removed from new incident reporting.',
+            metadata: [
+                'incident_category_id' =>
+                    (int) $category->id,
+                'category_name' =>
+                    $category->category_name,
+            ],
+            request: $request,
+        );
+
+        return back()->with(
+            'success',
+            'Incident category removed from new reports. Existing incident records were preserved.'
+        );
+    }
     public function quickStoreBarangay(
         Request $request
     ): RedirectResponse {
@@ -1388,7 +1642,6 @@ $this->recordOperationalActivity(
             'incident_status_histories',
             'incident_status_history',
             'incident_escalations',
-            'case_records',
         ];
 
         foreach ($relatedTables as $table) {
@@ -1400,25 +1653,7 @@ $this->recordOperationalActivity(
         }
 
         if (Schema::hasTable('notifications') && Schema::hasColumn('notifications', 'source_id')) {
-            DB::table('notifications')
-                ->where('source_id', $incidentId)
-                ->when(Schema::hasColumn('notifications', 'type'), function ($query) {
-                    $query->whereIn('type', [
-                        'incident',
-                        'incident_reported',
-                        'incident_update',
-                        'incident_updated',
-                        'incident_status_update',
-                        'status_update',
-                        'dispatch',
-                        'escalation',
-                        'emergency',
-                        'resolved',
-                        'community_problem',
-                        'community',
-                    ]);
-                })
-                ->delete();
+            // Recipient-owned notification receipts are intentionally preserved for this incident.
         }
     }
 
@@ -1447,7 +1682,16 @@ $this->recordOperationalActivity(
         }
 
         if (Schema::hasColumn('incidents', 'map_severity')) {
-            $incidentUpdates['map_severity'] = $validated['priority'];
+            $incidentUpdates['map_severity'] =
+                (bool) (
+                    $validated['_severity_assessed']
+                    ?? false
+                )
+                    ? (
+                        $validated['priority']
+                        ?? $incident->priority
+                    )
+                    : null;
         }
 
         if (! empty($incidentUpdates)) {
@@ -1914,5 +2158,86 @@ $this->recordOperationalActivity(
             'Red Cross' => 'Red Cross',
             'Municipal Government' => 'Municipal Government',
         ];
+    }
+
+    private function notifyIncidentMessageRecipients(
+        Incident $incident,
+        User $sender
+    ): void {
+        if (! Schema::hasTable('notifications')) {
+            return;
+        }
+
+        $incident->loadMissing([
+            'reporter',
+            'assignedTanod.user',
+        ]);
+
+        $managementIds = User::query()
+            ->whereIn(
+                'role',
+                ['admin', 'official', 'dao']
+            )
+            ->when(
+                Schema::hasColumn('users', 'is_active'),
+                fn ($query) => $query->where(
+                    'is_active',
+                    true
+                )
+            )
+            ->pluck('id');
+
+        $recipientIds = collect()
+            ->merge($managementIds)
+            ->push($incident->reporter_id)
+            ->push($incident->assignedTanod?->user_id)
+            ->filter()
+            ->map(
+                fn ($id): int => (int) $id
+            )
+            ->reject(
+                fn (int $id): bool =>
+                    $id === (int) $sender->id
+            )
+            ->unique()
+            ->values();
+
+        foreach ($recipientIds as $userId) {
+            $data = [
+                'user_id' => $userId,
+                'type' => 'incident_message',
+                'source_id' => $incident->id,
+                'title' => 'New incident message',
+                'message' =>
+                    $sender->name
+                    . ' added a message to '
+                    . $incident->display_title
+                    . '.',
+                'is_read' => false,
+                'read_at' => null,
+            ];
+
+            if (
+                Schema::hasColumn(
+                    'notifications',
+                    'acknowledged_by'
+                )
+            ) {
+                $data['acknowledged_by'] = null;
+            }
+
+            if (
+                Schema::hasColumn(
+                    'notifications',
+                    'acknowledged_at'
+                )
+            ) {
+                $data['acknowledged_at'] = null;
+            }
+
+            UserNotification::query()->create(
+                $data
+            );
+        }
     }
 }

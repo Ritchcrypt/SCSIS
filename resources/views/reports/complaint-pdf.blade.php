@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Specific Complaint Report</title>
+    <title>Resident Feedback Report</title>
 
     <style>
         body {
@@ -147,10 +147,10 @@
     <div class="header">
         <p class="system-title">TabangNow / DaoSystem</p>
 
-        <p class="title">Specific Complaint Report</p>
+        <p class="title">Resident Feedback Report</p>
 
         <p class="subtitle">
-            Resident Complaint Documentation — Dao, Capiz
+            Resident Feedback Documentation — Dao, Capiz
         </p>
 
         <div class="meta">
@@ -160,15 +160,15 @@
     </div>
 
     <div class="notice">
-        This report contains only the selected resident complaint and its directly related records. Other complaints or incidents are excluded.
+        This report contains only the selected resident feedback and its directly related records. Other feedback records or incidents are excluded.
     </div>
 
     <div class="section">
-        <p class="section-title">Complaint Details</p>
+        <p class="section-title">Feedback Details</p>
 
         <table>
             <tr>
-                <td class="label">Complaint Code</td>
+                <td class="label">Feedback Reference</td>
                 <td class="value">{{ $value('code') }}</td>
             </tr>
 
@@ -178,7 +178,7 @@
             </tr>
 
             <tr>
-                <td class="label">Complainant</td>
+                <td class="label">Resident</td>
                 <td class="value">{{ $value('complainant') }}</td>
             </tr>
 
@@ -198,7 +198,7 @@
             </tr>
 
             <tr>
-                <td class="label">Complaint Date & Time</td>
+                <td class="label">Feedback Date & Time</td>
                 <td class="value">{{ $value('date_time') }}</td>
             </tr>
 
@@ -215,7 +215,7 @@
     </div>
 
     <div class="section">
-        <p class="section-title">Complaint Narrative / Details</p>
+        <p class="section-title">Feedback Narrative / Details</p>
 
         <table>
             <tr>
@@ -225,7 +225,7 @@
     </div>
 
     <div class="section">
-        <p class="section-title">Proofs / Attachments</p>
+        <p class="section-title">Supporting / Action Evidence</p>
 
         @if ($proofRecords->count())
             <table>
@@ -241,7 +241,7 @@
                 <tbody>
                     @foreach ($proofRecords as $proof)
                         <tr>
-                            <td>{{ $proof['file_name'] ?? 'Proof file' }}</td>
+                            <td>{{ $proof['file_name'] ?? 'Evidence file' }}</td>
                             <td>{{ $proof['file_type'] ?? '—' }}</td>
                             <td>{{ $proof['file_size'] ?? '—' }}</td>
                             <td>{{ $proof['uploaded_at'] ?? '—' }}</td>
@@ -261,7 +261,7 @@
     </div>
 
     <div class="footer">
-        This report is generated from TabangNow / DaoSystem records. It is intended for barangay complaint documentation and monitoring.
+        This report is generated from TabangNow / DaoSystem records. It is intended for barangay resident feedback documentation and service monitoring.
     </div>
 </body>
 </html>

@@ -214,6 +214,8 @@
             </tr>
         </table>
     </div>
+    @if ($showCaseRecords ?? false)
+
 
     <div class="section">
         <div class="section-title">Related Case Records</div>
@@ -252,6 +254,8 @@
             </table>
         @endif
     </div>
+    @endif
+
 
     <div class="section">
         <div class="section-title">Evidence / Attachments</div>

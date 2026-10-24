@@ -37,10 +37,16 @@ class SosReportPdfTest extends TestCase
             'acknowledged_at' => now(),
         ]);
 
+        /*
+         * The accepted Reports UI uses metric-level Download PDF actions.
+         * Open the Distress Signals / SOS metric before asserting this SOS
+         * record instead of expecting the retired "SOS PDF" button.
+         */
         $this->actingAs($admin)
-            ->get('/admin/reports')
+            ->get('/admin/reports?period=week&metric=distress')
             ->assertOk()
-            ->assertSee('SOS PDF')
+            ->assertSee('Distress Signals / SOS')
+            ->assertSee('Download PDF')
             ->assertSee($alert->alert_code);
 
         $webPdf = $this->actingAs($admin)

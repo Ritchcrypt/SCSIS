@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Barangay;
 use App\Models\User;
 use App\Models\UserNotification;
 use Illuminate\Auth\Events\Registered;
@@ -21,9 +22,27 @@ public string $contact_number = '';
 
 public string $address = '';
 
+public string $barangay_id = '';
+
+public string $date_of_birth = '';
+
+public bool $age_confirmation = false;
+
 public string $password = '';
 
     public string $password_confirmation = '';
+
+    /**
+     * Provide the current barangay list to the public registration view.
+     */
+    public function with(): array
+    {
+        return [
+            'barangays' => Barangay::query()
+                ->orderBy('barangay_name')
+                ->get(['id', 'barangay_name']),
+        ];
+    }
 
     /**
      * Register a new resident account.
@@ -74,6 +93,8 @@ $this->address = (string) preg_replace(
         |
         */
 
+        $this->validateResidentAge();
+
         $this->ensureIsNotRateLimited();
 
         $validated = $this->validate([
@@ -104,6 +125,12 @@ $this->address = (string) preg_replace(
                 'max:500',
             ],
 
+                'barangay_id' => [
+                'required',
+                'integer',
+                'exists:barangays,id',
+            ],
+
                 'password' => [
                 'required',
                 'string',
@@ -116,6 +143,8 @@ $this->address = (string) preg_replace(
                 'contact_number.regex' => 'Enter a valid Philippine mobile number, such as 09123456789.',
                 'address.required' => 'Complete address is required.',
                 'address.max' => 'Address must not exceed 500 characters.',
+                'barangay_id.required' => 'Select your barangay of residence.',
+                'barangay_id.exists' => 'Choose a valid barangay from the list.',
             ]);
 
         /*
@@ -132,9 +161,13 @@ $this->address = (string) preg_replace(
     'email' => $validated['email'],
     'contact_number' => $validated['contact_number'],
     'address' => $validated['address'],
+    'barangay_id' => (int) $validated['barangay_id'],
+    'date_of_birth' => $this->date_of_birth,
+    'age_attested_at' => now(),
     'password' => Hash::make($validated['password']),
     'role' => 'resident',
     'is_active' => false,
+    'registration_review_status' => 'pending',
     'status' => false,
 ]);
 
@@ -207,6 +240,56 @@ $this->address = (string) preg_replace(
     /**
      * Prevent excessive account creation.
      */
+    /**
+     * Validate the resident-declared legal age independently from the
+     * established registration validation array.
+     */
+    protected function validateResidentAge(): void
+    {
+        validator(
+            [
+                'date_of_birth' =>
+                    $this->date_of_birth,
+
+                'age_confirmation' =>
+                    $this->age_confirmation,
+            ],
+            [
+                'date_of_birth' => [
+                    'required',
+                    'date_format:Y-m-d',
+                    'before_or_equal:'
+                        . now()
+                            ->subYears(18)
+                            ->toDateString(),
+                    'after_or_equal:'
+                        . now()
+                            ->subYears(120)
+                            ->toDateString(),
+                ],
+
+                'age_confirmation' => [
+                    'accepted',
+                ],
+            ],
+            [
+                'date_of_birth.required' =>
+                    'Date of birth is required.',
+
+                'date_of_birth.date_format' =>
+                    'Enter a valid date of birth.',
+
+                'date_of_birth.before_or_equal' =>
+                    'Resident registration is limited to persons 18 years old or older.',
+
+                'date_of_birth.after_or_equal' =>
+                    'Enter a plausible date of birth.',
+
+                'age_confirmation.accepted' =>
+                    'You must confirm that your date of birth is accurate and that you are at least 18 years old.',
+            ]
+        )->validate();
+    }
     protected function ensureIsNotRateLimited(): void
     {
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 3)) {
@@ -230,10 +313,12 @@ $this->address = (string) preg_replace(
 }; ?>
 
 <div class="flex flex-col gap-6">
-    <x-auth-header
-        title="Create a resident account"
-        description="Register for access to TabangNow community services"
-    />
+    <div class="tn-auth-header">
+        <h1 style="font-size: clamp(17px, 2.1vw, 26px); font-weight: 850; line-height: 1.18; letter-spacing: -0.045em; white-space: nowrap;">
+            Create a resident account
+        </h1>
+        <p>Register for access to TabangNow community services</p>
+    </div>
 
     <x-auth-session-status
         class="text-center"
@@ -368,6 +453,91 @@ $this->address = (string) preg_replace(
     </div>
 </div>
 
+    {{-- Barangay of Residence: used for targeted community announcements --}}
+    <div class="grid gap-2">
+        <label for="barangay_id" class="text-sm font-semibold text-slate-800">
+            Barangay of Residence <span class="text-red-600" aria-hidden="true">*</span>
+        </label>
+
+        <select
+            wire:model="barangay_id"
+            id="barangay_id"
+            name="barangay_id"
+            required
+            class="h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        >
+            <option value="">Select the barangay where you currently live</option>
+            @foreach ($barangays as $barangay)
+                <option value="{{ $barangay->id }}">{{ $barangay->barangay_name }}</option>
+            @endforeach
+        </select>
+
+        <p class="text-xs leading-5 text-slate-500">
+            Your barangay determines which location-specific community announcements and notices you receive.
+        </p>
+
+        @error('barangay_id')
+            <p class="text-sm font-medium text-red-600">{{ $message }}</p>
+        @enderror
+    </div>
+
+    {{-- Resident Age Restriction --}}
+    <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <div class="grid gap-4">
+            <div>
+                <h3 class="text-sm font-bold text-slate-900">
+                    Resident age requirement
+                </h3>
+
+                <p class="mt-1 text-xs leading-5 text-slate-600">
+                    Website resident registration is limited to persons
+                    18 years old or older. The information you submit is
+                    subject to administrator review before your account
+                    can be activated.
+                </p>
+            </div>
+
+            <flux:input
+                wire:model="date_of_birth"
+                id="date_of_birth"
+                :label="__('Date of birth')"
+                type="date"
+                name="date_of_birth"
+                required
+                autocomplete="bday"
+                min="{{ now()->subYears(120)->toDateString() }}"
+                max="{{ now()->subYears(18)->toDateString() }}"
+            />
+
+            <label
+                for="age_confirmation"
+                class="flex cursor-pointer items-start gap-3 rounded-lg border border-blue-200 bg-white p-3"
+            >
+                <input
+                    wire:model="age_confirmation"
+                    id="age_confirmation"
+                    name="age_confirmation"
+                    type="checkbox"
+                    value="1"
+                    required
+                    class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+                >
+
+                <span class="text-xs leading-5 text-slate-700">
+                    I certify that the date of birth I entered is accurate
+                    and that I am at least 18 years old. I understand that
+                    false registration information may cause the account
+                    to be rejected or deactivated by the administrator.
+                </span>
+            </label>
+
+            @error('age_confirmation')
+                <p class="text-sm text-red-600">
+                    {{ $message }}
+                </p>
+            @enderror
+        </div>
+    </div>
     {{-- Password --}}
     <div class="grid gap-2">
         <flux:input

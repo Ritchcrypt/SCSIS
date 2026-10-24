@@ -159,6 +159,10 @@
                             Address
                         </th>
 
+
+                        <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
+                            Resident Age
+                        </th>
                         <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-white">
                             Role
                         </th>
@@ -253,6 +257,38 @@
                                 </span>
                             </td>
 
+                            <td class="px-5 py-4 text-sm text-slate-700">
+                                @if (strtolower((string) $userRecord->role) === 'resident')
+                                    @if ($userRecord->date_of_birth && $userRecord->resident_age !== null)
+                                        <div class="space-y-1">
+                                            <span class="{{ $userRecord->resident_age >= 18
+                                                ? 'inline-flex rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-bold text-green-700'
+                                                : 'inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700' }}">
+                                                {{ $userRecord->resident_age }} yrs
+                                            </span>
+
+                                            <p class="text-xs text-slate-500">
+                                                DOB:
+                                                {{ $userRecord->date_of_birth->format('M d, Y') }}
+                                            </p>
+
+                                            <p class="text-xs font-semibold {{ $userRecord->resident_age >= 18 && $userRecord->age_attested_at
+                                                ? 'text-green-700'
+                                                : 'text-amber-700' }}">
+                                                {{ $userRecord->resident_age >= 18 && $userRecord->age_attested_at
+                                                    ? '18+ gate passed'
+                                                    : 'Review age record' }}
+                                            </p>
+                                        </div>
+                                    @else
+                                        <span class="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">
+                                            No age record
+                                        </span>
+                                    @endif
+                                @else
+                                    —
+                                @endif
+                            </td>
                             <td class="px-5 py-4">
                                 <span class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                                     {{ ucfirst((string) $userRecord->role) }}
@@ -273,6 +309,16 @@
                                         {{ $isOnline ? 'Online' : 'Offline' }}
                                     </span>
                                 </span>
+                                @if (strtolower((string) $userRecord->role) === 'resident')
+                                    @php $reviewStatus = strtolower(trim((string) ($userRecord->registration_review_status ?? ''))); @endphp
+                                    @if (! $userRecord->isActive() && in_array($reviewStatus, ['', 'pending'], true))
+                                        <span class="mt-2 block text-xs font-semibold text-amber-700">Registration: Pending review</span>
+                                    @elseif ($reviewStatus === 'declined')
+                                        <span class="mt-2 block text-xs font-semibold text-red-700">Registration: Declined</span>
+                                    @elseif ($reviewStatus === 'approved')
+                                        <span class="mt-2 block text-xs font-semibold text-emerald-700">Registration: Approved</span>
+                                    @endif
+                                @endif
                             </td>
 
                             <td class="px-5 py-4 text-sm text-slate-700">
@@ -290,12 +336,19 @@
                    :href="route('admin.users.edit', $userRecord)"
                    label="Edit user"
                    data-user-management-return />
+    @if (strtolower((string) $userRecord->role) === 'resident'
+         && ! $userRecord->isActive()
+         && in_array(strtolower((string) ($userRecord->registration_review_status ?? '')), ['', 'pending'], true))
+        <a href="{{ route('admin.users.edit', $userRecord) }}"
+           class="whitespace-nowrap text-xs font-bold text-amber-700 underline hover:text-amber-900"
+           data-user-management-return>Review registration</a>
+    @endif
 </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-5 py-14 text-center">
+                            <td colspan="9" class="px-5 py-14 text-center">
                                 <h3 class="text-base font-bold text-slate-900">
                                     No users found
                                 </h3>

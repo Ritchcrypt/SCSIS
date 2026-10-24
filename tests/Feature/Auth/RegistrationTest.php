@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Barangay;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -23,12 +24,19 @@ class RegistrationTest extends TestCase
     {
         $password = 'TabangNow#2026Secure';
         $email = 'resident.test@example.com';
+        $barangay = Barangay::query()->firstOrCreate(
+            ['barangay_name' => 'Agtambi'],
+            ['location' => 'Dao, Capiz']
+        );
 
         Volt::test('auth.register')
             ->set('name', 'Resident Test')
             ->set('email', $email)
             ->set('contact_number', '09123456789')
             ->set('address', 'Poblacion, Dao, Capiz')
+            ->set('barangay_id', (string) $barangay->id)
+            ->set('date_of_birth', now()->subYears(20)->subDay()->toDateString())
+            ->set('age_confirmation', true)
             ->set('password', $password)
             ->set('password_confirmation', $password)
             ->call('register')
@@ -43,6 +51,9 @@ class RegistrationTest extends TestCase
         $this->assertSame('resident', $user->role);
         $this->assertSame('09123456789', $user->contact_number);
         $this->assertSame('Poblacion, Dao, Capiz', $user->address);
+        $this->assertSame($barangay->id, (int) $user->barangay_id);
+        $this->assertSame(20, $user->resident_age);
+        $this->assertNotNull($user->age_attested_at);
         $this->assertFalse((bool) $user->is_active);
         $this->assertTrue(Hash::check($password, $user->password));
 

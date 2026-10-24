@@ -76,10 +76,10 @@ class NotificationAlertTierPolicyTest extends TestCase
             'dispatch' => 'moderate',
             'escalation' => 'moderate',
 
-            // Task assignments normally require attention.
-            'tanod_task' => 'moderate',
-            'tanod_task_assigned' => 'moderate',
-            'task_assigned' => 'moderate',
+            // Tanod Task assignments trigger Code Red.
+            'tanod_task' => 'critical',
+            'tanod_task_assigned' => 'critical',
+            'task_assigned' => 'critical',
 
             // Future unknown informational notifications must never
             // accidentally become Code Red.

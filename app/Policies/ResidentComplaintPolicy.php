@@ -36,7 +36,7 @@ class ResidentComplaintPolicy
     }
 
     /**
-     * Only residents may submit resident complaints.
+     * Only residents may submit resident feedback.
      */
     public function create(User $user): bool
     {

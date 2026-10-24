@@ -102,6 +102,35 @@ class ResidentComplaintController extends Controller
         abort_unless($user instanceof User, 401, 'Unauthenticated.');
 
         $validated = $request->validate([
+            'feedback_category' => [
+                'nullable',
+                Rule::in([
+                    'system_experience',
+                    'staff_response',
+                    'barangay_service',
+                    'community_concern',
+                    'suggestion',
+                ]),
+            ],
+            'feedback_type' => [
+                'nullable',
+                Rule::in([
+                    'concern',
+                    'complaint',
+                    'suggestion',
+                    'compliment',
+                ]),
+            ],
+            'feedback_subject' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'service_rating' => [
+                'nullable',
+                'integer',
+                'between:1,5',
+            ],
             'complainant_name' => [
                 'required',
                 'string',
@@ -114,7 +143,7 @@ class ResidentComplaintController extends Controller
                 'regex:/^[0-9+()\-.\\s]*$/',
             ],
             'complaint_address' => [
-                'required',
+                'nullable',
                 'string',
                 'max:500',
             ],
@@ -150,6 +179,14 @@ class ResidentComplaintController extends Controller
             ): ResidentComplaint {
                 $complaint = ResidentComplaint::create([
                     'resident_id' => $user->id,
+                    'feedback_category' =>
+                        $validated['feedback_category'] ?? 'community_concern',
+                    'feedback_type' =>
+                        $validated['feedback_type'] ?? 'concern',
+                    'feedback_subject' =>
+                        $validated['feedback_subject'] ?? null,
+                    'service_rating' =>
+                        $validated['service_rating'] ?? null,
                     'complainant_name' =>
                         $validated['complainant_name'],
                     'contact_number' =>
@@ -157,7 +194,7 @@ class ResidentComplaintController extends Controller
                     'complaint_description' =>
                         $validated['complaint_description'],
                     'complaint_address' =>
-                        $validated['complaint_address'],
+                        $validated['complaint_address'] ?? null,
                     'evidence_path' => $evidencePath,
                     'status' => 'submitted',
                     'submitted_at' => now(),
@@ -184,7 +221,7 @@ class ResidentComplaintController extends Controller
             event: 'complaint.created',
             category: 'complaint',
             description:
-                'A resident complaint was submitted.',
+                'Resident feedback was submitted.',
             metadata: [
                 'complaint_id' => (int) $complaint->id,
                 'status' => $complaint->status,
@@ -199,7 +236,7 @@ class ResidentComplaintController extends Controller
         return response()
             ->json([
                 'message' =>
-                    'Complaint submitted successfully.',
+                    'Feedback submitted successfully.',
                 'data' =>
                     $this->serializeComplaint(
                         $complaint
@@ -309,7 +346,7 @@ class ResidentComplaintController extends Controller
             event: 'complaint.status_updated',
             category: 'complaint',
             description:
-                'A resident complaint status was updated.',
+                'A resident feedback status was updated.',
             metadata: [
                 'complaint_id' =>
                     (int) $residentComplaint->id,
@@ -324,7 +361,7 @@ class ResidentComplaintController extends Controller
         return response()
             ->json([
                 'message' =>
-                    'Complaint status updated successfully.',
+                    'Feedback status updated successfully.',
                 'data' =>
                     $this->serializeComplaint(
                         $residentComplaint
@@ -423,7 +460,7 @@ class ResidentComplaintController extends Controller
             event: 'complaint.proof_uploaded',
             category: 'complaint',
             description:
-                'A proof image was uploaded for a resident complaint.',
+                'Response and action evidence was added to resident feedback.',
             metadata: [
                 'complaint_id' =>
                     (int) $residentComplaint->id,
@@ -440,7 +477,7 @@ class ResidentComplaintController extends Controller
         return response()
             ->json([
                 'message' =>
-                    'Proof picture sent to resident successfully.',
+                    'Response and action evidence added successfully.',
                 'data' =>
                     $this->serializeComplaint(
                         $residentComplaint
@@ -567,12 +604,7 @@ class ResidentComplaintController extends Controller
         DB::transaction(function () use (
             $residentComplaint
         ): void {
-            $this
-                ->deleteComplaintNotifications(
-                    $residentComplaint
-                );
-
-            $this->deleteComplaintProofRows(
+$this->deleteComplaintProofRows(
                 $residentComplaint
             );
 
@@ -588,7 +620,7 @@ class ResidentComplaintController extends Controller
             event: 'complaint.deleted',
             category: 'complaint',
             description:
-                'A resident complaint was deleted.',
+                'Resident feedback was deleted.',
             metadata: $metadata,
             request: $request,
         );
@@ -596,7 +628,7 @@ class ResidentComplaintController extends Controller
         return response()
             ->json([
                 'message' =>
-                    'Complaint deleted successfully.',
+                    'Feedback deleted successfully.',
             ])
             ->header('Cache-Control', 'no-store, private');
     }
@@ -608,6 +640,20 @@ class ResidentComplaintController extends Controller
             'id' => (int) $complaint->id,
             'resident_id' =>
                 (int) $complaint->resident_id,
+            'feedback_category' =>
+                (string) ($complaint->feedback_category ?: 'community_concern'),
+            'feedback_category_label' =>
+                $complaint->feedbackCategoryLabel(),
+            'feedback_type' =>
+                (string) ($complaint->feedback_type ?: 'concern'),
+            'feedback_type_label' =>
+                $complaint->feedbackTypeLabel(),
+            'feedback_subject' =>
+                $complaint->feedback_subject,
+            'service_rating' =>
+                $complaint->service_rating
+                    ? (int) $complaint->service_rating
+                    : null,
             'complainant_name' =>
                 (string) $complaint
                     ->complainant_name,
@@ -771,11 +817,11 @@ class ResidentComplaintController extends Controller
                                 'source_id' =>
                                     $complaint->id,
                                 'title' =>
-                                    'New resident complaint',
+                                    'New resident feedback',
                                 'message' =>
                                     $complaint
                                         ->complainant_name
-                                    . ' submitted a complaint: '
+                                    . ' submitted feedback: '
                                     . mb_substr(
                                         $complaint
                                             ->complaint_description,

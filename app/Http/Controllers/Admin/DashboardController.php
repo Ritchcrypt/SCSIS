@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\CaseRecord;
 use App\Models\Incident;
 use App\Models\Status;
 use App\Support\SafeDatabaseIdentifier;
@@ -42,11 +41,18 @@ class DashboardController extends Controller
         */
 
         $activeStatusNames = [
+            'reported',
+            'acknowledged',
             'pending',
+            'submitted',
             'verified',
-            'responding',
             'dispatched',
+            'responding',
             'active',
+            'in progress',
+            'in_progress',
+            'under review',
+            'under_review',
             'escalated',
         ];
 
@@ -73,20 +79,13 @@ class DashboardController extends Controller
         */
 
         $totalIncidents = Incident::count();
-
-        // "Active Cases" belongs to Case Management, so count case_records
-        // rather than incident workflow statuses.
-        $activeCases = Schema::hasTable('case_records')
-            ? CaseRecord::query()
-                ->whereIn('status', [
-                    'open',
-                    'under_investigation',
-                    'mediation',
-                ])
-                ->count()
+        $activeIncidents = ! empty($activeStatusIds)
+            ? Incident::whereIn(
+                'status_id',
+                $activeStatusIds
+            )->count()
             : 0;
-
-        $resolvedCases = ! empty($resolvedStatusIds)
+$resolvedIncidents = ! empty($resolvedStatusIds)
             ? Incident::whereIn('status_id', $resolvedStatusIds)->count()
             : 0;
 
@@ -111,7 +110,7 @@ class DashboardController extends Controller
         | This counts only records where the real duty/status field says On Duty.
         */
 
-        $tanodOnDuty = $this->countTanodOnDuty();
+        $tanodOnDuty = app(\App\Services\TanodDutyCounter::class)->currentCount();
 
         /*
         |--------------------------------------------------------------------------
@@ -134,8 +133,8 @@ class DashboardController extends Controller
 
         return view('admin.dashboard', [
             'totalIncidents' => $totalIncidents,
-            'activeCases' => $activeCases,
-            'resolvedCases' => $resolvedCases,
+            'activeIncidents' => $activeIncidents,
+            'resolvedIncidents' => $resolvedIncidents,
             'criticalIncidents' => $criticalIncidents,
             'tanodOnDuty' => $tanodOnDuty,
             'recentIncidents' => $recentIncidents,

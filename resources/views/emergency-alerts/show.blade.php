@@ -64,7 +64,7 @@
                 </div>
 
                 <div>
-                    <dt class="font-semibold text-slate-500">Linked TabangNow user</dt>
+                    <dt class="font-semibold text-slate-500">Reporter full name</dt>
                     <dd class="mt-1 font-bold text-slate-900">{{ $alert->display_name }}</dd>
                 </div>
 
@@ -79,7 +79,7 @@
                     </div>
                 @else
                     <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
-                        No TabangNow account was linked to this device. Use the submitted mobile number and location when responding.
+                        No TabangNow account is linked to this distress signal. The submitted reporter name, mobile number, and location should be used when responding.
                     </div>
                 @endif
             </dl>

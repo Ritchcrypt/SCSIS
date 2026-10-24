@@ -120,6 +120,15 @@
 
                 $showInWeatherFeed = (bool) ($announcement->show_in_weather_feed ?? false);
 
+                $targetBarangayNames = (
+                    $barangayTargetingReady
+                    && $announcement->relationLoaded('targetBarangays')
+                )
+                    ? $announcement->targetBarangays
+                        ->pluck('barangay_name')
+                        ->values()
+                    : collect();
+
                 $destroyRouteName = match ($role) {
                     'admin' => \Illuminate\Support\Facades\Route::has('admin.announcements.destroy')
                         ? 'admin.announcements.destroy'
@@ -189,6 +198,16 @@
                                 <span>{{ $publishedDate }}</span>
                                 <span>•</span>
                                 <span>{{ $announcement->display_audience }}</span>
+
+                                @if ($barangayTargetingReady)
+                                    <span>•</span>
+                                    <span>
+                                        Barangay:
+                                        {{ $targetBarangayNames->isNotEmpty()
+                                            ? $targetBarangayNames->join(', ')
+                                            : 'Legacy / Unscoped' }}
+                                    </span>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -360,6 +379,59 @@
                     </div>
                 </div>
 
+
+                <div class="rounded-2xl border border-blue-200 bg-blue-50/50 p-5">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm font-bold text-slate-800">
+                            Target Barangays *
+                        </label>
+
+                        <p class="text-sm leading-6 text-slate-600">
+                            Only users assigned to the selected barangays and matching the chosen audience will receive and see this announcement.
+                        </p>
+                    </div>
+
+                    @if (! $barangayTargetingReady)
+                        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                            Barangay targeting requires the new database migration before announcements can be posted.
+                        </div>
+                    @elseif ($barangays->isEmpty())
+                        <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                            No official Dao barangays are available in the database.
+                        </div>
+                    @else
+                        <div class="mt-4 grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-blue-100 bg-white p-4 sm:grid-cols-2">
+                            @foreach ($barangays as $barangay)
+                                <label class="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-blue-50">
+                                    <input type="checkbox"
+                                           name="barangay_ids[]"
+                                           value="{{ $barangay->id }}"
+                                           @checked(in_array(
+                                               (string) $barangay->id,
+                                               array_map(
+                                                   'strval',
+                                                   (array) old('barangay_ids', [])
+                                               ),
+                                               true
+                                           ))
+                                           class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+
+                                    <span class="text-sm font-semibold text-slate-700">
+                                        {{ $barangay->barangay_name }}
+                                    </span>
+                                </label>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @error('barangay_ids')
+                        <p class="mt-3 text-sm font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
+
+                    @error('barangay_ids.*')
+                        <p class="mt-3 text-sm font-semibold text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
                 <label class="flex cursor-pointer items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4">
                     <div>
                         <p class="text-sm font-bold text-red-700">
@@ -367,7 +439,7 @@
                         </p>
 
                         <p class="mt-1 text-sm text-red-600">
-                            Triggers system-wide emergency alert and automatically shows this announcement in the Weather & Disaster Feed.
+                            Sends an emergency-priority alert only to matching users in the selected barangays and automatically shows this announcement in the Weather & Disaster Feed.
                         </p>
                     </div>
 

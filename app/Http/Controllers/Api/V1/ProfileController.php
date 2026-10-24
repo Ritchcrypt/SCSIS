@@ -44,7 +44,9 @@ class ProfileController extends Controller
                 'can_change_password' => $selfService,
                 'can_self_delete' => $selfService,
             ],
-            'password_policy' => [
+            'options' => [
+                'barangays' => $this->barangayOptions(),
+            ],            'password_policy' => [
                 'minimum_length' => 12,
                 'mixed_case' => true,
                 'numbers' => true,
@@ -76,7 +78,11 @@ class ProfileController extends Controller
                 'max:30',
                 'regex:/^[0-9+()\-\s]*$/',
             ],
-            'address' => ['nullable', 'string', 'max:1000'],
+            'address' => ['nullable', 'string', 'max:1000'],            'barangay_id' => [
+                'nullable',
+                'integer',
+                'exists:barangays,id',
+            ],
             'profile_photo' => [
                 'nullable',
                 'image',
@@ -91,7 +97,7 @@ class ProfileController extends Controller
             'name' => (string) $actor->name,
             'email' => (string) $actor->email,
             'contact_number' => (string) ($actor->contact_number ?? ''),
-            'address' => (string) ($actor->address ?? ''),
+            'address' => (string) ($actor->address ?? ''),            'barangay_id' => (int) ($actor->barangay_id ?? 0),
         ];
 
         $normalizedEmail = strtolower(trim((string) $validated['email']));
@@ -129,6 +135,17 @@ class ProfileController extends Controller
                         : null;
                 }
 
+                if (
+                    array_key_exists('barangay_id', $validated)
+                    && Schema::hasColumn('users', 'barangay_id')
+                ) {
+                    $barangayId = $validated['barangay_id'] ?? null;
+
+                    $user->barangay_id =
+                        $barangayId !== null
+                            ? (int) $barangayId
+                            : null;
+                }
                 if ($newPhoto && Schema::hasColumn('users', 'profile_photo_path')) {
                     $user->profile_photo_path = $newPhoto;
                 }
@@ -157,6 +174,12 @@ class ProfileController extends Controller
         if (strcasecmp($original['email'], (string) $updated->email) !== 0) $changedFields[] = 'email';
         if ($original['contact_number'] !== (string) ($updated->contact_number ?? '')) $changedFields[] = 'contact_number';
         if ($original['address'] !== (string) ($updated->address ?? '')) $changedFields[] = 'address';
+        if (
+            $original['barangay_id']
+            !== (int) ($updated->barangay_id ?? 0)
+        ) {
+            $changedFields[] = 'barangay_id';
+        }
         if ($newPhoto) $changedFields[] = 'profile_photo';
 
         if ($changedFields !== []) {
@@ -371,6 +394,29 @@ class ProfileController extends Controller
             'profile_photo_version' => optional($user->updated_at)->toIso8601String(),
             'email_verified' => !Schema::hasColumn('users', 'email_verified_at') || $user->email_verified_at !== null,
         ];
+    }
+
+    private function barangayOptions(): array
+    {
+        if (! Schema::hasTable('barangays')) {
+            return [];
+        }
+
+        return DB::table('barangays')
+            ->select([
+                'id',
+                'barangay_name',
+            ])
+            ->orderBy('barangay_name')
+            ->get()
+            ->map(
+                fn ($barangay): array => [
+                    'id' => (int) $barangay->id,
+                    'name' => (string) $barangay->barangay_name,
+                ]
+            )
+            ->values()
+            ->all();
     }
 
     private function verifyPassword(User $user, string $password, string $field): void

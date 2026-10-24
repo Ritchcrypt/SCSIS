@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\TanodProfile;
 use App\Models\User;
 use App\Services\TanodDutyScheduleService;
+use App\Support\DaoBarangays;
 use App\Support\SqlLikePattern;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,7 +53,7 @@ class TanodRosterController extends Controller
             )
             ->with([
                 'user',
-                'employee',
+                'employee.barangay',
             ])
             ->when(
                 $searchPattern !== null,
@@ -144,6 +145,7 @@ class TanodRosterController extends Controller
                     'statuses' => $this->optionRows(
                         $this->statuses()
                     ),
+                    'barangays' => $this->barangayOptions(),
                 ],
 
                 'permissions' => [
@@ -376,7 +378,7 @@ class TanodRosterController extends Controller
             $lockedTanod = TanodProfile::query()
                 ->with([
                     'user',
-                    'employee',
+                    'employee.barangay',
                 ])
                 ->lockForUpdate()
                 ->findOrFail($tanod->getKey());
@@ -542,7 +544,7 @@ class TanodRosterController extends Controller
             $lockedTanod = TanodProfile::query()
                 ->with([
                     'user',
-                    'employee',
+                    'employee.barangay',
                 ])
                 ->lockForUpdate()
                 ->findOrFail($tanod->getKey());
@@ -655,6 +657,11 @@ class TanodRosterController extends Controller
             'employee_id' => $tanod->employee_id
                 ? (int) $tanod->employee_id
                 : null,
+            'barangay_id' => $tanod->employee?->barangay_id !== null
+                ? (int) $tanod->employee->barangay_id
+                : null,
+            'barangay_name' =>
+                $tanod->employee?->barangay?->barangay_name,
             'badge_number' =>
                 $tanod->badge_number,
             'rank' => $tanod->response_rank !== null
@@ -709,6 +716,25 @@ class TanodRosterController extends Controller
             'employee_active' =>
                 (bool) ($tanod->employee?->is_active ?? false),
         ];
+    }
+
+    private function barangayOptions(): array
+    {
+        return Barangay::query()
+            ->whereIn('barangay_name', DaoBarangays::names())
+            ->orderBy('barangay_name')
+            ->get([
+                'id',
+                'barangay_name',
+            ])
+            ->map(
+                fn (Barangay $barangay): array => [
+                    'value' => (int) $barangay->id,
+                    'label' => (string) $barangay->barangay_name,
+                ]
+            )
+            ->values()
+            ->all();
     }
 
     private function normalizeEmailInput(

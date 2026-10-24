@@ -79,10 +79,15 @@ class IncidentInitialStatusRegressionTest extends TestCase
 
         $response->assertSessionHasNoErrors();
 
+        /*
+         * Website incident titles are now generated from the selected
+         * category. Locate the created record by this test's unique
+         * description instead of the obsolete submitted title.
+         */
         $incident = Incident::query()
             ->where(
-                'incident_title',
-                'Website reported-status regression'
+                'incident_description',
+                'Regression test incident report.'
             )
             ->firstOrFail();
 
@@ -197,13 +202,13 @@ class IncidentInitialStatusRegressionTest extends TestCase
 
         return [
             'incident_title' => $title,
-            'incident_description' =>
-                'Regression test incident report.',
+            'incident_description' => 'Regression test incident report.',
             'category_id' => (int) $categoryId,
             'barangay_id' => (int) $barangayId,
             'priority' => 'low',
-            'location_address' =>
-                'Dao, Capiz regression test location',
+            'location_address' => 'Dao, Capiz regression test location',
+            'latitude' => 11.3889,
+            'longitude' => 122.6850,
         ];
     }
 }

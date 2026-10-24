@@ -27,6 +27,17 @@ class NotificationBellService
 
         $latestNotification = UserNotification::query()
             ->where('user_id', (int) $user->id)
+            ->when(
+                Schema::hasColumn('notifications', 'type'),
+                fn ($query) => $query->whereNotIn(
+                    'type',
+                    [
+                        'case_created',
+                        'case_updated',
+                        'case_deleted',
+                    ]
+                )
+            )
             ->orderByDesc('id')
             ->first();
 
@@ -66,7 +77,6 @@ class NotificationBellService
         return [
             'unread_count' => $notifications->count(),
             'notifications' => $notifications
-                ->take(20)
                 ->map(fn (UserNotification $notification) => $this->formatNotification($notification, $user))
                 ->values(),
             'fallback_url' => $this->dashboardUrl($user),
@@ -74,6 +84,87 @@ class NotificationBellService
         ];
     }
 
+    public function markAllUnreadAsRead(?User $user): int
+    {
+        if (
+            ! $user
+            || ! Schema::hasTable('notifications')
+            || ! Schema::hasColumn('notifications', 'user_id')
+        ) {
+            return 0;
+        }
+
+        $updates = [];
+
+        if (Schema::hasColumn('notifications', 'is_read')) {
+            $updates['is_read'] = true;
+        }
+
+        if (Schema::hasColumn('notifications', 'read_at')) {
+            $updates['read_at'] = now();
+        }
+
+        if ($updates === []) {
+            return 0;
+        }
+
+        $query = UserNotification::query()
+            ->where('user_id', (int) $user->id);
+
+        if (Schema::hasColumn('notifications', 'type')) {
+            $query->whereNotIn(
+                'type',
+                [
+                    'case_created',
+                    'case_updated',
+                    'case_deleted',
+                ]
+            );
+        }
+
+        if (Schema::hasColumn('notifications', 'is_read')) {
+            $query->where(function ($unreadQuery) {
+                $unreadQuery->where('is_read', false)
+                    ->orWhere('is_read', 0)
+                    ->orWhereNull('is_read');
+            });
+        } elseif (Schema::hasColumn('notifications', 'read_at')) {
+            $query->whereNull('read_at');
+        }
+
+        return (int) $query->update($updates);
+    }
+
+    public function deleteOwnedNotificationGroup(
+        ?User $user,
+        UserNotification $notification
+    ): int {
+        if (
+            ! $user
+            || ! Schema::hasTable('notifications')
+            || ! Schema::hasColumn('notifications', 'user_id')
+            || (int) $notification->user_id !== (int) $user->id
+        ) {
+            return 0;
+        }
+
+        $query = UserNotification::query()
+            ->where('user_id', (int) $user->id);
+
+        if (
+            Schema::hasColumn('notifications', 'source_id')
+            && Schema::hasColumn('notifications', 'type')
+            && $notification->source_id !== null
+        ) {
+            $query
+                ->where('type', $notification->type)
+                ->where('source_id', $notification->source_id);
+        } else {
+            $query->whereKey((int) $notification->id);
+        }
+
+        return $query->delete();
+    }
     private function formatPulseNotification(?UserNotification $notification): ?array
     {
         if (! $notification) {
@@ -103,6 +194,17 @@ class NotificationBellService
 
         $query = UserNotification::query()
             ->where('user_id', (int) $user->id);
+
+        if (Schema::hasColumn('notifications', 'type')) {
+            $query->whereNotIn(
+                'type',
+                [
+                    'case_created',
+                    'case_updated',
+                    'case_deleted',
+                ]
+            );
+        }
 
         if (Schema::hasColumn('notifications', 'is_read')) {
             $query->where(function ($unreadQuery) {
@@ -167,13 +269,10 @@ class NotificationBellService
             'user_registration' => 'New Registration',
             'account_activated' => 'Account Activated',
             'account_deactivated' => 'Account Deactivated',
-            'case_created' => 'Case Created',
-            'case_updated' => 'Case Updated',
-            'case_deleted' => 'Case Deleted',
-            'resident_complaint' => 'Resident Complaint',
-            'resident_complaint_update' => 'Complaint Update',
-            'resident_complaint_status_update' => 'Complaint Status Update',
-            'resident_complaint_proof' => 'Complaint Proof',
+            'resident_complaint' => 'Resident Feedback',
+            'resident_complaint_update' => 'Feedback Update',
+            'resident_complaint_status_update' => 'Feedback Status Update',
+            'resident_complaint_proof' => 'Feedback Action Evidence',
             'incident' => 'Incident',
             'incident_reported' => 'Incident Report',
             'incident_update' => 'Incident Update',
@@ -198,6 +297,7 @@ class NotificationBellService
             'tanod_task' => 'Tanod Task',
             'tanod_task_assigned' => 'Tanod Task',
             'tanod_task_update' => 'Tanod Task Update',
+            'tanod_task_response' => 'Tanod Task Response',
             'task_assigned' => 'Tanod Task',
             'task_update' => 'Tanod Task Update',
             'community_problem' => 'Community Problem',
@@ -243,11 +343,6 @@ class NotificationBellService
             return route('emergency-alerts.show', (int) $notification->source_id);
         }
 
-        if (in_array($type, ['case_created', 'case_updated', 'case_deleted'], true)) {
-            return $role === 'admin'
-                ? $this->roleRouteUrl($role, 'cases.index')
-                : $this->dashboardUrl($user);
-        }
 
         if (in_array($type, ['announcement', 'calamity'], true)) {
             return $this->roleRouteUrl($role, 'announcements.index');
@@ -262,6 +357,25 @@ class NotificationBellService
             return $this->roleRouteUrl($role, 'resident-complaints.index');
         }
 
+        if ($type === 'tanod_task_response') {
+            if (
+                in_array(
+                    $role,
+                    ['official', 'dao'],
+                    true
+                )
+            ) {
+                return $this->roleRouteUrl(
+                    $role,
+                    'incidents.index'
+                );
+            }
+
+            return $this->roleRouteUrl(
+                $role,
+                'tanod-tasks.index'
+            );
+        }
         if (in_array($type, [
             'tanod_task',
             'tanod_task_assigned',

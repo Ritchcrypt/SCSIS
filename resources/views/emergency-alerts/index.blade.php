@@ -10,7 +10,7 @@
                 <p class="text-sm font-bold uppercase tracking-[0.18em] text-red-700">Emergency Response</p>
                 <h1 class="mt-1 text-2xl font-black text-slate-950">Distress Signal</h1>
                 <p class="mt-2 text-sm text-slate-600">
-                    Emergency distress signals submitted from the TabangNow mobile application.
+                    Emergency distress signals submitted from the TabangNow website and mobile application.
                 </p>
             </div>
 

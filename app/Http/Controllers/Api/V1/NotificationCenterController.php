@@ -81,6 +81,85 @@ class NotificationCenterController extends Controller
             ->header('Cache-Control', 'no-store, private');
     }
 
+    public function markAllRead(
+        Request $request,
+        NotificationBellService $notificationBell
+    ): JsonResponse {
+        $user = $request->user();
+
+        abort_unless(
+            $user,
+            401,
+            'Authentication is required.'
+        );
+
+        $markedRead =
+            $notificationBell->markAllUnreadAsRead($user);
+
+        $bell = $notificationBell->forUser($user);
+
+        return response()
+            ->json([
+                'message' => 'All notifications marked as read.',
+                'data' => [
+                    'marked_read' => $markedRead,
+                    'unread_count' =>
+                        (int) ($bell['unread_count'] ?? 0),
+                    'notifications' => collect(
+                        $bell['notifications'] ?? []
+                    )->values()->all(),
+                ],
+            ])
+            ->header(
+                'Cache-Control',
+                'no-store, private'
+            );
+    }
+
+    public function destroy(
+        Request $request,
+        UserNotification $notification,
+        NotificationBellService $notificationBell
+    ): JsonResponse {
+        $user = $request->user();
+
+        abort_unless(
+            $user,
+            401,
+            'Authentication is required.'
+        );
+
+        Gate::authorize(
+            'delete',
+            $notification
+        );
+
+        $deleted = $notificationBell
+            ->deleteOwnedNotificationGroup(
+                $user,
+                $notification
+            );
+
+        $bell = $notificationBell->forUser($user);
+
+        return response()
+            ->json([
+                'message' =>
+                    'Notification removed from your account only.',
+                'data' => [
+                    'deleted_count' => $deleted,
+                    'unread_count' =>
+                        (int) ($bell['unread_count'] ?? 0),
+                    'notifications' => collect(
+                        $bell['notifications'] ?? []
+                    )->values()->all(),
+                ],
+            ])
+            ->header(
+                'Cache-Control',
+                'no-store, private'
+            );
+    }
     private function markNotificationGroupAsRead(
         UserNotification $notification
     ): void {
@@ -180,6 +259,12 @@ class NotificationCenterController extends Controller
                 : $this->target('dashboard');
         }
 
+        if ($type === 'tanod_task_response') {
+            return $this->tanodTaskResponseTarget(
+                $role,
+                $sourceId
+            );
+        }
         if (
             in_array(
                 $type,
@@ -242,5 +327,62 @@ class NotificationCenterController extends Controller
             'module' => $module,
             'source_id' => $sourceId,
         ];
+    }
+
+    private function tanodTaskResponseTarget(
+        string $role,
+        ?int $taskId
+    ): array {
+        if (! $taskId) {
+            return $this->target('dashboard');
+        }
+
+        if (
+            in_array(
+                $role,
+                ['admin', 'tanod'],
+                true
+            )
+        ) {
+            return $this->target(
+                'tanodTasks',
+                $taskId
+            );
+        }
+
+        if (
+            in_array(
+                $role,
+                ['official', 'dao'],
+                true
+            )
+            && Schema::hasTable('tanod_tasks')
+            && Schema::hasColumn(
+                'tanod_tasks',
+                'incident_id'
+            )
+        ) {
+            $incidentId = DB::table('tanod_tasks')
+                ->where('id', $taskId)
+                ->value('incident_id');
+
+            if (
+                $incidentId
+                && Schema::hasTable('incidents')
+                && DB::table('incidents')
+                    ->where(
+                        'id',
+                        (int) $incidentId
+                    )
+                    ->exists()
+            ) {
+                return $this->target(
+                    'incidents',
+                    (int) $incidentId
+                );
+            }
+        }
+
+        return $this->target('dashboard');
     }
 }

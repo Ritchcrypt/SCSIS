@@ -37,9 +37,28 @@
                 </p>
             </div>
 
-            <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
-                {{ $unreadNotificationCount }}
-            </span>
+            <div class="flex items-center gap-2">
+                @if ($unreadNotificationCount > 0)
+                    <form
+                        method="POST"
+                        action="{{ route('notifications.read-all') }}"
+                        class="m-0"
+                    >
+                        @csrf
+
+                        <button
+                            type="submit"
+                            class="rounded-lg px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50 hover:text-blue-900"
+                        >
+                            Read all
+                        </button>
+                    </form>
+                @endif
+
+                <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                    {{ $unreadNotificationCount }}
+                </span>
+            </div>
         </div>
 
         <div class="max-h-80 divide-y divide-slate-200 overflow-y-scroll overscroll-contain pr-1"
@@ -76,7 +95,7 @@
                                 </p>
 
                                 <span class="text-[11px] font-bold text-blue-700">
-                                    Open →
+                                    Open
                                 </span>
                             </div>
                         </button>
@@ -98,10 +117,25 @@
                             </p>
 
                             <span class="text-[11px] font-bold text-blue-700">
-                                Open →
+                                Open
                             </span>
                         </div>
                     </a>
+                @endif
+
+                @if ($notificationId)
+                    <form method="POST"
+                          action="{{ route('notifications.destroy', $notificationId) }}"
+                          class="border-t border-slate-100 px-4 pb-2 text-right"
+                          onsubmit="return confirm('Delete this notification from your account only?');">
+                        @csrf
+                        @method('DELETE')
+
+                        <button type="submit"
+                                class="rounded px-2 py-1 text-[11px] font-bold text-red-600 transition hover:bg-red-50">
+                            Delete from my notifications
+                        </button>
+                    </form>
                 @endif
             @empty
                 <div class="px-4 py-8 text-center">

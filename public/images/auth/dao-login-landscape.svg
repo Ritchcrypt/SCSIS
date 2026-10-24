@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+<defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#4fa6e8"/>
+        <stop offset="48%" stop-color="#aad9f5"/>
+        <stop offset="72%" stop-color="#f4c286"/>
+        <stop offset="100%" stop-color="#dca259"/>
+    </linearGradient>
+
+    <linearGradient id="farMountain" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#567fa4"/>
+        <stop offset="100%" stop-color="#274968"/>
+    </linearGradient>
+
+    <linearGradient id="nearMountain" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#315f73"/>
+        <stop offset="100%" stop-color="#183b48"/>
+    </linearGradient>
+
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#7b933e"/>
+        <stop offset="100%" stop-color="#35531d"/>
+    </linearGradient>
+
+    <filter id="softCloud">
+        <feGaussianBlur stdDeviation="20"/>
+    </filter>
+
+    <filter id="sunGlow">
+        <feGaussianBlur stdDeviation="24"/>
+    </filter>
+</defs>
+
+<rect width="1920" height="1080" fill="url(#sky)"/>
+
+<!-- single sunset -->
+<circle cx="245" cy="610" r="105" fill="#fff1bd" opacity=".28" filter="url(#sunGlow)"/>
+<circle cx="245" cy="610" r="58" fill="#fff5cf" opacity=".92"/>
+
+<!-- clouds -->
+<g fill="#fff6ee" opacity=".58" filter="url(#softCloud)">
+    <ellipse cx="430" cy="300" rx="235" ry="48"/>
+    <ellipse cx="680" cy="365" rx="290" ry="58"/>
+    <ellipse cx="1260" cy="320" rx="300" ry="55"/>
+    <ellipse cx="1540" cy="405" rx="300" ry="52"/>
+</g>
+
+<!-- distant mountains -->
+<path d="M0 760
+         L160 630 L310 700
+         L505 500 L690 705
+         L850 585 L1020 720
+         L1220 530 L1420 715
+         L1605 590 L1790 700
+         L1920 575
+         L1920 1080 L0 1080 Z"
+      fill="url(#farMountain)"/>
+
+<!-- haze -->
+<path d="M0 795
+         Q300 700 610 790
+         T1220 765
+         T1920 805
+         L1920 1080 L0 1080 Z"
+      fill="#87a6b7"
+      opacity=".35"/>
+
+<!-- nearer foothills -->
+<path d="M0 850
+         Q260 740 500 830
+         T980 825
+         T1450 810
+         T1920 835
+         L1920 1080 L0 1080 Z"
+      fill="url(#nearMountain)"
+      opacity=".88"/>
+
+<!-- rice field -->
+<path d="M0 890
+         Q370 830 730 900
+         T1450 875
+         T1920 890
+         L1920 1080 L0 1080 Z"
+      fill="url(#field)"/>
+
+<path d="M0 970
+         Q400 900 810 975
+         T1500 945
+         T1920 960
+         L1920 1080 L0 1080 Z"
+      fill="#405e20"/>
+
+<path d="M0 1030
+         Q300 965 600 1025
+         T1180 1015
+         T1600 1020
+         T1920 995
+         L1920 1080 L0 1080 Z"
+      fill="#253b16"/>
+
+<rect y="560" width="1920" height="260" fill="#ffbe78" opacity=".10"/>
+</svg>

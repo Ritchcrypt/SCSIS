@@ -450,6 +450,47 @@ html[data-theme='dark'] input.tn-password-input:-webkit-autofill {
                 </div>
             </div>
 
+            <div>
+                <label for="barangay_id"
+                       class="mb-2 block text-sm font-semibold text-slate-700">
+                    Barangay of Residence
+                </label>
+
+                <select id="barangay_id"
+                        name="barangay_id"
+                        required
+                        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                    <option value="">
+                        Select the barangay where you currently live
+                    </option>
+
+                    @foreach (($barangays ?? []) as $barangay)
+                        <option
+                            value="{{ $barangay->id }}"
+                            @selected(
+                                (string) old(
+                                    'barangay_id',
+                                    $userRecord->barangay_id ?? ''
+                                )
+                                === (string) $barangay->id
+                            )
+                        >
+                            {{ $barangay->barangay_name }}
+                        </option>
+                    @endforeach
+                </select>
+
+                <p class="mt-2 text-xs text-slate-500">
+                    Used for barangay-targeted announcements,
+                    community notices, and related messages.
+                </p>
+
+                @error('barangay_id')
+                    <p class="mt-2 text-sm font-medium text-red-600">
+                        {{ $message }}
+                    </p>
+                @enderror
+            </div>
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-slate-700">

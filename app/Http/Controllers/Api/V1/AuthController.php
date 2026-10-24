@@ -22,7 +22,41 @@ use Illuminate\Validation\Rules;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
-{
+{    public function barangays(): JsonResponse
+    {
+        if (! Schema::hasTable('barangays')) {
+            return response()->json([
+                'data' => [],
+            ]);
+        }
+
+        $barangays = DB::table('barangays')
+            ->select([
+                'id',
+                'barangay_name',
+            ])
+            ->orderBy('barangay_name')
+            ->get()
+            ->map(
+                fn ($barangay): array => [
+                    'id' => (int) $barangay->id,
+                    'name' => (string) $barangay->barangay_name,
+                ]
+            )
+            ->values()
+            ->all();
+
+        return response()
+            ->json([
+                'data' => $barangays,
+            ])
+            ->header(
+                'Cache-Control',
+                'public, max-age=300'
+            );
+    }
+
+
     public function register(Request $request): JsonResponse
     {
         $name = trim((string) $request->input('name'));
@@ -78,7 +112,11 @@ class AuthController extends Controller
                 'string',
                 'regex:/^09\d{9}$/',
             ],
-            'address' => ['required', 'string', 'max:500'],
+            'address' => ['required', 'string', 'max:500'],            'barangay_id' => [
+                'nullable',
+                'integer',
+                'exists:barangays,id',
+            ],
             'password' => [
                 'required',
                 'string',
@@ -96,10 +134,11 @@ class AuthController extends Controller
             'name' => $validated['name'],
             'email' => $validated['email'],
             'contact_number' => $validated['contact_number'],
-            'address' => $validated['address'],
+            'address' => $validated['address'],            'barangay_id' => isset($validated['barangay_id']) ? (int) $validated['barangay_id'] : null,
             'password' => Hash::make($validated['password']),
             'role' => 'resident',
             'is_active' => false,
+            'registration_review_status' => 'pending',
             'status' => false,
         ]);
 
@@ -136,6 +175,19 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+            'theme_mode' => Schema::hasColumn('users', 'theme_mode')
+                ? strtolower(
+                    trim(
+                        (string) ($user->theme_mode ?: 'system')
+                    )
+                )
+                : 'system',
+            'theme_custom_color' => Schema::hasColumn(
+                'users',
+                'theme_custom_color'
+            )
+                ? $user->theme_custom_color
+                : null,
             ],
         ], 201);
     }
@@ -340,6 +392,19 @@ class AuthController extends Controller
                 ? $user->address
                 : null,
             'role' => $user->role,
+            'theme_mode' => Schema::hasColumn('users', 'theme_mode')
+                ? strtolower(
+                    trim(
+                        (string) ($user->theme_mode ?: 'system')
+                    )
+                )
+                : 'system',
+            'theme_custom_color' => Schema::hasColumn(
+                'users',
+                'theme_custom_color'
+            )
+                ? $user->theme_custom_color
+                : null,
             'barangay_id' => $user->barangay_id,
             'has_profile_photo' => Schema::hasColumn('users', 'profile_photo_path')
                 && ! empty($user->profile_photo_path),

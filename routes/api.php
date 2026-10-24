@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\V1\UserManagementController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\BarangayMapController;
 use App\Http\Controllers\Api\V1\ResidentComplaintController;
-use App\Http\Controllers\Api\V1\CaseManagementController;
 use App\Http\Controllers\Api\V1\DevSessionController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DashboardParityController;
@@ -43,7 +42,13 @@ Route::get('/v1/mobile/version', [
 |--------------------------------------------------------------------------
 */
 
-Route::prefix('v1/auth')->group(function (): void {
+Route::prefix('v1/auth')->group(function (): void {    Route::get('/barangays', [
+        AuthController::class,
+        'barangays',
+    ])
+        ->middleware('throttle:60,1')
+        ->name('api.v1.auth.barangays');
+
     Route::post('/register', [
         AuthController::class,
         'register',
@@ -371,6 +376,16 @@ Route::prefix('v1')
             'pulse',
         ])->name('api.v1.notifications.pulse');
 
+        Route::post('/notifications/read-all', [
+            NotificationCenterController::class,
+            'markAllRead',
+        ])->name('api.v1.notifications.read-all');
+
+        Route::delete('/notifications/{notification}', [
+            NotificationCenterController::class,
+            'destroy',
+        ])->whereNumber('notification')
+            ->name('api.v1.notifications.destroy');
         Route::post('/notifications/{notification}/open', [
             NotificationCenterController::class,
             'open',
@@ -467,36 +482,7 @@ Route::prefix('v1')
 
         /*
         |--------------------------------------------------------------------------
-        | Case Management
-        |--------------------------------------------------------------------------
-        | CaseRecordPolicy: Administrator only.
-        */
-
-        Route::get('/cases', [
-            CaseManagementController::class,
-            'index',
-        ])->name('api.v1.cases.index');
-
-        Route::post('/cases', [
-            CaseManagementController::class,
-            'store',
-        ])->name('api.v1.cases.store');
-
-        Route::patch('/cases/{caseRecord}', [
-            CaseManagementController::class,
-            'update',
-        ])->whereNumber('caseRecord')
-            ->name('api.v1.cases.update');
-
-        Route::delete('/cases/{caseRecord}', [
-            CaseManagementController::class,
-            'destroy',
-        ])->whereNumber('caseRecord')
-            ->name('api.v1.cases.destroy');
-
-        /*
-        |--------------------------------------------------------------------------
-        | Resident Complaints
+        | Resident Feedback
         |--------------------------------------------------------------------------
         | Admin + Official/DAO process. Resident owns/submits only their records.
         | Laravel ResidentComplaintPolicy is the final security boundary.
@@ -578,17 +564,15 @@ Route::prefix('v1')
             'downloadPdf',
         ])->name('api.v1.reports.pdf');
 
+        Route::post('/reports/selection/pdf', [
+            ReportController::class,
+            'downloadSelectedPdf',
+        ])->name('api.v1.reports.selection-pdf');
         Route::get('/reports/incidents/{incident}/pdf', [
             ReportController::class,
             'downloadIncidentPdf',
         ])->whereNumber('incident')
             ->name('api.v1.reports.incident-pdf');
-
-        Route::get('/reports/cases/{caseRecord}/pdf', [
-            ReportController::class,
-            'downloadCasePdf',
-        ])->whereNumber('caseRecord')
-            ->name('api.v1.reports.case-pdf');
 
         Route::get('/reports/complaints/{residentComplaint}/pdf', [
             ReportController::class,

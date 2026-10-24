@@ -152,7 +152,7 @@
             @if ($announcementsUrl)
                 <a href="{{ $announcementsUrl }}"
                    class="text-sm font-bold text-blue-700 hover:text-blue-800">
-                    Open Announcements →
+                    Open Announcements
                 </a>
             @endif
         </div>
