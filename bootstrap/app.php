@@ -122,24 +122,22 @@ return Application::configure(basePath: dirname(__DIR__))
         */
 
         $exceptions->render(function (
-            \Illuminate\Session\TokenMismatchException $exception,
+            \Symfony\Component\HttpKernel\Exception\HttpException $exception,
             \Illuminate\Http\Request $request
         ) {
-            if ($request->expectsJson()) {
+            // Laravel converts CSRF mismatches into HTTP 419 before rendering.
+            if (
+                $exception->getStatusCode() !== 419
+                || ! $exception->getPrevious() instanceof \Illuminate\Session\TokenMismatchException
+                || $request->expectsJson()
+                || ! $request->isMethod('post')
+                || ! ($request->routeIs('logout') || $request->is('logout'))
+            ) {
                 return null;
             }
 
-            $isLogoutRequest =
-                $request->routeIs('logout')
-                || (
-                    $request->isMethod('post')
-                    && $request->is('logout')
-                );
-
-            if (! $isLogoutRequest) {
-                return null;
-            }
-
+            // Do not execute logout when CSRF validation failed.
+            // Only replace the unusable 419 page with a safe navigation.
             return redirect()
                 ->route('login')
                 ->with(
