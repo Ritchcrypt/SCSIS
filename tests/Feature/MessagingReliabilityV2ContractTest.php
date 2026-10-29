@@ -47,16 +47,40 @@ class MessagingReliabilityV2ContractTest extends TestCase
         ] as $path) {
             $source = (string) file_get_contents($path);
 
-            $this->assertStringContainsString(
+            // Controllers persist the message; the model observer is the
+            // only producer of incident-message notifications.
+            $this->assertStringNotContainsString(
                 'notifyIncidentMessageRecipients(',
                 $source
             );
-
             $this->assertStringContainsString(
-                "'type' => 'incident_message'",
+                'IncidentMessage::',
                 $source
             );
         }
+
+        $provider = (string) file_get_contents(
+            app_path('Providers/AppServiceProvider.php')
+        );
+        $observer = (string) file_get_contents(
+            app_path('Observers/IncidentMessageNotificationObserver.php')
+        );
+        $service = (string) file_get_contents(
+            app_path('Services/SystemNotificationService.php')
+        );
+
+        $this->assertStringContainsString(
+            'IncidentMessage::observe(IncidentMessageNotificationObserver::class)',
+            $provider
+        );
+        $this->assertStringContainsString(
+            'notifyIncidentMessage($incidentMessage)',
+            $observer
+        );
+        $this->assertStringContainsString(
+            "type: 'incident_message'",
+            $service
+        );
     }
 
     public function test_notification_routing_knows_tanod_task_response(): void

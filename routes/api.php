@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\V1\PushTokenController;
 use App\Http\Controllers\Api\V1\TanodAlertController;
 use App\Http\Controllers\Api\V1\SystemBrandingController;
 use App\Http\Controllers\Api\V1\MobileVersionController;
+use App\Http\Controllers\Api\V1\DashboardWelcomePhotoController;
 use App\Http\Controllers\PresenceController;
 use App\Http\Middleware\EnsureApiUserIsActive;
 use Illuminate\Support\Facades\Route;
@@ -130,6 +131,23 @@ Route::prefix('v1')
         | Dashboard
         |--------------------------------------------------------------------------
         */
+
+        // Same shared banner image as the authenticated Laravel website.
+        // All roles read; uploads require role:admin and a controller check.
+        Route::get('/dashboard/welcome-photo/status', [
+            DashboardWelcomePhotoController::class, 'status',
+        ])->name('api.v1.dashboard-welcome.status');
+
+        Route::get('/dashboard/welcome-photo/image', [
+            DashboardWelcomePhotoController::class, 'show',
+        ])->name('api.v1.dashboard-welcome.image');
+
+        Route::post('/dashboard/welcome-photo', [
+            DashboardWelcomePhotoController::class, 'update',
+        ])->middleware('role:admin')
+          ->name('api.v1.dashboard-welcome.update');
+
+
 
         Route::get('/dashboard', [
             DashboardParityController::class,
@@ -653,6 +671,22 @@ Route::prefix('v1')
             'destroy',
         ])->whereNumber('user')
             ->name('api.v1.users.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Deleted Data Recovery - Admin-only mobile parity
+        |--------------------------------------------------------------------------
+        */
+        Route::get('/deleted-data-recovery', [
+            \App\Http\Controllers\Api\V1\DeletedDataRecoveryController::class,
+            'index',
+        ])->name('api.v1.deleted-data-recovery.index');
+
+        Route::patch('/deleted-data-recovery/{deletedDataArchive}/restore', [
+            \App\Http\Controllers\Api\V1\DeletedDataRecoveryController::class,
+            'restore',
+        ])->whereNumber('deletedDataArchive')
+            ->name('api.v1.deleted-data-recovery.restore');
 
         /*
         |--------------------------------------------------------------------------

@@ -41,9 +41,14 @@ final class DashboardWelcomeBannerContractTest extends TestCase
 
         $this->assertStringContainsString('auth()->user()?->name', $view);
         $this->assertStringContainsString('{{ $dashboardWelcomeName }}', $view);
-        $this->assertStringContainsString("asset('images/dashboard/dao-welcome-scene-20261022_173013_735.jpg')", $view);
+        $this->assertStringContainsString("route('dashboard-welcome.image'", $view);
+        $this->assertStringContainsString('data-welcome-version', $view);
+        $this->assertStringContainsString('Change photo', $view);
+        $this->assertStringContainsString('if ($dashboardWelcomeIsAdmin)', $view);
         $this->assertStringContainsString('Welcome back,', $view);
-        $this->assertSame(1, substr_count($view, "asset('images/dashboard/dao-welcome-scene-20261022_173013_735.jpg')"));
+        $controller = file_get_contents(app_path('Http/Controllers/DashboardWelcomeImageController.php'));
+        $this->assertStringContainsString('images/dashboard/dao-welcome-scene-20261022_173013_735.jpg', $controller);
+        $this->assertStringContainsString("'dashboard-welcome.image'", file_get_contents(base_path('routes/web.php')));
 
         $image = public_path('images/dashboard/dao-welcome-scene-20261022_173013_735.jpg');
         $this->assertFileExists($image);
