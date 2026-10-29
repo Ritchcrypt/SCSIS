@@ -47,7 +47,6 @@
     @foreach($daoExternalStories as $story)
         <div data-dao-ext-record
             data-title="{{ $story['title'] }}"
-            data-summary="{{ $story['summary'] }}"
             data-url="{{ $story['url'] }}"
             data-source="{{ $story['source'] }}"
             data-published="{{ $story['published'] ?? '' }}"></div>
@@ -63,19 +62,18 @@
     const records = [...shell.querySelectorAll('[data-dao-ext-record]')].map(el => el.dataset);
     if (!banner || !greeting || !records.length) return;
     const heading = document.createElement('div'); heading.className = 'tn-dao-ext-heading tn-dao-ext-content'; heading.hidden = true;
-    const label = document.createElement('div'); label.className = 'tn-dao-ext-heading__label'; label.textContent = 'DAO, CAPIZ · EXTERNAL NEWS';
+    const label = document.createElement('div'); label.className = 'tn-dao-ext-heading__label'; label.textContent = 'DAO, CAPIZ';
     const title = document.createElement('h2');
-    const summary = document.createElement('p');
     const source = document.createElement('div'); source.className = 'tn-dao-ext-heading__source';
-    heading.append(label,title,summary,source); banner.append(heading);
+    heading.append(label,title,source); banner.append(heading);
     const reader = document.createElement('button'); reader.type = 'button'; reader.className = 'tn-dao-ext-reader';
-    reader.setAttribute('aria-label','Read this external Dao news article'); banner.append(reader);
+    reader.setAttribute('aria-label','Read Dao news at the publisher (opens in a new tab)'); banner.append(reader);
     const left = document.createElement('button'); left.type='button'; left.className = 'tn-dao-ext-navigation tn-dao-ext-navigation--left';
     left.setAttribute('aria-label','Previous news slide'); banner.append(left);
     const right = document.createElement('button'); right.type='button'; right.className = 'tn-dao-ext-navigation tn-dao-ext-navigation--right';
     right.setAttribute('aria-label','Next news slide'); banner.append(right);
     const counter = document.createElement('span'); counter.className = 'tn-dao-ext-counter'; banner.append(counter);
-    const hint = document.createElement('span'); hint.className = 'tn-dao-ext-hint'; hint.textContent='Tap edges to browse · Open news slides at publisher (new tab)'; banner.append(hint);
+    const hint = document.createElement('span'); hint.className = 'tn-dao-ext-hint'; hint.textContent='Tap edges to browse · Tap center to open'; banner.append(hint);
     // Artwork is generated locally from CSS colors. No publisher images loaded.
     const backgrounds = [
         'linear-gradient(115deg,#123456 0%,#225f68 58%,#2a806a 100%)',
@@ -99,8 +97,7 @@
         }
         if (showNews) {
             title.textContent = story.title || 'Dao update';
-            summary.textContent = story.summary || '';
-            source.textContent = [story.source,story.published].filter(Boolean).join(' · ') + ' · Opens publisher website in new tab';
+            source.textContent = [story.source,story.published].filter(Boolean).join(' · ');
         }
         counter.textContent = `${active + 1} / ${records.length + 1}`;
     };

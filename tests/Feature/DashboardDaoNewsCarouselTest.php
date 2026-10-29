@@ -124,7 +124,13 @@ final class DashboardDaoNewsCarouselTest extends TestCase
         $this->assertStringContainsString("window.open(link.href, '_blank', 'noopener,noreferrer')", $view);
         $this->assertStringContainsString("link.protocol !== 'https:'", $view);
         $this->assertStringContainsString('if (active === 0) return;', $view);
-        $this->assertStringContainsString('Opens publisher website in new tab', $view);
+        $this->assertStringContainsString("label.textContent = 'DAO, CAPIZ';", $view);
+        $this->assertStringContainsString('Tap edges to browse · Tap center to open', $view);
+        $this->assertStringContainsString("source.textContent = [story.source,story.published].filter(Boolean).join(' · ');", $view);
+        $this->assertStringNotContainsString('DAO, CAPIZ · EXTERNAL NEWS', $view);
+        $this->assertStringNotContainsString('Opens publisher website in new tab', $view);
+        $this->assertStringNotContainsString('data-summary=', $view);
+        $this->assertStringNotContainsString('external update.', $view);
         $this->assertStringContainsString('tn-dao-ext-navigation--left', $view);
         $this->assertStringContainsString('Review and approve', $view);
         // Admin-only destructive operations still ask for explicit confirmation.
