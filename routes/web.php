@@ -14,6 +14,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicDownloadController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResidentComplaintController;
+use App\Http\Controllers\DashboardWelcomeImageController;
 use App\Http\Controllers\RoleDashboardController;
 use App\Http\Controllers\SystemBrandingController;
 use App\Http\Controllers\TanodAlertController;
@@ -52,6 +53,12 @@ Route::get('/download/apk', [PublicDownloadController::class, 'apk'])
 */
 
 Route::middleware(['auth', 'active.user'])->group(function () {
+    Route::get('/dashboard/welcome-photo', [DashboardWelcomeImageController::class, 'show'])
+        ->name('dashboard-welcome.image');
+    Route::get('/dashboard/welcome-photo/status', [DashboardWelcomeImageController::class, 'status'])
+        ->middleware('throttle:60,1')
+        ->name('dashboard-welcome.status');
+
     Route::post('/presence/heartbeat', [PresenceController::class, 'heartbeat'])
         ->name('presence.heartbeat');
 
@@ -131,6 +138,10 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
     ->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])
             ->name('dashboard');
+
+        Route::post('/dashboard/welcome-photo', [DashboardWelcomeImageController::class, 'update'])
+            ->middleware('throttle:6,1')
+            ->name('dashboard-welcome-image.update');
 
         Route::get('/reports', [ReportController::class, 'index'])
             ->name('reports.index');
@@ -564,3 +575,15 @@ if (file_exists(__DIR__.'/auth.php')) {
 if (file_exists(__DIR__.'/settings.php')) {
     require __DIR__.'/settings.php';
 }
+
+
+// TABANGNOW_C21_PERMISSION_FIRST_EXTERNAL_LINKS_START
+// Direct external links only. No feeds, scraping, or remote article content.
+\Illuminate\Support\Facades\Route::middleware(['auth', 'active.user', 'role:admin'])
+    ->prefix('admin')->name('admin.')->group(function () {
+        \Illuminate\Support\Facades\Route::post('/dao-external-links', [\App\Http\Controllers\DashboardDaoNewsLinksController::class, 'store'])
+            ->name('dao-news-links.store');
+        \Illuminate\Support\Facades\Route::delete('/dao-external-links/{id}', [\App\Http\Controllers\DashboardDaoNewsLinksController::class, 'destroy'])
+            ->name('dao-news-links.destroy');
+    });
+// TABANGNOW_C21_PERMISSION_FIRST_EXTERNAL_LINKS_END

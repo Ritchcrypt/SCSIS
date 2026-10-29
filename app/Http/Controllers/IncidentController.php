@@ -1026,11 +1026,8 @@ $validated = $request->validate($rules);
             'message' => $validated['message'],
         ]);
 
-                $this->notifyIncidentMessageRecipients(
-            incident: $incident,
-            sender: $request->user()
-        );
-$this->recordOperationalActivity(
+
+        $this->recordOperationalActivity(
             event: 'incident.message_added',
             category: 'incident',
             description: 'A message was added to an incident.',
@@ -2160,84 +2157,4 @@ $this->recordOperationalActivity(
         ];
     }
 
-    private function notifyIncidentMessageRecipients(
-        Incident $incident,
-        User $sender
-    ): void {
-        if (! Schema::hasTable('notifications')) {
-            return;
-        }
-
-        $incident->loadMissing([
-            'reporter',
-            'assignedTanod.user',
-        ]);
-
-        $managementIds = User::query()
-            ->whereIn(
-                'role',
-                ['admin', 'official', 'dao']
-            )
-            ->when(
-                Schema::hasColumn('users', 'is_active'),
-                fn ($query) => $query->where(
-                    'is_active',
-                    true
-                )
-            )
-            ->pluck('id');
-
-        $recipientIds = collect()
-            ->merge($managementIds)
-            ->push($incident->reporter_id)
-            ->push($incident->assignedTanod?->user_id)
-            ->filter()
-            ->map(
-                fn ($id): int => (int) $id
-            )
-            ->reject(
-                fn (int $id): bool =>
-                    $id === (int) $sender->id
-            )
-            ->unique()
-            ->values();
-
-        foreach ($recipientIds as $userId) {
-            $data = [
-                'user_id' => $userId,
-                'type' => 'incident_message',
-                'source_id' => $incident->id,
-                'title' => 'New incident message',
-                'message' =>
-                    $sender->name
-                    . ' added a message to '
-                    . $incident->display_title
-                    . '.',
-                'is_read' => false,
-                'read_at' => null,
-            ];
-
-            if (
-                Schema::hasColumn(
-                    'notifications',
-                    'acknowledged_by'
-                )
-            ) {
-                $data['acknowledged_by'] = null;
-            }
-
-            if (
-                Schema::hasColumn(
-                    'notifications',
-                    'acknowledged_at'
-                )
-            ) {
-                $data['acknowledged_at'] = null;
-            }
-
-            UserNotification::query()->create(
-                $data
-            );
-        }
-    }
 }

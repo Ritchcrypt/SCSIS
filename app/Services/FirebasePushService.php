@@ -205,6 +205,12 @@ class FirebasePushService
             return 'critical';
         }
 
+        // Incident conversation messages use the existing Flutter Code Red
+        // channel. Keep the API alert_tier aligned with that established policy.
+        if ($type === 'incident_message') {
+            return 'critical';
+        }
+
         if (in_array($type, [
             'user_registration',
             'resident_complaint',

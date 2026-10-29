@@ -17,10 +17,11 @@ class NotificationAlertTierPolicyTest extends TestCase
             'emergency' => 'critical',
             'calamity' => 'critical',
 
-            // MODERATE: new actionable human-facing work/messages.
+            // CRITICAL: incident messages preserve existing mobile Code Red.
+            // MODERATE: other actionable human-facing work/messages.
             'user_registration' => 'moderate',
             'resident_complaint' => 'moderate',
-            'incident_message' => 'moderate',
+            'incident_message' => 'critical',
             'tanod_alert' => 'moderate',
             'community_problem' => 'moderate',
             'account_deactivated' => 'moderate',
