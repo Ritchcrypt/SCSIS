@@ -7,6 +7,7 @@ use App\Models\MobileEmergencyDevice;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class EmergencyDeviceController extends Controller
@@ -25,21 +26,37 @@ class EmergencyDeviceController extends Controller
 
         $plainToken = Str::random(80);
 
-        $device = MobileEmergencyDevice::query()->updateOrCreate(
-            ['installation_id' => trim($validated['installation_id'])],
-            [
-                'user_id' => $user->id,
-                'token_hash' => hash('sha256', $plainToken),
-                'device_name' => isset($validated['device_name'])
-                    ? trim((string) $validated['device_name'])
-                    : null,
-                'platform' => isset($validated['platform'])
-                    ? strtolower(trim((string) $validated['platform']))
-                    : 'android',
-                'last_seen_at' => now(),
-                'revoked_at' => null,
-            ]
-        );
+        // installation_id comes from an untrusted client. It cannot confer
+        // ownership of another account's previously enrolled device.
+        $device = DB::transaction(function () use ($validated, $user, $plainToken): MobileEmergencyDevice {
+            $installationId = trim($validated['installation_id']);
+            $existing = MobileEmergencyDevice::query()
+                ->where('installation_id', $installationId)
+                ->lockForUpdate()
+                ->first();
+
+            abort_if(
+                $existing !== null && (int) $existing->user_id !== (int) $user->id,
+                409,
+                'This device is already linked to a different account.'
+            );
+
+            return MobileEmergencyDevice::query()->updateOrCreate(
+                ['installation_id' => $installationId],
+                [
+                    'user_id' => $user->id,
+                    'token_hash' => hash('sha256', $plainToken),
+                    'device_name' => isset($validated['device_name'])
+                        ? trim((string) $validated['device_name'])
+                        : null,
+                    'platform' => isset($validated['platform'])
+                        ? strtolower(trim((string) $validated['platform']))
+                        : 'android',
+                    'last_seen_at' => now(),
+                    'revoked_at' => null,
+                ]
+            );
+        });
 
         return response()->json([
             'message' => 'Emergency device enrollment completed.',

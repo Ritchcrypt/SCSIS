@@ -5,13 +5,21 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class DevSessionController extends Controller
 {
-    public function create(): JsonResponse
+    public function create(Request $request): JsonResponse
     {
-        abort_unless(app()->environment('local'), 404);
+        // Local development never grants administrator access by default.
+        // Explicit opt-in is still restricted to loopback clients only.
+        abort_unless(
+            app()->environment('local')
+                && (bool) config('security.development.admin_bypass_enabled', false)
+                && in_array($request->ip(), ['127.0.0.1', '::1'], true),
+            404
+        );
 
         $query = User::query()
             ->whereRaw('LOWER(TRIM(role)) = ?', ['admin'])

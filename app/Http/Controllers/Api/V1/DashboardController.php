@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\CaseRecord;
 use App\Models\Incident;
 use App\Models\Status;
 use App\Models\User;
@@ -84,12 +83,14 @@ class DashboardController extends Controller
     private function adminDashboard(): array
     {
         $activeStatusNames = [
-            'pending',
-            'verified',
-            'responding',
-            'dispatched',
             'active',
+            'dispatched',
+            'responding',
+            'in progress',
+            'in_progress',
             'escalated',
+            'under review',
+            'under_review',
         ];
 
         $resolvedStatusNames = [
@@ -116,18 +117,15 @@ class DashboardController extends Controller
 
         $totalIncidents = Incident::count();
 
-        // Keep the mobile Admin dashboard aligned with Case Management.
-        $activeCases = Schema::hasTable('case_records')
-            ? CaseRecord::query()
-                ->whereIn('status', [
-                    'open',
-                    'under_investigation',
-                    'mediation',
-                ])
+        // The former Case Management table is retired. Derive dashboard
+        // activity from the shared incidents/statuses records instead.
+        $activeIncidents = ! empty($activeStatusIds)
+            ? Incident::query()
+                ->whereIn('status_id', $activeStatusIds)
                 ->count()
             : 0;
 
-        $resolvedCases = ! empty($resolvedStatusIds)
+        $resolvedIncidents = ! empty($resolvedStatusIds)
             ? Incident::query()
                 ->whereIn(
                     'status_id',
@@ -173,8 +171,8 @@ class DashboardController extends Controller
 
             'summary' => [
                 'total_incidents' => $totalIncidents,
-                'active_cases' => $activeCases,
-                'resolved_cases' => $resolvedCases,
+                'active_incidents' => $activeIncidents,
+                'resolved_incidents' => $resolvedIncidents,
                 'critical_incidents' => $criticalIncidents,
                 'tanod_on_duty' => $this->countTanodOnDuty(),
             ],

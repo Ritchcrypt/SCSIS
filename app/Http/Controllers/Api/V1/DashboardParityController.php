@@ -50,11 +50,6 @@ class DashboardParityController extends DashboardController
                 ? $data['summary']
                 : [];
 
-            $pendingIncidents = (int) ($summary['pending_incidents'] ?? 0);
-            $activeIncidents = (int) ($summary['active_incidents'] ?? 0);
-
-            $summary['active_cases'] = $pendingIncidents + $activeIncidents;
-            $summary['resolved_cases'] = (int) ($summary['resolved_incidents'] ?? 0);
             $summary['critical_incidents'] = $this->criticalIncidentCount();
             $summary['tanod_on_duty'] = $this->countTanodOnDuty();
 

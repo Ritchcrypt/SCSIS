@@ -15,6 +15,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password as PasswordBroker;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -987,10 +988,33 @@ class UserManagementController extends Controller
             $user
         );
 
-        $status =
-            PasswordBroker::sendResetLink([
+        $deliveryError = \App\Support\AccountActionReadiness::passwordResetError();
+        if ($deliveryError !== null) {
+            Log::warning('User Management password reset is not ready.', [
+                'reason' => $deliveryError,
+            ]);
+            return response()->json([
+                'message' => 'Password reset email is currently unavailable. Ask an administrator to check mail and password-reset configuration.',
+            ], 503)->header('Cache-Control', 'no-store, private');
+        }
+
+        try {
+            $status = PasswordBroker::sendResetLink([
                 'email' => $user->email,
             ]);
+        } catch (\Throwable $exception) {
+            Log::warning('User Management password reset delivery failed.', [
+                'user_id' => (int) $user->id,
+                'exception_type' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'mailer' => (string) config('mail.default'),
+            ]);
+
+            return response()->json([
+                'message' => 'The reset email could not be delivered. Check the configured mail provider and try again.',
+            ], 503)->header('Cache-Control', 'no-store, private');
+        }
+
 
         if (
             $status ===
@@ -1024,6 +1048,12 @@ class UserManagementController extends Controller
                 );
         }
 
+        if ($status === PasswordBroker::RESET_THROTTLED) {
+            return response()->json([
+                'message' => 'A reset link was requested recently. Please wait before trying again.',
+            ], 429)->header('Cache-Control', 'no-store, private');
+        }
+
         return response()
             ->json([
                 'message' =>
@@ -1050,92 +1080,121 @@ class UserManagementController extends Controller
                     ?? null
             );
 
-        DB::transaction(
-            function () use (
-                $request,
-                $user
-            ): void {
-                $lockedUser =
-                    User::query()
-                        ->whereKey($user->id)
-                        ->lockForUpdate()
-                        ->firstOrFail();
+        $deletionStage = 'start';
+        try {
+            DB::transaction(
+                function () use (
+                    $request,
+                    $user,
+                    &$deletionStage
+                ): void {
+                    $lockedUser =
+                        User::query()
+                            ->whereKey($user->id)
+                            ->lockForUpdate()
+                            ->firstOrFail();
 
-                $this
-                    ->ensureNotDeletedPlaceholder(
-                        $lockedUser
-                    );
+                    $this
+                        ->ensureNotDeletedPlaceholder(
+                            $lockedUser
+                        );
 
-                $this
-                    ->assertSafeAdministratorStateChange(
-                        $request->user(),
-                        $lockedUser,
-                        strtolower(
-                            trim(
-                                (string)
-                                    $lockedUser->role
-                            )
-                        ),
-                        false,
-                        true
-                    );
+                    $this
+                        ->assertSafeAdministratorStateChange(
+                            $request->user(),
+                            $lockedUser,
+                            strtolower(
+                                trim(
+                                    (string)
+                                        $lockedUser->role
+                                )
+                            ),
+                            false,
+                            true
+                        );
 
-                $deletedUserId =
-                    $this->deletedUserId();
+                    $deletionStage = 'deleted_user_placeholder';
+                    $deletedUserId =
+                        $this->deletedUserId();
 
-                $employeeIds =
-                    $this->employeeIdsForUser(
-                        (int) $lockedUser->id
-                    );
+                    $deletionStage = 'employee_lookup';
+                    $employeeIds =
+                        $this->employeeIdsForUser(
+                            (int) $lockedUser->id
+                        );
 
-                $this
-                    ->reassignHistoricalUserReferences(
-                        (int) $lockedUser->id,
-                        $deletedUserId
-                    );
+                    $deletionStage = 'historical_reference_reassignment';
+                    $this
+                        ->reassignHistoricalUserReferences(
+                            (int) $lockedUser->id,
+                            $deletedUserId
+                        );
 
-                $this
-                    ->removeAccountSpecificRecords(
-                        $lockedUser,
-                        $employeeIds
-                    );
+                    $deletionStage = 'account_records_cleanup';
+                    $this
+                        ->removeAccountSpecificRecords(
+                            $lockedUser,
+                            $employeeIds
+                        );
 
-                $deleted =
-                    $lockedUser->delete();
+                    $deletionStage = 'user_delete';
+                    $deleted =
+                        $lockedUser->delete();
 
-                if (! $deleted) {
-                    throw new \RuntimeException(
-                        'The user account could not be deleted.'
+                    if (! $deleted) {
+                        throw new \RuntimeException(
+                            'The user account could not be deleted.'
+                        );
+                    }
+
+                    $deletionStage = 'audit_record';
+                    $this->activityLogger->record(
+                        event:
+                            'user_management.deleted',
+                        category:
+                            'user_management',
+                        description:
+                            'Administrator permanently deleted a user account.',
+                        actor:
+                            $request->user(),
+                        target:
+                            $lockedUser,
+                        metadata: [
+                            'deleted_role' =>
+                                strtolower(
+                                    (string)
+                                        $lockedUser
+                                            ->role
+                                ),
+                        ],
+                        request: $request,
                     );
                 }
+            );
 
-                $this->activityLogger->record(
-                    event:
-                        'user_management.deleted',
-                    category:
-                        'user_management',
-                    description:
-                        'Administrator permanently deleted a user account.',
-                    actor:
-                        $request->user(),
-                    target:
-                        $lockedUser,
-                    metadata: [
-                        'deleted_role' =>
-                            strtolower(
-                                (string)
-                                    $lockedUser
-                                        ->role
-                            ),
-                    ],
-                    request: $request,
-                );
-            }
-        );
+        } catch (\Throwable $exception) {
+            Log::error('Mobile User Management deletion transaction failed.', [
+                'user_id' => (int) $user->id,
+                'exception_type' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'stage' => $deletionStage,
+                'missing_database_object' => \App\Support\AccountActionReadiness::missingDatabaseObject($exception),
+            ]);
 
-        $this->deletePublicFile(
-            $profilePhotoPath
-        );
+            return response()->json([
+                'message' => 'Account deletion could not be completed. No account deletion was committed. Check related records and the server log.',
+            ], 409)->header('Cache-Control', 'no-store, private');
+        }
+
+        // Post-commit image cleanup must not report a false account deletion failure.
+        try {
+            $this->deletePublicFile($profilePhotoPath);
+        } catch (\Throwable $exception) {
+            Log::warning('Deleted mobile user profile image cleanup failed.', [
+                'user_id' => (int) $user->id,
+                'exception_type' => get_class($exception),
+            ]);
+        }
 
         return response()
             ->json([
@@ -2414,13 +2473,6 @@ class UserManagementController extends Controller
                 'incident_status_histories',
                 'updated_by',
             ],
-            ['case_records', 'created_by'],
-            ['case_records', 'creator_id'],
-            [
-                'case_status_histories',
-                'updated_by',
-            ],
-            ['case_messages', 'user_id'],
             ['announcements', 'created_by'],
             ['tanod_tasks', 'created_by'],
             ['tanod_tasks', 'updated_by'],

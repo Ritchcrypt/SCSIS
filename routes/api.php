@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AnnouncementController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\AccountMfaController;
 use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\UserManagementController;
 use App\Http\Controllers\Api\V1\ReportController;
@@ -146,6 +147,22 @@ Route::prefix('v1')
             DashboardWelcomePhotoController::class, 'update',
         ])->middleware('role:admin')
           ->name('api.v1.dashboard-welcome.update');
+        // Dao external-news carousel: authenticated roles read; Admin manages.
+        // Reuses website's approved links, signed audit and storage (no new feeds).
+        Route::get('/dashboard/dao-news', [
+            \App\Http\Controllers\Api\V1\DashboardDaoNewsController::class, 'index',
+        ])->middleware('throttle:60,1')
+          ->name('api.v1.dao-news.index');
+
+        Route::get('/dashboard/dao-news/manage', [
+            \App\Http\Controllers\Api\V1\DashboardDaoNewsController::class, 'manage',
+        ])->middleware('role:admin')
+          ->name('api.v1.dao-news.manage');
+
+        Route::post('/dashboard/dao-news/manage', [
+            \App\Http\Controllers\Api\V1\DashboardDaoNewsController::class, 'update',
+        ])->middleware('role:admin')
+          ->name('api.v1.dao-news.update');
 
 
 
@@ -165,6 +182,20 @@ Route::prefix('v1')
             ProfileController::class,
             'show',
         ])->name('api.v1.profile.show');
+
+        // Optional TOTP for every active role. The user manages only their own MFA.
+        Route::prefix('profile/mfa')->middleware('throttle:5,1')->group(function (): void {
+            Route::get('/status', [AccountMfaController::class, 'status'])
+                ->name('api.v1.profile.mfa.status');
+            Route::post('/begin', [AccountMfaController::class, 'begin'])
+                ->name('api.v1.profile.mfa.begin');
+            Route::post('/confirm', [AccountMfaController::class, 'confirm'])
+                ->name('api.v1.profile.mfa.confirm');
+            Route::post('/recovery', [AccountMfaController::class, 'regenerate'])
+                ->name('api.v1.profile.mfa.recovery');
+            Route::post('/disable', [AccountMfaController::class, 'disable'])
+                ->name('api.v1.profile.mfa.disable');
+        });
 
         Route::post('/profile/update', [
             ProfileController::class,

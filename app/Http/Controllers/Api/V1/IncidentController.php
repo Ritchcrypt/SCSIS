@@ -362,12 +362,6 @@ class IncidentController extends Controller
             'messages.user',
         ]);
 
-        if ($request->user()?->isAdmin() || $request->user()?->isOfficial()) {
-            $incident->load('caseRecords.creator');
-        } else {
-            $incident->setRelation('caseRecords', collect());
-        }
-
         $canUpdate = Gate::allows('update', $incident);
         $canAssign = Gate::allows('assign', $incident);
         $canEscalate = Gate::allows('escalate', $incident);
@@ -746,12 +740,6 @@ class IncidentController extends Controller
             'messages.user',
         ]);
 
-        if ($request->user()?->isAdmin() || $request->user()?->isOfficial()) {
-            $incident->load('caseRecords.creator');
-        } else {
-            $incident->setRelation('caseRecords', collect());
-        }
-
         return response()->json([
             'message' =>
                 'Incident report submitted successfully.',
@@ -979,12 +967,6 @@ class IncidentController extends Controller
             'messages.user',
         ]);
 
-        if ($request->user()?->isAdmin() || $request->user()?->isOfficial()) {
-            $incident->load('caseRecords.creator');
-        } else {
-            $incident->setRelation('caseRecords', collect());
-        }
-
         return response()->json([
             'message' =>
                 'Incident status updated successfully.',
@@ -1126,12 +1108,6 @@ class IncidentController extends Controller
             'escalations.escalatedBy',
             'messages.user',
         ]);
-
-        if ($request->user()?->isAdmin() || $request->user()?->isOfficial()) {
-            $incident->load('caseRecords.creator');
-        } else {
-            $incident->setRelation('caseRecords', collect());
-        }
 
         return response()->json([
             'message' =>
@@ -1701,29 +1677,8 @@ class IncidentController extends Controller
                 ]
             );
 
-        $data['related_cases'] = $incident->caseRecords
-            ->sortByDesc('created_at')
-            ->values()
-            ->map(
-                fn ($caseRecord): array => [
-                    'id' => (int) $caseRecord->id,
-                    'case_number' => $caseRecord->case_number
-                        ?? 'Case #' . $caseRecord->id,
-                    'case_type' => $caseRecord->case_type,
-                    'case_type_label' =>
-                        $caseRecord->display_type,
-                    'status' => $caseRecord->status,
-                    'status_label' =>
-                        $caseRecord->display_status,
-                    'hearing_date' =>
-                        $caseRecord->hearing_date?->toDateString(),
-                    'handled_by' => $caseRecord->handled_by,
-                    'resolution' => $caseRecord->resolution,
-                    'notes' => $caseRecord->notes,
-                    'created_at' =>
-                        $caseRecord->created_at?->toIso8601String(),
-                ]
-            );
+        // Backward-compatible payload key: Case Management is retired.
+        $data['related_cases'] = [];
 
         return $data;
     }

@@ -756,27 +756,57 @@
                         @endif
                     @endif
 
-                    <form method="POST"
-                          action="{{ route('admin.users.reset-password', $userRecord) }}">
-                        @csrf
-                        @method('PATCH')
+                    @can('resetPassword', $userRecord)
+                        <form method="POST" action="{{ route('admin.users.reset-password', $userRecord) }}">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit"
+                                    class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
+                                Send Password Reset Link
+                            </button>
+                        </form>
+                    @endcan
 
-                        <button type="submit"
-                                class="inline-flex w-full items-center justify-center rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100 sm:w-auto">
-                            Send Password Reset Link
-                        </button>
-                    </form>
-
-                    <form method="POST"
-                          action="{{ route('admin.users.destroy', $userRecord) }}">
-                        @csrf
-                        @method('DELETE')
-
-                        <button type="submit"
+                    @can('delete', $userRecord)
+                        <button type="button"
+                                popovertarget="permanent-user-delete-popover-{{ $userRecord->id }}"
+                                popovertargetaction="show"
                                 class="inline-flex w-full items-center justify-center rounded-xl border border-red-300 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto">
                             Permanent Delete
                         </button>
-                    </form>
+                        <div id="permanent-user-delete-popover-{{ $userRecord->id }}"
+                             class="tn-account-popover" popover>
+                            <div class="tn-account-popover-content">
+                                <div>
+                                    <h2 class="tn-account-popover-title">Permanently delete this user?</h2>
+                                    <p class="tn-account-popover-message">
+                                        This removes the account, revokes sessions and tokens, and cleans up linked account records. Historical audit records are retained. This cannot be undone.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="tn-account-popover-actions">
+                                <button type="button"
+                                        popovertarget="permanent-user-delete-popover-{{ $userRecord->id }}"
+                                        popovertargetaction="hide"
+                                        class="tn-account-popover-button tn-account-popover-button--cancel">
+                                    Cancel
+                                </button>
+                                <form method="POST" action="{{ route('admin.users.destroy', $userRecord) }}">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="tn-account-popover-button tn-account-popover-button--deactivate">
+                                        Confirm Permanent Delete
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    @else
+                        @if ((int) auth()->id() === (int) $userRecord->id)
+                            <span class="text-xs text-slate-500">
+                                Your signed-in administrator account cannot be deleted from User Management. Use My Profile for personal account settings.
+                            </span>
+                        @endif
+                    @endcan
                 </div>
             </div>
         @endif

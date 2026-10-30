@@ -1041,21 +1041,9 @@
 
                 $authInitial = strtoupper(mb_substr($authUser?->name ?? 'U', 0, 1));
 
-                $authProfileUrl = '#';
-
-if ($authUser) {
-    if (
-        $authUser->isAdmin()
-        && Route::has('admin.users.edit')
-    ) {
-        $authProfileUrl = route(
-            'admin.users.edit',
-            $authUser
-        );
-    } elseif (Route::has('profile.edit')) {
-        $authProfileUrl = route('profile.edit');
-    }
-}
+                $authProfileUrl = Route::has('profile.edit')
+    ? route('profile.edit')
+    : '#';
 
                 $navItems = match ($role) {
                     'admin' => [

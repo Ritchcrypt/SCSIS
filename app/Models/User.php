@@ -35,6 +35,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'mfa_secret',
+        'mfa_recovery_codes',
     ];
 
     protected static function booted(): void
@@ -76,6 +78,7 @@ class User extends Authenticatable
             'status' => 'boolean',
             'date_of_birth' => 'date',
             'age_attested_at' => 'datetime',
+            'mfa_enabled_at' => 'datetime',
         ];
     }
 

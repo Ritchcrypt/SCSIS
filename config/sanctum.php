@@ -50,7 +50,9 @@ return [
     |
     */
 
-    'expiration' => null,
+    // 30-day maximum bearer-token lifetime; configurable without code changes.
+    // Expired tokens require a fresh sign-in and cannot remain valid indefinitely.
+    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION_MINUTES', 43200),
 
     /*
     |--------------------------------------------------------------------------

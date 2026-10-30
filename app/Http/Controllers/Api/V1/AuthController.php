@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AdminTotpService;
 use App\Models\UserNotification;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -203,6 +204,7 @@ class AuthController extends Controller
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string'],
             'device_name' => ['required', 'string', 'max:255'],
+            'mfa_code' => ['nullable', 'string', 'max:32'],
         ]);
 
         $throttleKey = $this->throttleKey(
@@ -256,11 +258,33 @@ class AuthController extends Controller
             ], 422);
         }
 
+        // Password verification must not issue a token for any enrolled account
+        // until its second factor has been verified.
+        if (! empty($user->mfa_secret)) {
+            $code = trim((string) ($validated['mfa_code'] ?? ''));
+            if ($code === '') {
+                return response()->json([
+                    'mfa_required' => true,
+                    'message' => 'Enter your account authenticator code.',
+                ], 202);
+            }
+
+            if (! app(AdminTotpService::class)->verifyAndConsume($user, $code)) {
+                RateLimiter::hit($throttleKey, 60);
+                return response()->json([
+                    'mfa_required' => true,
+                    'message' => 'Invalid or previously used authenticator code.',
+                ], 422);
+            }
+        }
+
         RateLimiter::clear($throttleKey);
 
+        // Independent of Sanctum's null global expiration setting.
         $token = $user->createToken(
             $validated['device_name'],
-            ['mobile']
+            ['mobile'],
+            now()->addDays(30)
         );
 
         event(new Login('sanctum', $user, false));

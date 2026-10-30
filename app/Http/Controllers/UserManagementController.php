@@ -769,9 +769,33 @@ class UserManagementController extends Controller
         Gate::authorize('resetPassword', $user);
         $this->ensureNotDeletedPlaceholder($user);
 
-        $status = PasswordBroker::sendResetLink([
-            'email' => $user->email,
-        ]);
+        $deliveryError = \App\Support\AccountActionReadiness::passwordResetError();
+        if ($deliveryError !== null) {
+            Log::warning('User Management password reset is not ready.', [
+                'reason' => $deliveryError,
+            ]);
+            return back()->with('error',
+                'Password reset email is currently unavailable. Check mail and password-reset configuration.'
+            );
+        }
+
+        try {
+            $status = PasswordBroker::sendResetLink([
+                'email' => $user->email,
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('User Management password reset delivery failed.', [
+                'user_id' => (int) $user->id,
+                'exception_type' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'mailer' => (string) config('mail.default'),
+            ]);
+
+            return back()->with('error',
+                'The reset email could not be delivered. Check the mail provider configuration and try again.'
+            );
+        }
+
 
         if ($status === PasswordBroker::RESET_LINK_SENT) {
             $this->activityLogger->record(
@@ -794,6 +818,12 @@ class UserManagementController extends Controller
             );
         }
 
+        if ($status === PasswordBroker::RESET_THROTTLED) {
+            return back()->with('error',
+                'A reset link was requested recently. Please wait before trying again.'
+            );
+        }
+
         return back()->with(
             'error',
             'The password reset link could not be sent. Check the mail configuration and try again.'
@@ -813,63 +843,94 @@ class UserManagementController extends Controller
             $user->profile_photo_path ?? null
         );
 
-        DB::transaction(function () use (
-            $request,
-            $user
-        ): void {
-            $lockedUser = User::query()
-                ->whereKey($user->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        $deletionStage = 'start';
+        try {
+            DB::transaction(function () use (
+                $request,
+                $user,
+                &$deletionStage
+            ): void {
+                $lockedUser = User::query()
+                    ->whereKey($user->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-            $this->assertSafeAdministratorStateChange(
-                $request->user(),
-                $lockedUser,
-                strtolower(trim((string) $lockedUser->role)),
-                false,
-                true
-            );
-
-            $deletedUserId = $this->deletedUserId();
-
-            $employeeIds = $this->employeeIdsForUser(
-                (int) $lockedUser->id
-            );
-
-            $this->reassignHistoricalUserReferences(
-                (int) $lockedUser->id,
-                $deletedUserId
-            );
-
-            $this->removeAccountSpecificRecords(
-                $lockedUser,
-                $employeeIds
-            );
-
-            $deleted = $lockedUser->delete();
-
-            if (! $deleted) {
-                throw new \RuntimeException(
-                    'The user account could not be deleted.'
+                $this->assertSafeAdministratorStateChange(
+                    $request->user(),
+                    $lockedUser,
+                    strtolower(trim((string) $lockedUser->role)),
+                    false,
+                    true
                 );
-            }
 
-            $this->activityLogger->record(
-                event: 'user_management.deleted',
-                category: 'user_management',
-                description: 'Administrator permanently deleted a user account.',
-                actor: $request->user(),
-                target: $lockedUser,
-                metadata: [
-                    'deleted_role' => strtolower(
-                        (string) $lockedUser->role
-                    ),
-                ],
-                request: $request,
+                $deletionStage = 'deleted_user_placeholder';
+                $deletedUserId = $this->deletedUserId();
+
+                $deletionStage = 'employee_lookup';
+                $employeeIds = $this->employeeIdsForUser(
+                    (int) $lockedUser->id
+                );
+
+                $deletionStage = 'historical_reference_reassignment';
+                $this->reassignHistoricalUserReferences(
+                    (int) $lockedUser->id,
+                    $deletedUserId
+                );
+
+                $deletionStage = 'account_records_cleanup';
+                $this->removeAccountSpecificRecords(
+                    $lockedUser,
+                    $employeeIds
+                );
+
+                $deletionStage = 'user_delete';
+                $deleted = $lockedUser->delete();
+
+                if (! $deleted) {
+                    throw new \RuntimeException(
+                        'The user account could not be deleted.'
+                    );
+                }
+
+                $deletionStage = 'audit_record';
+                $this->activityLogger->record(
+                    event: 'user_management.deleted',
+                    category: 'user_management',
+                    description: 'Administrator permanently deleted a user account.',
+                    actor: $request->user(),
+                    target: $lockedUser,
+                    metadata: [
+                        'deleted_role' => strtolower(
+                            (string) $lockedUser->role
+                        ),
+                    ],
+                    request: $request,
+                );
+            });
+
+        } catch (\Throwable $exception) {
+            Log::error('User Management account deletion transaction failed.', [
+                'user_id' => (int) $user->id,
+                'exception_type' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'stage' => $deletionStage,
+                'missing_database_object' => \App\Support\AccountActionReadiness::missingDatabaseObject($exception),
+            ]);
+
+            return back()->with('error',
+                'Account deletion could not be completed. No account deletion was committed. Check related records and the server log.'
             );
-        });
+        }
 
-        $this->deletePublicFile($profilePhotoPath);
+        // A missing photo must not turn an already committed deletion into an error page.
+        try {
+            $this->deletePublicFile($profilePhotoPath);
+        } catch (\Throwable $exception) {
+            Log::warning('Deleted user profile image cleanup failed.', [
+                'user_id' => (int) $user->id,
+                'exception_type' => get_class($exception),
+            ]);
+        }
 
         return redirect()
             ->route('admin.users.index')
@@ -1460,10 +1521,6 @@ if (Schema::hasColumn('tanod_profiles', 'duty_status')) {
             ['incidents', 'resident_id'],
             ['incident_messages', 'user_id'],
             ['incident_status_histories', 'updated_by'],
-            ['case_records', 'created_by'],
-            ['case_records', 'creator_id'],
-            ['case_status_histories', 'updated_by'],
-            ['case_messages', 'user_id'],
             ['announcements', 'created_by'],
             ['tanod_tasks', 'created_by'],
             ['tanod_tasks', 'updated_by'],

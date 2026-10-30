@@ -1,6 +1,14 @@
 <?php
 
 return [
+    // OFF by default. Used only for explicit, loopback-only local diagnostics.
+    'development' => [
+        'admin_bypass_enabled' => filter_var(
+            env('TABANGNOW_LOCAL_ADMIN_BYPASS', false),
+            FILTER_VALIDATE_BOOLEAN
+        ),
+    ],
+
     'headers' => [
         'enabled' => env(
             'SECURITY_HEADERS_ENABLED',

@@ -3,14 +3,30 @@
     $daoExternalStories = app(\App\Services\DashboardDaoNewsService::class)->forUser(auth()->user());
 @endphp
 
+{{-- TN_C21_NEWS_FEEDBACK_FIX_V1: surface errors above collapsed manager, without modifying source validation --}}
+@if (auth()->user()?->role === 'admin')
+    @if ($errors->any())
+        <div role="alert" style="border:1px solid #b91c1c;border-radius:8px;padding:10px 14px;margin:10px 0;color:inherit;background:rgba(185,28,28,.08)">
+            <strong>External news link was not saved.</strong>
+            <span>{{ $errors->first() }}</span>
+            <span>Use an approved direct HTTPS publisher link and its actual publication date within the last 90 days.</span>
+        </div>
+    @elseif (session('dao_news_status') === 'Approved external link added for 60 days.')
+        <div data-tn-c21-news-add-success role="status" style="border:1px solid #16803b;border-radius:8px;padding:10px 14px;margin:10px 0;color:inherit;background:rgba(22,128,59,.08)">
+            <strong>News link saved.</strong> Showing the newest approved news slide now. Select the center of the slide to open its publisher.
+        </div>
+    @elseif (session('dao_news_status'))
+        <div role="status" style="border:1px solid #64748b;border-radius:8px;padding:10px 14px;margin:10px 0;color:inherit;background:rgba(100,116,139,.08)">
+            {{ session('dao_news_status') }}
+        </div>
+    @endif
+@endif
 @if ($daoExternalStories->isNotEmpty())
 <style>
     .tn-dao-ext-content[hidden] { display: none !important; }
     .tn-dao-ext-heading { position: relative; z-index: 4; max-width: min(72%, 720px);
         padding: 30px 38px 44px; color: white; text-shadow: 0 2px 5px rgba(0,0,0,.8);
         pointer-events: none; }
-    .tn-dao-ext-heading__label { display: inline-block; font-weight: 750; font-size: 12px;
-        padding: 5px 9px; border-radius: 5px; background: rgba(6,25,49,.82); margin-bottom: 9px; }
     .tn-dao-ext-heading h2 { font-size: clamp(20px, 2.25vw, 32px); line-height: 1.18; font-weight: 800;
         margin: 0 0 7px; max-height: 3.6em; overflow: hidden; }
     .tn-dao-ext-heading p { margin: 0 0 7px; line-height: 1.38; font-size: 13px;
@@ -62,10 +78,9 @@
     const records = [...shell.querySelectorAll('[data-dao-ext-record]')].map(el => el.dataset);
     if (!banner || !greeting || !records.length) return;
     const heading = document.createElement('div'); heading.className = 'tn-dao-ext-heading tn-dao-ext-content'; heading.hidden = true;
-    const label = document.createElement('div'); label.className = 'tn-dao-ext-heading__label'; label.textContent = 'DAO, CAPIZ';
     const title = document.createElement('h2');
     const source = document.createElement('div'); source.className = 'tn-dao-ext-heading__source';
-    heading.append(label,title,source); banner.append(heading);
+    heading.append(title,source); banner.append(heading);
     const reader = document.createElement('button'); reader.type = 'button'; reader.className = 'tn-dao-ext-reader';
     reader.setAttribute('aria-label','Read Dao news at the publisher (opens in a new tab)'); banner.append(reader);
     const left = document.createElement('button'); left.type='button'; left.className = 'tn-dao-ext-navigation tn-dao-ext-navigation--left';
@@ -131,7 +146,7 @@
             e.preventDefault();change(e.key === 'ArrowRight' ? 1 : -1);
         }
     });
-    apply(0);
+    apply(document.querySelector('[data-tn-c21-news-add-success]') ? 1 : 0);
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
     if (!reduceMotion) {
         const timer = window.setInterval(()=>{
@@ -149,7 +164,15 @@
 <style>
 .tn-dao-curated-manager { margin: 12px 0 22px; padding: 12px 16px; border: 1px solid #94a3b850;
  border-radius: 10px; color: inherit; background: rgba(100,116,139,.07); }
+/* Explicit accessible disclosure buttons avoid nested <details> click issues. */
 .tn-dao-curated-manager summary { cursor: pointer; font-weight: 700; }
+.tn-dao-curated-manager [data-tn-news-panel][hidden] { display: none !important; }
+.tn-dao-curated-manager__toggle { width: 100%; text-align: left; font-weight: 700;
+    padding: 7px 10px !important; background: transparent; border: 1px solid #94a3b850 !important;
+    color: inherit; border-radius: 7px; cursor: pointer; }
+.tn-dao-curated-manager__toggle:focus-visible { outline: 3px solid #38bdf8; outline-offset: 2px; }
+.tn-dao-curated-manager__panel { width: 100%; margin: 8px 0 0; padding: 8px 10px;
+    border-left: 2px solid #94a3b880; }
 .tn-dao-curated-manager p { font-size: 13px; margin: 10px 0; }
 .tn-dao-curated-manager__form { display:flex; flex-wrap:wrap; gap:9px; align-items:end; }
 .tn-dao-curated-manager label { display:flex; flex-direction:column; font-size:12px; font-weight:600; gap:4px; }
@@ -161,8 +184,28 @@
 .tn-dao-curated-manager__list { margin:12px 0 0; padding:0; list-style:none; }
 .tn-dao-curated-manager__list li { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:6px; font-size:12px; }
 .tn-dao-curated-manager__list span { min-width:0; overflow-wrap:anywhere; flex:1; }
+
+.tn-dao-curated-manager .tn-dao-friendly-audit-item {
+      display: block;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(100,116,139,.22);
+      overflow-wrap: anywhere;
+    }
+    .tn-dao-curated-manager .tn-dao-friendly-audit-item strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+    .tn-dao-curated-manager .tn-dao-friendly-audit-item span {
+      display: block;
+      font-size: 12px;
+      color: inherit;
+      opacity: .78;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
 </style>
-<details class="tn-dao-curated-manager">
+<details class="tn-dao-curated-manager" @if($errors->any()) open @endif>
   <summary>Manage external news links (Admin only)</summary>
   @php
     $daoNewsLinkService = app(\App\Services\DashboardDaoNewsService::class);
@@ -173,7 +216,7 @@
   @if($daoNewsStorageError)
     <p role="alert">The private news-links file needs recovery. Contact the administrator to verify and restore a matching versioned snapshot; never overwrite the audit key without its matching data file.</p>
   @endif
-  <p>Admin can edit, unpublish, check HTTPS availability (HEAD only), remove and review external links. Every change is recorded in a signed audit history. HEAD checks do not verify publisher accuracy or article content. Only reviewed publishers are accepted. TabangNow never fetches, copies or embeds publisher articles, headlines or photos. Each link must be relevant to Dao, Capiz, have a verified publication date within the past 90 days, and be re-reviewed every 60 days. Existing links remain saved but are hidden until reapproved. News slides visibly identify external publisher links; clicking opens the publisher in a separate tab without a popup.</p>
+
   @if(session('dao_news_status'))<p role="status">{{ session('dao_news_status') }}</p>@endif
   @if($errors->any())
     <p role="alert">{{ $errors->first() }}</p>
@@ -217,8 +260,10 @@
           @if(!empty($entry['last_checked_at'])) · Last HEAD check: {{ $entry['last_checked_at'] }} ({{ $entry['link_status'] }}{{ $entry['last_http_status'] ? ' HTTP '.$entry['last_http_status'] : '' }}) @endif
         </span>
         @unless($daoNewsStorageError)
-        <details style="width:100%;margin-left:10px">
-          <summary>Edit external article link</summary>
+        <div style="width:100%;margin-left:10px">
+          <button type="button" class="tn-dao-curated-manager__toggle" data-tn-news-toggle
+            aria-expanded="false" aria-controls="tn-dao-news-edit-{{ $entry['id'] }}">Edit external article link</button>
+          <div class="tn-dao-curated-manager__panel" id="tn-dao-news-edit-{{ $entry['id'] }}" data-tn-news-panel hidden>
           <form class="tn-dao-curated-manager__form" method="POST" action="{{ route('admin.dao-news-links.store') }}">
             @csrf
             <input type="hidden" name="edit_id" value="{{ $entry['id'] }}">
@@ -238,7 +283,8 @@
               I confirmed that the corrected article is relevant to Dao, Capiz.</label>
             <button type="submit">Save edited link</button>
           </form>
-        </details>
+          </div>
+        </div>
         <form method="POST" action="{{ route('admin.dao-news-links.store') }}">
           @csrf
           <input type="hidden" name="check_id" value="{{ $entry['id'] }}">
@@ -278,30 +324,82 @@
   @endif
 
   @if(!$daoNewsStorageError)
-  <details style="margin-top:14px">
-    <summary>External news audit history (latest 40)</summary>
-    <p>Private Admin-only history of additions, edits, reviews, link checks, unpublishing and removals. Signed with a dedicated private audit key after the first successful edit; versioned recovery snapshots preserve data and key together.</p>
-    @if($daoNewsAudit === [])
-      <p>No activity recorded yet; pre-upgrade edits were not historically logged.</p>
-    @else
-      <ul class="tn-dao-curated-manager__list">
-        @foreach($daoNewsAudit as $event)
-          <li>
-            <span><strong>{{ strtoupper(str_replace('_', ' ', $event['action'])) }}</strong>
-              · {{ $event['at'] }} · Admin user #{{ $event['actor_id'] ?: 'unknown' }}
-              · Link ID {{ $event['link_id'] }}
-              @if($event['before'])
-                · Before: {{ $event['before']['url'] }} ({{ $event['before']['topic'] }})
-              @endif
-              @if($event['after'])
-                · After: {{ $event['after']['url'] }} ({{ $event['after']['topic'] }})
-              @endif
-            </span>
+  <div style="margin-top:14px">
+    <button type="button" class="tn-dao-curated-manager__toggle" data-tn-news-toggle
+      aria-expanded="false" aria-controls="tn-dao-news-audit-panel">External news audit history (latest 40)</button>
+    <div id="tn-dao-news-audit-panel" class="tn-dao-curated-manager__panel" data-tn-news-panel hidden>
+      <p>Private Admin-only history of additions, edits, reviews, link checks, unpublishing and removals. Signed audit records and recovery snapshots remain protected.</p>
+      @if($daoNewsAudit === [])
+        <p>No activity recorded yet; pre-upgrade edits were not historically logged.</p>
+      @else
+        <ul class="tn-dao-curated-manager__list">
+          @foreach($daoNewsAudit as $event)
+          @php
+            // Presentation only. The original signed event and full history stay intact.
+            $auditAction = (string) ($event['action'] ?? '');
+            $auditRecord = is_array($event['after'] ?? null) ? $event['after'] :
+                (is_array($event['before'] ?? null) ? $event['before'] : []);
+            $auditStatus = (string) ($auditRecord['link_status'] ?? '');
+            $auditLabel = match ($auditAction) {
+                'added' => 'Article added',
+                'edited' => 'Article updated',
+                'reviewed' => 'Article approved',
+                'unpublished' => 'Article hidden',
+                'removed' => 'Article removed',
+                'link_checked' => match ($auditStatus) {
+                    'ok' => 'Link checked: available',
+                    'broken' => 'Link checked: unavailable',
+                    'redirected' => 'Link checked: redirected',
+                    'manual_check' => 'Link checked: needs review',
+                    default => 'Link checked',
+                },
+                default => 'News link updated',
+            };
+            $auditWhen = 'Date unavailable';
+            try {
+                if (!empty($event['at'])) {
+                    $auditWhen = \Illuminate\Support\Carbon::parse($event['at'])
+                        ->timezone('Asia/Manila')->format('M j, Y · g:i A');
+                }
+            } catch (\Throwable $ignored) { /* A malformed date must not break the dashboard. */ }
+            $auditUrl = (string) ($auditRecord['url'] ?? '');
+            $auditHost = (string) (parse_url($auditUrl, PHP_URL_HOST) ?: '');
+            $auditHost = preg_replace('/^www\./i', '', $auditHost);
+            $auditPath = (string) (parse_url($auditUrl, PHP_URL_PATH) ?: '');
+            $auditSlug = trim(str_replace(['-', '_'], ' ', basename(rtrim($auditPath, '/'))));
+            $auditDetail = $auditSlug !== '' ? $auditSlug : (string) ($auditRecord['topic'] ?? '');
+            $auditArticle = $auditHost !== ''
+                ? $auditHost.($auditDetail !== '' ? ' · '.\Illuminate\Support\Str::limit($auditDetail, 55) : '')
+                : ($auditDetail !== '' ? $auditDetail : 'Article details unavailable');
+          @endphp
+          <li class="tn-dao-friendly-audit-item">
+            <strong>{{ $auditLabel }}</strong>
+            <span>{{ $auditWhen }}</span>
+            <span>{{ $auditArticle }}</span>
           </li>
         @endforeach
-      </ul>
-    @endif
-  </details>
+        </ul>
+      @endif
+    </div>
+  </div>
   @endif
+
 </details>
+<script>
+/* Scoped to this dashboard manager; does not affect sitewide click handling. */
+(() => {
+  const manager = document.currentScript?.previousElementSibling;
+  if (!manager?.classList.contains('tn-dao-curated-manager')) return;
+  manager.addEventListener('click', event => {
+    const toggle = event.target.closest('button[data-tn-news-toggle]');
+    if (!toggle || !manager.contains(toggle)) return;
+    const id = toggle.getAttribute('aria-controls');
+    const panel = id ? document.getElementById(id) : null;
+    if (!panel || !manager.contains(panel) || !panel.hasAttribute('data-tn-news-panel')) return;
+    const expanding = panel.hidden;
+    panel.hidden = !expanding;
+    toggle.setAttribute('aria-expanded', String(expanding));
+  });
+})();
+</script>
 @endif
