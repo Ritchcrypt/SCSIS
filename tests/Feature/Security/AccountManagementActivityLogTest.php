@@ -4,7 +4,7 @@ namespace Tests\Feature\Security;
 
 use App\Models\ActivityLog;
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Notifications\BrevoPasswordResetNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -213,6 +213,8 @@ class AccountManagementActivityLogTest extends TestCase
     public function test_admin_activation_deactivation_and_reset_link_are_logged(): void
     {
         Notification::fake();
+        config()->set('services.brevo.key', 'fake-test-key-not-sent');
+        config()->set('mail.from.address', 'no-reply@example.org');
 
         /** @var User $admin */
         $admin = $this->activeAdmin();
@@ -244,7 +246,7 @@ class AccountManagementActivityLogTest extends TestCase
 
         Notification::assertSentTo(
             $target,
-            ResetPassword::class
+            BrevoPasswordResetNotification::class
         );
 
         $this->assertDatabaseHas('activity_logs', [

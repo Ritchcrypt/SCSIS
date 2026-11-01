@@ -3,7 +3,7 @@
 namespace Tests\Feature\Security;
 
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Notifications\BrevoPasswordResetNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -93,8 +93,8 @@ class SessionRevocationSecurityTest extends TestCase
 
         Notification::assertSentTo(
             $user,
-            ResetPassword::class,
-            function (ResetPassword $notification) use ($user): bool {
+            BrevoPasswordResetNotification::class,
+            function (BrevoPasswordResetNotification $notification) use ($user): bool {
                 $newPassword = 'ResetTabang#2026';
 
                 Volt::test('auth.reset-password', [

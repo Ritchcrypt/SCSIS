@@ -62,13 +62,13 @@
     rel="icon"
     type="image/png"
     sizes="32x32"
-    href="/tabangnow-tab-icon-v7.png?v=11"
+    href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12"
 >
 
 <link
     rel="shortcut icon"
     type="image/png"
-    href="/tabangnow-tab-icon-v7.png?v=11"
+    href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12"
 >
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -416,10 +416,12 @@
                 const selectedMode =
                     normalizeThemeMode(mode);
 
+                // Only render selection indicators for actual theme
+                // options. Hidden fields and the Custom Color submit
+                // button must not become selectable rows.
                 const controls = Array.from(
                     document.querySelectorAll(
-                        '[name="theme_mode"],'
-                        + '[data-theme-mode]'
+                        '[data-theme-option]'
                     )
                 );
 
@@ -1518,17 +1520,8 @@
                 );
             }
 
-            function isHistoryTraversal(event = null) {
-                const navigationEntry = performance
-                    .getEntriesByType('navigation')[0];
-
-                return Boolean(
-                    event?.persisted
-                    || navigationEntry?.type
-                        === 'back_forward'
-                );
-            }
-
+            // A back/forward network navigation already passed Laravel auth.
+            // Only a document restored from bfcache needs a fresh auth check.
             function refreshThroughLaravel() {
                 concealAuthenticatedDocument();
                 window.location.reload();
@@ -1544,7 +1537,7 @@
             window.addEventListener(
                 'pageshow',
                 function (event) {
-                    if (isHistoryTraversal(event)) {
+                    if (event.persisted) {
                         refreshThroughLaravel();
                         return;
                     }
@@ -1553,12 +1546,42 @@
                 }
             );
 
-            window.addEventListener(
-                'popstate',
-                function () {
-                    refreshThroughLaravel();
+            // Clicking the link for the current page should not re-request it.
+            // Other navigation, modified clicks, downloads, and fragments work normally.
+            document.addEventListener('click', function (event) {
+                if (
+                    event.defaultPrevented
+                    || event.button !== 0
+                    || event.ctrlKey
+                    || event.metaKey
+                    || event.altKey
+                    || event.shiftKey
+                    || !(event.target instanceof Element)
+                ) {
+                    return;
                 }
-            );
+
+                const link = event.target.closest('#adminSidebar a[href]');
+
+                if (
+                    !link
+                    || link.hasAttribute('download')
+                    || (link.target && link.target !== '_self')
+                ) {
+                    return;
+                }
+
+                const destination = new URL(link.href, window.location.href);
+
+                if (
+                    destination.origin === window.location.origin
+                    && destination.pathname === window.location.pathname
+                    && destination.search === window.location.search
+                    && !destination.hash
+                ) {
+                    event.preventDefault();
+                }
+            });
         })();
     </script>
 </body>

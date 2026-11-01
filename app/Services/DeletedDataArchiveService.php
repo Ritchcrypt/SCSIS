@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Announcement;
-use App\Models\CaseRecord;
 use App\Models\DeletedDataArchive;
 use App\Models\EmergencyHotline;
 use App\Models\Incident;
@@ -27,7 +26,6 @@ class DeletedDataArchiveService
         'api.v1.incidents.destroy' => ['incident', 'incident', Incident::class],
         'admin.resident-complaints.destroy' => ['resident_complaint', 'residentComplaint', ResidentComplaint::class],
         'api.v1.resident-complaints.destroy' => ['resident_complaint', 'residentComplaint', ResidentComplaint::class],
-        'api.v1.cases.destroy' => ['case_record', 'caseRecord', CaseRecord::class],
         'admin.announcements.destroy' => ['announcement', 'announcement', Announcement::class],
         'official.announcements.destroy' => ['announcement', 'announcement', Announcement::class],
         'api.v1.announcements.destroy' => ['announcement', 'announcement', Announcement::class],
@@ -59,7 +57,6 @@ class DeletedDataArchiveService
                 ['incident_status_histories', 'incident_id'],
                 ['incident_status_history', 'incident_id'],
                 ['incident_escalations', 'incident_id'],
-                ['case_records', 'incident_id'],
             ],
             'references' => [
                 ['tanod_tasks', 'incident_id'],
@@ -71,11 +68,6 @@ class DeletedDataArchiveService
             'children' => [
                 ['resident_complaint_proofs', 'resident_complaint_id'],
             ],
-            'references' => [],
-        ],
-        'case_record' => [
-            'root' => 'case_records',
-            'children' => [],
             'references' => [],
         ],
         'announcement' => [
@@ -594,9 +586,6 @@ class DeletedDataArchiveService
                 ?: 'Incident #' . $model->getKey(),
             'resident_complaint' => $model->complainant_name
                 ?: 'Complaint #' . $model->getKey(),
-            'case_record' => $model->case_number
-                ? 'Case ' . $model->case_number
-                : 'Case #' . $model->getKey(),
             'announcement' => $model->title
                 ?: 'Announcement #' . $model->getKey(),
             'emergency_hotline' => $model->agency_name

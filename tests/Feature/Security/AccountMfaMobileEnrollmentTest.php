@@ -5,12 +5,20 @@ namespace Tests\Feature\Security;
 use App\Models\User;
 use App\Services\AdminTotpService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
 class AccountMfaMobileEnrollmentTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function asMobileToken(string $token): static
+    {
+        // PHPUnit shares one application container between simulated requests.
+        // Force Sanctum to resolve each supplied bearer token independently.
+        Auth::forgetGuards();
+        return $this->withToken($token);
+    }
     private function mobileToken(User $user): string
     {
         return $user->createToken('Android', ['mobile'], now()->addDays(30))->plainTextToken;
@@ -22,25 +30,25 @@ class AccountMfaMobileEnrollmentTest extends TestCase
         foreach (['admin', 'official', 'tanod', 'resident'] as $role) {
             $user = User::factory()->create(['role' => $role, 'is_active' => true]);
             $token = $this->mobileToken($user);
-            $this->withToken($token)->getJson('/api/v1/profile/mfa/status')
+            $this->asMobileToken($token)->getJson('/api/v1/profile/mfa/status')
                 ->assertOk()->assertJson(['enabled' => false]);
-            $this->withToken($token)->postJson('/api/v1/profile/mfa/begin', ['password' => 'incorrect'])
+            $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/begin', ['password' => 'incorrect'])
                 ->assertUnprocessable();
-            $start = $this->withToken($token)->postJson('/api/v1/profile/mfa/begin', ['password' => 'password'])
+            $start = $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/begin', ['password' => 'password'])
                 ->assertOk()->assertHeader('Cache-Control', 'no-store, private')
                 ->json();
             $secret = $start['secret'];
             $this->assertStringStartsWith('otpauth://totp/', $start['provisioning_uri']);
-            $this->withToken($token)->postJson('/api/v1/profile/mfa/confirm', ['code' => '000ABC'])
+            $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/confirm', ['code' => '000ABC'])
                 ->assertUnprocessable();
-            $result = $this->withToken($token)->postJson('/api/v1/profile/mfa/confirm', [
+            $result = $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/confirm', [
                 'code' => $totp->codeAt($secret, time()),
             ])->assertOk()->assertJson(['enabled' => true])->json();
             $this->assertCount(8, $result['recovery_codes']);
             $this->assertNotEmpty($result['access_token']);
-            $this->withToken($token)->getJson('/api/v1/profile/mfa/status')
+            $this->asMobileToken($token)->getJson('/api/v1/profile/mfa/status')
                 ->assertUnauthorized(); // Pre-MFA tokens must be revoked.
-            $this->withToken($result['access_token'])->getJson('/api/v1/profile/mfa/status')
+            $this->asMobileToken($result['access_token'])->getJson('/api/v1/profile/mfa/status')
                 ->assertOk()->assertJson(['enabled' => true, 'recovery_codes_remaining' => 8]);
         }
     }
@@ -50,30 +58,30 @@ class AccountMfaMobileEnrollmentTest extends TestCase
         $user = User::factory()->create(['role' => 'resident', 'is_active' => true]);
         $token = $this->mobileToken($user);
         $totp = app(AdminTotpService::class);
-        $start = $this->withToken($token)->postJson('/api/v1/profile/mfa/begin', [
+        $start = $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/begin', [
             'password' => 'password',
         ])->assertOk()->json();
-        $confirmed = $this->withToken($token)->postJson('/api/v1/profile/mfa/confirm', [
+        $confirmed = $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/confirm', [
             'code' => $totp->codeAt($start['secret'], time()),
         ])->assertOk()->json();
         $token = $confirmed['access_token'];
         $oldCodes = $confirmed['recovery_codes'];
-        $this->withToken($token)->postJson('/api/v1/profile/mfa/recovery', [
+        $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/recovery', [
             'password' => 'bad-password', 'code' => $oldCodes[0],
         ])->assertUnprocessable();
-        $fresh = $this->withToken($token)->postJson('/api/v1/profile/mfa/recovery', [
+        $fresh = $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/recovery', [
             'password' => 'password', 'code' => $oldCodes[0],
         ])->assertOk()->json();
         $this->assertCount(8, $fresh['recovery_codes']);
-        $this->withToken($token)->postJson('/api/v1/profile/mfa/disable', [
+        $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/disable', [
             'password' => 'password', 'code' => $oldCodes[1],
         ])->assertUnprocessable();
-        $off = $this->withToken($token)->postJson('/api/v1/profile/mfa/disable', [
+        $off = $this->asMobileToken($token)->postJson('/api/v1/profile/mfa/disable', [
             'password' => 'password', 'code' => $fresh['recovery_codes'][0],
         ])->assertOk()->assertJson(['enabled' => false])->json();
         $this->assertNotEmpty($off['access_token']);
-        $this->withToken($token)->getJson('/api/v1/profile/mfa/status')->assertUnauthorized();
-        $this->withToken($off['access_token'])->getJson('/api/v1/profile/mfa/status')
+        $this->asMobileToken($token)->getJson('/api/v1/profile/mfa/status')->assertUnauthorized();
+        $this->asMobileToken($off['access_token'])->getJson('/api/v1/profile/mfa/status')
             ->assertOk()->assertJson(['enabled' => false]);
     }
 
@@ -92,18 +100,37 @@ class AccountMfaMobileEnrollmentTest extends TestCase
         $user = User::factory()->create(['role' => 'resident', 'is_active' => true]);
         $firstDevice = $this->mobileToken($user);
         $secondDevice = $this->mobileToken($user);
-        $begin = $this->withToken($firstDevice)->postJson('/api/v1/profile/mfa/begin', [
+        $begin = $this->asMobileToken($firstDevice)->postJson('/api/v1/profile/mfa/begin', [
             'password' => 'password',
         ])->assertOk()->json();
 
-        $this->withToken($secondDevice)->postJson('/api/v1/profile/mfa/confirm', [
+        $this->asMobileToken($secondDevice)->postJson('/api/v1/profile/mfa/confirm', [
             'code' => app(AdminTotpService::class)->codeAt($begin['secret'], time()),
         ])->assertUnprocessable();
 
-        $this->withToken($firstDevice)->getJson('/api/v1/profile/mfa/status')
+        $this->asMobileToken($firstDevice)->getJson('/api/v1/profile/mfa/status')
             ->assertOk()->assertJson(['enabled' => false]);
     }
 
+    public function test_mfa_sensitive_throttle_is_per_user_not_shared_ip(): void
+    {
+        $first = User::factory()->create(['role' => 'resident', 'is_active' => true]);
+        $second = User::factory()->create(['role' => 'official', 'is_active' => true]);
+        $firstToken = $this->mobileToken($first);
+        $secondToken = $this->mobileToken($second);
+
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $this->asMobileToken($firstToken)
+                ->postJson('/api/v1/profile/mfa/begin', ['password' => 'incorrect'])
+                ->assertUnprocessable();
+        }
+        $this->asMobileToken($firstToken)
+            ->postJson('/api/v1/profile/mfa/begin', ['password' => 'incorrect'])
+            ->assertStatus(429);
+        $this->asMobileToken($secondToken)
+            ->postJson('/api/v1/profile/mfa/begin', ['password' => 'incorrect'])
+            ->assertUnprocessable();
+    }
     public function test_unauthenticated_devices_cannot_manage_mfa(): void
     {
         $this->postJson('/api/v1/profile/mfa/begin', ['password' => 'password'])

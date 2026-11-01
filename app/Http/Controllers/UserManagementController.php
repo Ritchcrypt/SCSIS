@@ -788,7 +788,8 @@ class UserManagementController extends Controller
                 'user_id' => (int) $user->id,
                 'exception_type' => get_class($exception),
                 'exception_code' => (string) $exception->getCode(),
-                'mailer' => (string) config('mail.default'),
+                'transport' => 'brevo_api',
+                'reason' => \App\Support\PasswordResetFailure::classify($exception),
             ]);
 
             return back()->with('error',

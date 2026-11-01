@@ -115,6 +115,80 @@
                 </button>
             </div>
         </form>
+
+    </div>
+
+    @php
+        $customAuthBackgroundUrl = \App\Http\Controllers\AuthBackgroundController::uploadedUrl($setting);
+        $authBackgroundPreviewUrl = $customAuthBackgroundUrl
+            ?? asset('images/auth/dao-auth-photo-20261022_181835_038.jpg');
+    @endphp
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div class="mb-5">
+            <h2 class="text-xl font-bold text-slate-900">Public Authentication Background</h2>
+            <p class="mt-1 text-sm text-slate-600">
+                This image appears behind the login, sign-up, forgot-password, and reset-password forms.
+                Changes are shared immediately on the website. Your dashboard welcome photo is separate.
+            </p>
+        </div>
+
+        <div class="mb-5 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+            <img src="{{ $authBackgroundPreviewUrl }}"
+                 alt="Current public login-page background"
+                 class="block h-52 w-full object-cover sm:h-64">
+        </div>
+
+        <p class="mb-4 text-sm text-slate-600">
+            {{ $customAuthBackgroundUrl ? 'Using an administrator-uploaded image.' : 'Using the original default background.' }}
+        </p>
+
+        <form method="POST"
+              action="{{ route('admin.system-branding.auth-background.update') }}"
+              enctype="multipart/form-data"
+              class="space-y-4">
+            @csrf
+            <div>
+                <label for="auth_background" class="block text-sm font-bold text-slate-700">
+                    New background image
+                </label>
+                <input id="auth_background"
+                       type="file"
+                       name="auth_background"
+                       accept="image/jpeg,image/png,image/webp"
+                       required
+                       class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-bold file:text-blue-700 hover:file:bg-blue-100">
+
+                @error('auth_background')
+                    <p class="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{{ $message }}</p>
+                @enderror
+
+                <p class="mt-3 text-xs text-slate-500">
+                    Recommended: use a wide landscape image such as 1920 x 1080.
+                    The system accepts JPG, PNG, or WebP files up to 5 MB.
+                </p>
+            </div>
+            <button type="submit"
+                    class="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700">
+                Apply Authentication Background
+            </button>
+        </form>
+
+        @if ($customAuthBackgroundUrl)
+            <form method="POST"
+                  action="{{ route('admin.system-branding.auth-background.reset') }}"
+                  class="mt-4 border-t border-slate-200 pt-4">
+                @csrf
+                @method('DELETE')
+                <button type="submit"
+                        onclick="return confirm('Restore the original public authentication background?')"
+                        class="rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                    Restore Default Background
+                </button>
+            </form>
+        @endif
     </div>
 </div>
+
+
 @endsection

@@ -1,4 +1,4 @@
-﻿@php
+@php
     $setting = null;
 
     $settingsTable = (new \App\Models\SystemSetting())->getTable();
@@ -27,7 +27,12 @@
             . '?v='
             . optional($setting->updated_at)->timestamp;
     }
-    $authBackgroundUrl = asset('images/auth/dao-auth-photo-20261022_181835_038.jpg');
+    // Single stable image endpoint; controller resolves custom image or the bundled default.
+    $authBackgroundVersion = is_string($setting?->auth_background_path)
+        && $setting->auth_background_path !== ''
+        ? substr(hash('sha256', $setting->auth_background_path), 0, 16)
+        : 'default';
+    $authBackgroundUrl = route('auth-background.image', ['v' => $authBackgroundVersion]);
 @endphp
 
 <!DOCTYPE html>

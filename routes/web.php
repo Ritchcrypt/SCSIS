@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DeletedDataRecoveryController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\AuthBackgroundController;
 use App\Http\Controllers\BarangayMapController;
 use App\Http\Controllers\EmergencyModeController;
 use App\Http\Controllers\IncidentController;
@@ -39,6 +40,10 @@ Route::get('/', function () {
 
 Route::get('/system-branding/logo', [SystemBrandingController::class, 'logo'])
     ->name('system-branding.logo');
+
+// The selected auth image is public; only administrators can change it.
+Route::get('/auth/background', [AuthBackgroundController::class, 'show'])
+    ->name('auth-background.image');
 
 Route::get('/download', [PublicDownloadController::class, 'index'])
     ->name('download');
@@ -213,6 +218,14 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::put('/system-branding', [SystemBrandingController::class, 'update'])
             ->name('system-branding.update');
+
+        Route::post('/system-branding/auth-background', [AuthBackgroundController::class, 'update'])
+            ->middleware('throttle:6,1')
+            ->name('system-branding.auth-background.update');
+
+        Route::delete('/system-branding/auth-background', [AuthBackgroundController::class, 'reset'])
+            ->middleware('throttle:6,1')
+            ->name('system-branding.auth-background.reset');
 
         Route::get('/users', [UserManagementController::class, 'index'])
             ->name('users.index');

@@ -17,11 +17,11 @@ class ReportExportQuerySecurityTest extends TestCase
     public function test_identifier_must_be_in_the_explicit_allowlist(): void
     {
         $this->assertSame(
-            'case_records',
+            'notifications',
             SafeDatabaseIdentifier::approved(
-                'case_records',
+                'notifications',
                 [
-                    'case_records',
+                    'notifications',
                     'announcements',
                 ]
             )
@@ -34,7 +34,7 @@ class ReportExportQuerySecurityTest extends TestCase
         SafeDatabaseIdentifier::approved(
             'users',
             [
-                'case_records',
+                'notifications',
                 'announcements',
             ]
         );

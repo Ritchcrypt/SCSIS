@@ -106,8 +106,8 @@ class SystemBrandingLogoFallbackTest extends TestCase
                     'images/tabangnow-favicon-final.svg',
                     false
                 )
-                ->assertDontSee(
-                    'tabangnow-tab-icon-v7.png',
+                ->assertSee(
+                    'tabangnow-tab-icon-v7.png?v=12',
                     false
                 )
                 ->assertDontSee(
@@ -132,8 +132,8 @@ class SystemBrandingLogoFallbackTest extends TestCase
                     'images/tabangnow-favicon-final.svg',
                     false
                 )
-                ->assertDontSee(
-                    'tabangnow-tab-icon-v7.png',
+                ->assertSee(
+                    'tabangnow-tab-icon-v7.png?v=12',
                     false
                 )
                 ->assertDontSee(

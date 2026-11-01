@@ -214,47 +214,6 @@
             </tr>
         </table>
     </div>
-    @if ($showCaseRecords ?? false)
-
-
-    <div class="section">
-        <div class="section-title">Related Case Records</div>
-
-        @if ($relatedCases->count())
-            <table>
-                <thead>
-                    <tr>
-                        <th>Case No.</th>
-                        <th>Subject</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Handled By</th>
-                        <th>Hearing</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @foreach ($relatedCases as $case)
-                        <tr>
-                            <td>{{ $case['case_number'] }}</td>
-                            <td>{{ $case['subject_name'] }}</td>
-                            <td>{{ $case['case_type'] }}</td>
-                            <td>{{ $case['status'] }}</td>
-                            <td>{{ $case['handled_by'] }}</td>
-                            <td>{{ $case['hearing_date'] }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        @else
-            <table>
-                <tr>
-                    <td class="muted">No related case record found for this incident.</td>
-                </tr>
-            </table>
-        @endif
-    </div>
-    @endif
 
 
     <div class="section">

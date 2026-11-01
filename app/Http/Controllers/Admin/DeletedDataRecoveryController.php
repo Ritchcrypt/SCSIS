@@ -50,7 +50,7 @@ class DeletedDataRecoveryController extends Controller
         $searchPattern = SqlLikePattern::contains($search);
 
         $records = DeletedDataArchive::query()
-            ->where('resource_type', '<>', 'case_record')
+            ->whereIn('resource_type', array_keys(self::TYPE_LABELS))
             ->when(
                 $status === 'recoverable',
                 fn ($query) => $query->whereNull('restored_at')
@@ -100,11 +100,11 @@ class DeletedDataRecoveryController extends Controller
             ],
             'summary' => [
                 'recoverable' => DeletedDataArchive::query()
-                    ->where('resource_type', '<>', 'case_record')
+                    ->whereIn('resource_type', array_keys(self::TYPE_LABELS))
                     ->whereNull('restored_at')
                     ->count(),
                 'restored' => DeletedDataArchive::query()
-                    ->where('resource_type', '<>', 'case_record')
+                    ->whereIn('resource_type', array_keys(self::TYPE_LABELS))
                     ->whereNotNull('restored_at')
                     ->count(),
             ],
@@ -117,8 +117,8 @@ class DeletedDataRecoveryController extends Controller
     ): RedirectResponse {
         Gate::authorize('restore', $deletedDataArchive);
 
-        abort_if(
-            $deletedDataArchive->resource_type === 'case_record',
+        abort_unless(
+            array_key_exists($deletedDataArchive->resource_type, self::TYPE_LABELS),
             404
         );
 

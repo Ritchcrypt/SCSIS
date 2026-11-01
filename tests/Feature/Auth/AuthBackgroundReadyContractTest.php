@@ -18,7 +18,7 @@ final class AuthBackgroundReadyContractTest extends TestCase
         );
 
         $this->assertStringContainsString(
-            '$authBackgroundUrl = asset(',
+            '$authBackgroundUrl = route(\'auth-background.image\'',
             $source
         );
 

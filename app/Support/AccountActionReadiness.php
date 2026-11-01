@@ -18,21 +18,18 @@ final class AccountActionReadiness
             return 'reset_token_table_missing';
         }
 
-        $mailer = strtolower(trim((string) config('mail.default', '')));
-        if ($mailer === '' || in_array($mailer, ['log', 'array'], true)) {
-            return 'mail_transport_not_deliverable';
-        }
-        if (in_array($mailer, ['failover', 'roundrobin'], true)) {
-            // These transports can fall back to log/array and report false delivery success.
-            return 'mail_transport_needs_verification';
-        }
-        if ($mailer === 'brevo' && trim((string) config('services.brevo.key', '')) === '') {
+        // Password resets use BrevoPasswordResetNotification, not mail.default.
+        // A log/array SMTP fallback would falsely report successful delivery.
+        if (trim((string) config('services.brevo.key', '')) === '') {
             return 'brevo_api_key_missing';
         }
+
         $from = trim((string) config('mail.from.address', ''));
-        if ($from === '' || $from === 'hello@example.com') {
+        if (! filter_var($from, FILTER_VALIDATE_EMAIL)
+            || strtolower($from) === 'hello@example.com') {
             return 'mail_from_not_configured';
         }
+
         return null;
     }
 

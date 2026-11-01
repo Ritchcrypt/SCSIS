@@ -65,6 +65,12 @@ Route::prefix('v1/auth')->group(function (): void {    Route::get('/barangays', 
         'forgotPassword',
     ])->middleware('throttle:5,1')
         ->name('api.v1.auth.forgot-password');
+    // Native Flutter password-reset completion (same broker as website).
+    Route::post('/reset-password', [
+        \App\Http\Controllers\Api\V1\MobilePasswordResetController::class,
+        'reset',
+    ])->middleware('throttle:5,1')
+        ->name('api.v1.auth.reset-password');
 
     /*
     | Temporary local development bypass.
@@ -184,16 +190,21 @@ Route::prefix('v1')
         ])->name('api.v1.profile.show');
 
         // Optional TOTP for every active role. The user manages only their own MFA.
-        Route::prefix('profile/mfa')->middleware('throttle:5,1')->group(function (): void {
+        Route::prefix('profile/mfa')->group(function (): void {
             Route::get('/status', [AccountMfaController::class, 'status'])
+                ->middleware('throttle:60,1')
                 ->name('api.v1.profile.mfa.status');
             Route::post('/begin', [AccountMfaController::class, 'begin'])
+                ->middleware('throttle:tabangnow-mfa-sensitive')
                 ->name('api.v1.profile.mfa.begin');
             Route::post('/confirm', [AccountMfaController::class, 'confirm'])
+                ->middleware('throttle:tabangnow-mfa-sensitive')
                 ->name('api.v1.profile.mfa.confirm');
             Route::post('/recovery', [AccountMfaController::class, 'regenerate'])
+                ->middleware('throttle:tabangnow-mfa-sensitive')
                 ->name('api.v1.profile.mfa.recovery');
             Route::post('/disable', [AccountMfaController::class, 'disable'])
+                ->middleware('throttle:tabangnow-mfa-sensitive')
                 ->name('api.v1.profile.mfa.disable');
         });
 

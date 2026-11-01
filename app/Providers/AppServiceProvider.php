@@ -6,7 +6,6 @@ use App\Listeners\NotifyPendingResidentRegistration;
 use App\Listeners\RecordAuthenticationActivity;
 use App\Models\ActivityLog;
 use App\Models\Announcement;
-use App\Models\CaseRecord;
 use App\Models\EmergencyHotline;
 use App\Models\Incident;
 use App\Models\IncidentMessage;
@@ -16,7 +15,6 @@ use App\Models\TanodProfile;
 use App\Models\TanodTask;
 use App\Models\User;
 use App\Models\UserNotification;
-use App\Observers\CaseRecordNotificationObserver;
 use App\Observers\IncidentMessageNotificationObserver;
 use App\Observers\MobileEmergencyAlertNotificationObserver;
 use App\Observers\ResidentComplaintNotificationObserver;
@@ -25,7 +23,6 @@ use App\Observers\UserAccountNotificationObserver;
 use App\Observers\UserNotificationPushObserver;
 use App\Policies\ActivityLogPolicy;
 use App\Policies\AnnouncementPolicy;
-use App\Policies\CaseRecordPolicy;
 use App\Policies\EmergencyHotlinePolicy;
 use App\Policies\IncidentPolicy;
 use App\Policies\ResidentComplaintPolicy;
@@ -41,6 +38,9 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -79,7 +79,6 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::policy(ActivityLog::class, ActivityLogPolicy::class);
         Gate::policy(Announcement::class, AnnouncementPolicy::class);
-        Gate::policy(CaseRecord::class, CaseRecordPolicy::class);
         Gate::policy(EmergencyHotline::class, EmergencyHotlinePolicy::class);
         Gate::policy(Incident::class, IncidentPolicy::class);
         Gate::policy(ResidentComplaint::class, ResidentComplaintPolicy::class);
@@ -130,6 +129,15 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Limit sensitive MFA actions per account, not per shared household IP.
+        // Status lookups have their own separate, higher read-only limit.
+        RateLimiter::for('tabangnow-mfa-sensitive', static function (Request $request): Limit {
+            $userId = $request->user()?->getAuthIdentifier();
+            $key = $userId === null
+                ? 'ip:'.($request->ip() ?? 'unknown')
+                : 'user:'.$userId;
+            return Limit::perMinute(10)->by('mfa:'.$key);
+        });
         Mail::extend('brevo', function () {
             $apiKey = trim((string) config('services.brevo.key'));
 
@@ -150,7 +158,6 @@ class AppServiceProvider extends ServiceProvider
 
         User::observe(UserAccountNotificationObserver::class);
         UserNotification::observe(UserNotificationPushObserver::class);
-        CaseRecord::observe(CaseRecordNotificationObserver::class);
         IncidentMessage::observe(IncidentMessageNotificationObserver::class);
         MobileEmergencyAlert::observe(MobileEmergencyAlertNotificationObserver::class);
         TanodTask::observe(TanodTaskNotificationObserver::class);
