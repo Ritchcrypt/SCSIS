@@ -86,3 +86,19 @@ Schedule::call(
     )
     ->withoutOverlapping(5);
 
+
+/*
+|--------------------------------------------------------------------------
+| Brevo password reset provider availability (opt-in)
+|--------------------------------------------------------------------------
+|
+| Read-only GET request to Brevo every 15 minutes. Requires the Laravel
+| scheduler to actually run. Enable with TABANGNOW_BREVO_MONITOR_ENABLED=true.
+| On errors, this emits a redacted Laravel warning (no reset emails sent).
+|
+*/
+
+Schedule::command('tabangnow:brevo-health --live')
+    ->everyFifteenMinutes()
+    ->when(fn (): bool => (bool) config('password_reset_monitor.enabled', false))
+    ->withoutOverlapping(5);

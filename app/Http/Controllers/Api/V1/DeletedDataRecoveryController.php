@@ -47,7 +47,7 @@ class DeletedDataRecoveryController extends Controller
         $searchPattern = SqlLikePattern::contains($search);
 
         $query = DeletedDataArchive::query()
-            ->where('resource_type', '<>', 'case_record')
+            ->whereIn('resource_type', array_keys(self::TYPE_LABELS))
             ->when($status === 'recoverable', fn ($q) => $q->whereNull('restored_at'))
             ->when($status === 'restored', fn ($q) => $q->whereNotNull('restored_at'))
             ->when($type !== '', fn ($q) => $q->where('resource_type', $type))
@@ -77,14 +77,14 @@ class DeletedDataRecoveryController extends Controller
                 'deleted_at' => $archive->deleted_at?->toIso8601String(),
                 'restored_at' => $archive->restored_at?->toIso8601String(),
                 'can_restore' => Gate::allows('restore', $archive)
-                    && $archive->resource_type !== 'case_record',
+                    && array_key_exists($archive->resource_type, self::TYPE_LABELS),
             ])->values()->all(),
             'summary' => [
                 'recoverable' => DeletedDataArchive::query()
-                    ->where('resource_type', '<>', 'case_record')
+                    ->whereIn('resource_type', array_keys(self::TYPE_LABELS))
                     ->whereNull('restored_at')->count(),
                 'restored' => DeletedDataArchive::query()
-                    ->where('resource_type', '<>', 'case_record')
+                    ->whereIn('resource_type', array_keys(self::TYPE_LABELS))
                     ->whereNotNull('restored_at')->count(),
             ],
             'filters' => [
@@ -104,7 +104,7 @@ class DeletedDataRecoveryController extends Controller
     public function restore(Request $request, DeletedDataArchive $deletedDataArchive): JsonResponse
     {
         Gate::authorize('restore', $deletedDataArchive);
-        abort_if($deletedDataArchive->resource_type === 'case_record', 404);
+        abort_unless(array_key_exists($deletedDataArchive->resource_type, self::TYPE_LABELS), 404);
 
         try {
             $this->archives->restore($deletedDataArchive, $request->user());

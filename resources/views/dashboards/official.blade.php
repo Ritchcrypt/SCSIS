@@ -145,14 +145,17 @@
 
 <section class="mt-8">
     <div class="rounded-2xl border border-orange-300 bg-white p-6 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:border-orange-500 hover:shadow-lg">
-        <div class="mb-6 flex items-center justify-between">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-xl font-bold text-slate-900">
                 Recent Incident Activity
             </h2>
-
-            <span class="text-sm text-slate-400">
-                Latest records
-            </span>
+            <div class="flex flex-wrap items-center gap-3">
+                <span class="text-sm text-slate-400">Latest records</span>
+                <a href="{{ route('official.incidents.index') }}"
+                   class="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-400 hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                    View All Incidents
+                </a>
+            </div>
         </div>
 
         <div class="max-h-96 space-y-5 overflow-y-auto pr-2">
@@ -198,7 +201,13 @@
                         ?? null;
                 @endphp
 
-                <div class="border-b border-slate-100 pb-4 last:border-0">
+                @can('view', $incident)
+                    <a href="{{ route('official.incidents.show', $incident) }}"
+                       aria-label="Open incident: {{ $incidentTitle }}"
+                       class="group block rounded-lg border-b border-slate-100 px-2 py-3 transition hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 last:border-b-0">
+                @else
+                    <div class="border-b border-slate-100 px-2 py-3 last:border-b-0">
+                @endcan
                     <div class="flex items-start gap-4">
                         <div class="mt-1 h-3 w-3 rounded-full
                             @if ($priority === 'critical') bg-red-500
@@ -250,7 +259,11 @@
                             </p>
                         </div>
                     </div>
-                </div>
+                @can('view', $incident)
+                    </a>
+                @else
+                    </div>
+                @endcan
             @empty
                 <p class="text-slate-500">
                     No recent incidents found.

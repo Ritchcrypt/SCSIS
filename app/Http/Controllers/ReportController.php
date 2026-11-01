@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Announcement;
-use App\Models\CaseRecord;
 use App\Models\Employee;
 use App\Models\Incident;
 use App\Models\MobileEmergencyAlert;
@@ -22,7 +21,6 @@ use Illuminate\View\View;
 class ReportController extends Controller
 {
     private const COUNTABLE_REPORT_TABLES = [
-        'case_records',
         'announcements',
     ];
 
@@ -104,12 +102,6 @@ class ReportController extends Controller
             $this->reportData(
                 $request
             );
-
-        unset(
-            $data['casesFiled'],
-            $data['caseReportOptions']
-        );
-
         return $data;
     }
 
@@ -454,10 +446,6 @@ public function downloadIncidentPdf(
         Gate::authorize('view', $incident);
 
         $data = $this->specificIncidentReportData($incident);
-
-        $data['showCaseRecords'] =
-            $request->is('api/*');
-
         $fileName = 'incident-report-'
             . $this->safeFileToken(
                 $data['incidentReport']['code']
@@ -473,32 +461,6 @@ public function downloadIncidentPdf(
             ->download($fileName);
     }
 
-
-    public function downloadCasePdf(
-        Request $request,
-        CaseRecord $caseRecord
-    ) {
-        Gate::authorize('viewReports');
-        Gate::authorize('view', $caseRecord);
-
-        $data = $this->specificCaseReportData($caseRecord);
-
-        $code = $data['caseReport']['case_number']
-            ?? ('case-' . $caseRecord->id);
-
-        $fileName = 'case-report-'
-            . $this->safeFileToken(
-                $code,
-                'case-' . $caseRecord->id
-            )
-            . '-'
-            . now()->format('Ymd-His')
-            . '.pdf';
-
-        return Pdf::loadHTML($this->casePdfHtml($data))
-            ->setPaper('a4', 'portrait')
-            ->download($fileName);
-    }
 
 
     public function downloadComplaintPdf(
@@ -557,266 +519,6 @@ public function downloadIncidentPdf(
             ->setPaper('a4', 'portrait')
             ->download($fileName);
     }
-    private function casePdfHtml(array $data): string
-{
-    $caseReport = $data['caseReport'] ?? [];
-
-    $generatedBy = e($data['generatedBy'] ?? 'System');
-
-    try {
-        $generatedAt = Carbon::parse($data['generatedAt'] ?? now())->format('M d, Y h:i A');
-    } catch (\Throwable $e) {
-        $generatedAt = now()->format('M d, Y h:i A');
-    }
-
-    $value = function (string $key, string $default = '—') use ($caseReport): string {
-        $rawValue = $caseReport[$key] ?? null;
-
-        if ($rawValue === null) {
-            return e($default);
-        }
-
-        $text = trim((string) $rawValue);
-
-        return e($text !== '' ? $text : $default);
-    };
-
-    return '<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Case Report</title>
-
-    <style>
-        body {
-            font-family: DejaVu Sans, sans-serif;
-            color: #0f172a;
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
-        .header {
-            border-bottom: 3px solid #1e3a8a;
-            padding-bottom: 12px;
-            margin-bottom: 18px;
-        }
-
-        .system-title {
-            margin: 0;
-            color: #1e3a8a;
-            font-size: 13px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        .title {
-            margin: 4px 0 0;
-            color: #0f172a;
-            font-size: 22px;
-            font-weight: bold;
-        }
-
-        .subtitle {
-            margin-top: 4px;
-            color: #475569;
-            font-size: 11px;
-        }
-
-        .meta {
-            margin-top: 10px;
-            font-size: 10px;
-            color: #475569;
-        }
-
-        .notice {
-            margin-bottom: 16px;
-            border: 1px solid #bfdbfe;
-            background: #eff6ff;
-            color: #1e3a8a;
-            padding: 9px 10px;
-            font-size: 10px;
-            font-weight: bold;
-        }
-
-        .section {
-            margin-top: 16px;
-        }
-
-        .section-title {
-            background: #1e3a8a;
-            color: #ffffff;
-            font-weight: bold;
-            padding: 8px 10px;
-            margin: 0;
-            font-size: 12px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            page-break-inside: auto;
-        }
-
-        tr {
-            page-break-inside: avoid;
-        }
-
-        td,
-        th {
-            border: 1px solid #cbd5e1;
-            padding: 8px;
-            vertical-align: top;
-        }
-
-        .label {
-            width: 30%;
-            background: #f8fafc;
-            font-weight: bold;
-            color: #334155;
-        }
-
-        .value {
-            color: #0f172a;
-        }
-
-        .wide-text {
-            min-height: 42px;
-            white-space: pre-line;
-        }
-
-        .footer {
-            margin-top: 28px;
-            border-top: 1px solid #cbd5e1;
-            padding-top: 10px;
-            font-size: 10px;
-            color: #64748b;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <p class="system-title">TabangNow / DaoSystem</p>
-
-        <p class="title">Case Report</p>
-
-        <p class="subtitle">
-            Case Management Documentation — Dao, Capiz
-        </p>
-
-        <div class="meta">
-            Generated by: ' . $generatedBy . '<br>
-            Generated at: ' . e($generatedAt) . '
-        </div>
-    </div>
-
-    <div class="notice">
-        This report contains only the selected case management record. Other cases, resident feedback records, or incidents are excluded.
-    </div>
-
-    <div class="section">
-        <p class="section-title">Case Details</p>
-
-        <table>
-            <tr>
-                <td class="label">Case Number</td>
-                <td class="value">' . $value('case_number') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Title / Subject</td>
-                <td class="value">' . $value('title') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Case Type</td>
-                <td class="value">' . $value('case_type') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Subject / Party Name</td>
-                <td class="value">' . $value('subject_name') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Contact Number</td>
-                <td class="value">' . $value('contact') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Address</td>
-                <td class="value">' . $value('address') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Linked Incident</td>
-                <td class="value">' . $value('linked_incident') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Status</td>
-                <td class="value">' . $value('status') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Handled By</td>
-                <td class="value">' . $value('handled_by') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Hearing Date</td>
-                <td class="value">' . $value('hearing_date') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Created By</td>
-                <td class="value">' . $value('created_by') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Created At</td>
-                <td class="value">' . $value('created_at') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Last Updated By</td>
-                <td class="value">' . $value('updated_by') . '</td>
-            </tr>
-
-            <tr>
-                <td class="label">Last Updated</td>
-                <td class="value">' . $value('updated_at') . '</td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="section">
-        <p class="section-title">Resolution / Action Taken</p>
-
-        <table>
-            <tr>
-                <td class="wide-text">' . nl2br($value('resolution')) . '</td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="section">
-        <p class="section-title">Notes / Details</p>
-
-        <table>
-            <tr>
-                <td class="wide-text">' . nl2br($value('notes')) . '</td>
-            </tr>
-        </table>
-    </div>
-
-    <div class="footer">
-        This report is generated from TabangNow / DaoSystem records. It is intended for barangay case management documentation and monitoring.
-    </div>
-</body>
-</html>';
-}
-
     private function reportData(Request $request): array
     {
         [
@@ -1073,116 +775,10 @@ public function downloadIncidentPdf(
                 'created_at' => $this->formatDateTime($incident->created_at),
                 'updated_at' => $this->formatDateTime($incident->updated_at),
             ],
-
-            'relatedCases' => $this->specificIncidentCaseRecords($incident),
             'evidenceRecords' => $this->specificIncidentEvidenceRecords($incident),
             'tanodTaskRecords' => $this->specificIncidentTanodTaskRecords($incident),
         ];
     }
-
-    private function specificCaseReportData(CaseRecord $caseRecord): array
-{
-    $caseRecord->loadMissing([
-        'incident',
-        'creator:id,name',
-        'updater:id,name',
-    ]);
-
-    $currentUser = Auth::user();
-
-    $linkedIncident = $caseRecord->incident
-        ? $caseRecord->incident->display_code
-            . ' - '
-            . $caseRecord->incident->display_title
-        : ($caseRecord->incident_title ?: 'No linked incident');
-
-    $caseReport = [
-        'id' => $caseRecord->id,
-
-        'case_number' => $this->firstTextValue($caseRecord, [
-            'case_number',
-            'reference_number',
-            'ticket_number',
-        ], 'CASE-' . str_pad((string) $caseRecord->id, 6, '0', STR_PAD_LEFT)),
-
-        'title' => $this->firstTextValue($caseRecord, [
-            'title',
-            'case_title',
-            'subject',
-            'complaint_title',
-            'incident_title',
-        ], 'Barangay case record'),
-
-        'case_type' => ucfirst(str_replace('_', ' ', $this->firstTextValue($caseRecord, [
-            'case_type',
-            'type',
-            'category',
-        ], 'Case'))),
-
-        'subject_name' => $this->firstTextValue($caseRecord, [
-            'subject_name',
-            'respondent_name',
-            'complainant_name',
-            'party_name',
-            'name',
-        ], 'Not specified'),
-
-        'status' => ucfirst(str_replace('_', ' ', $this->firstTextValue($caseRecord, [
-            'status',
-            'case_status',
-        ], 'Pending'))),
-
-        'handled_by' => $this->firstTextValue($caseRecord, [
-            'handled_by',
-            'assigned_to',
-            'mediator',
-            'officer_in_charge',
-        ], 'Not specified'),
-
-        'contact' => $this->firstTextValue($caseRecord, [
-            'contact',
-            'contact_number',
-            'phone',
-        ], 'Not specified'),
-
-        'address' => $this->firstTextValue($caseRecord, [
-            'address',
-            'location',
-        ], 'Not specified'),
-
-        'linked_incident' => $linkedIncident,
-        'created_by' => $caseRecord->creator?->name ?: 'Not recorded',
-        'updated_by' => $caseRecord->updater?->name ?: 'Not recorded',
-
-        'hearing_date' => $this->formatDateOnly($caseRecord->hearing_date ?? null),
-
-        'resolution' => $this->firstTextValue($caseRecord, [
-            'resolution',
-            'case_resolution',
-            'settlement',
-            'action_taken',
-        ], '—'),
-
-        'notes' => $this->firstTextValue($caseRecord, [
-            'notes',
-            'remarks',
-            'description',
-            'details',
-            'narrative',
-        ], '—'),
-
-        'created_at' => $this->formatDateTime($caseRecord->created_at ?? null),
-        'updated_at' => $this->formatDateTime($caseRecord->updated_at ?? null),
-    ];
-
-    return [
-        'generatedAt' => now(),
-        'generatedBy' => $currentUser ? $currentUser->name : 'System',
-
-        'caseRecord' => $caseRecord,
-        'caseReport' => $caseReport,
-    ];
-}
 
 
     private function specificSosReportData(
@@ -1631,61 +1227,6 @@ public function downloadIncidentPdf(
             });
     }
 
-    private function caseReportOptions()
-{
-    if (
-        ! class_exists(CaseRecord::class)
-        || ! Schema::hasTable('case_records')
-    ) {
-        return collect();
-    }
-
-    $query = CaseRecord::query();
-
-    if (Schema::hasColumn('case_records', 'created_at')) {
-        $query->orderByDesc('created_at');
-    } else {
-        $query->orderByDesc('id');
-    }
-
-    return $query
-        ->limit(100)
-        ->get()
-        ->map(function ($caseRecord) {
-            $caseNumber = $this->firstTextValue($caseRecord, [
-                'case_number',
-                'reference_number',
-                'ticket_number',
-            ], 'CASE-' . str_pad((string) $caseRecord->id, 6, '0', STR_PAD_LEFT));
-
-            $title = $this->firstTextValue($caseRecord, [
-                'title',
-                'case_title',
-                'subject',
-                'complaint_title',
-            ], 'Barangay case record');
-
-            $subjectName = $this->firstTextValue($caseRecord, [
-                'subject_name',
-                'respondent_name',
-                'complainant_name',
-                'party_name',
-                'name',
-            ], 'Not specified');
-
-            return [
-                'id' => $caseRecord->id,
-                'label' => $caseNumber
-                    . ' - '
-                    . $title
-                    . ' - '
-                    . $subjectName
-                    . ' - '
-                    . $this->formatDateTime($caseRecord->created_at ?? null),
-            ];
-        });
-}
-
     private function complaintReportOptions()
     {
         if (
@@ -1824,35 +1365,6 @@ public function downloadIncidentPdf(
         }
 
         return 'Not specified';
-    }
-
-    private function specificIncidentCaseRecords(Incident $incident)
-    {
-        if (
-            ! class_exists(CaseRecord::class)
-            || ! Schema::hasTable('case_records')
-            || ! Schema::hasColumn('case_records', 'incident_id')
-        ) {
-            return collect();
-        }
-
-        return CaseRecord::query()
-            ->where('incident_id', $incident->id)
-            ->latest()
-            ->get()
-            ->map(function ($case) {
-                return [
-                    'case_number' => $case->case_number ?? 'Case #' . $case->id,
-                    'subject_name' => $case->subject_name ?? $case->title ?? '—',
-                    'case_type' => ucfirst(str_replace('_', ' ', (string) ($case->case_type ?? 'case'))),
-                    'status' => ucfirst(str_replace('_', ' ', (string) ($case->status ?? '—'))),
-                    'handled_by' => $case->handled_by ?? '—',
-                    'hearing_date' => $this->formatDateOnly($case->hearing_date ?? null),
-                    'resolution' => $case->resolution ?? '—',
-                    'notes' => $case->notes ?? '—',
-                    'created_at' => $this->formatDateTime($case->created_at ?? null),
-                ];
-            });
     }
 
     private function specificIncidentEvidenceRecords(Incident $incident)
@@ -2089,31 +1601,7 @@ public function downloadIncidentPdf(
             ];
         }
 
-        if (class_exists(CaseRecord::class) && Schema::hasTable('case_records')) {
-            $cases = CaseRecord::query()
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->latest()
-                ->limit(50)
-                ->get();
 
-            foreach ($cases as $case) {
-                $records[] = [
-                    'category' => 'Case',
-                    'title' => 'Case No. '
-                        . ($case->case_number ?? $case->id)
-                        . ' - '
-                        . ($case->incident_title
-                            ?? $case->subject_name
-                            ?? 'Barangay case record'),
-                    'type' => ucfirst(str_replace('_', ' ', (string) ($case->case_type ?? 'case'))),
-                    'status' => ucfirst(str_replace('_', ' ', (string) ($case->status ?? '—'))),
-                    'severity' => '—',
-                    'barangay' => '—',
-                    'datetime' => optional($case->created_at)->format('M d, Y h:i A') ?? '-',
-                    'sort_date' => optional($case->created_at)->timestamp ?? 0,
-                ];
-            }
-        }
 
         if (class_exists(Announcement::class) && Schema::hasTable('announcements')) {
             $announcementRecords = Announcement::query()

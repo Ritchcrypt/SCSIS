@@ -124,7 +124,8 @@ final class DashboardDaoNewsCarouselTest extends TestCase
         $this->assertStringContainsString("window.open(link.href, '_blank', 'noopener,noreferrer')", $view);
         $this->assertStringContainsString("link.protocol !== 'https:'", $view);
         $this->assertStringContainsString('if (active === 0) return;', $view);
-        $this->assertStringContainsString("label.textContent = 'DAO, CAPIZ';", $view);
+        $this->assertStringNotContainsString('tn-dao-ext-heading__label', $view);
+        $this->assertStringContainsString('heading.append(title,source); banner.append(heading);', $view);
         $this->assertStringContainsString('Tap edges to browse · Tap center to open', $view);
         $this->assertStringContainsString("source.textContent = [story.source,story.published].filter(Boolean).join(' · ');", $view);
         $this->assertStringNotContainsString('DAO, CAPIZ · EXTERNAL NEWS', $view);
@@ -263,7 +264,13 @@ final class DashboardDaoNewsCarouselTest extends TestCase
         $this->assertStringContainsString('name="edit_id"', $form);
         $this->assertStringContainsString('name="check_id"', $form);
         $this->assertStringContainsString('Unpublish / flag changed', $form);
-        $this->assertStringContainsString('External news audit history', $form);
+        $this->assertStringContainsString('External news audit history (latest 40)', $form);
+        $this->assertStringContainsString('$daoNewsLinkService->auditHistory()', $form);
+        $this->assertStringContainsString('aria-controls="tn-dao-news-edit-{{ $entry[\'id\'] }}"', $form);
+        $this->assertStringContainsString('data-tn-news-toggle', $form);
+        $this->assertStringContainsString('data-tn-news-panel hidden', $form);
+        $this->assertStringContainsString('toggle.setAttribute(\'aria-expanded\', String(expanding));', $form);
+        $this->assertStringContainsString('Unpublish / flag changed', $form);
         $this->assertStringContainsString('editCuratedLink', $controller);
     }
 

@@ -1,5 +1,7 @@
-﻿<?php
+<?php
 
+use App\Models\User;
+use App\Services\AdminTotpService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
@@ -20,6 +22,10 @@ new #[Layout('components.layouts.auth')] class extends Component {
 
     public bool $remember = false;
 
+    public bool $awaitingMfa = false;
+
+    public string $mfaCode = '';
+
     public function login(): void
     {
         $this->email = Str::lower(trim($this->email));
@@ -34,12 +40,31 @@ new #[Layout('components.layouts.auth')] class extends Component {
             'is_active' => true,
         ];
 
+        // Authenticate the password without creating an authenticated session
+        // until the second factor is verified for any enrolled account.
+        $user = User::query()->where('email', $this->email)->first();
+        if ($user instanceof User && ! empty($user->mfa_secret)) {
+            if (! Auth::validate($credentials)) {
+                RateLimiter::hit($this->throttleKey(), 60);
+                throw ValidationException::withMessages(['email' => __('auth.failed')]);
+            }
+
+            // Rotate the pre-auth session ID without rotating its CSRF token.
+            // Livewire must retain the same token until MFA completes.
+            Session::migrate(true);
+            Session::put('security.admin_mfa_pending', [
+                'user_id' => $user->id,
+                'remember' => $this->remember,
+                'expires_at' => time() + 300,
+            ]);
+            $this->password = '';
+            $this->awaitingMfa = true;
+            return;
+        }
+
         if (! Auth::attempt($credentials, $this->remember)) {
             RateLimiter::hit($this->throttleKey(), 60);
-
-            throw ValidationException::withMessages([
-                'email' => __('auth.failed'),
-            ]);
+            throw ValidationException::withMessages(['email' => __('auth.failed')]);
         }
 
         RateLimiter::clear($this->throttleKey());
@@ -57,6 +82,46 @@ new #[Layout('components.layouts.auth')] class extends Component {
             default: route('dashboard', absolute: false),
             navigate: true
         );
+    }
+
+    public function verifyMfa(): void
+    {
+        $pending = Session::get('security.admin_mfa_pending');
+        if (! is_array($pending) || (int) ($pending['expires_at'] ?? 0) < time()) {
+            Session::forget('security.admin_mfa_pending');
+            $this->awaitingMfa = false;
+            throw ValidationException::withMessages(['mfaCode' => 'Verification expired. Sign in again.']);
+        }
+
+        $key = 'admin-mfa|'.(int) $pending['user_id'].'|'.request()->ip();
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            throw ValidationException::withMessages(['mfaCode' => 'Too many attempts. Try again later.']);
+        }
+
+        $user = User::query()->find((int) $pending['user_id']);
+        if (! $user instanceof User || ! $user->isActive()
+            || empty($user->mfa_secret)
+            || ! app(AdminTotpService::class)->verifyAndConsume($user, $this->mfaCode)) {
+            RateLimiter::hit($key, 60);
+            throw ValidationException::withMessages(['mfaCode' => 'Incorrect or previously used authenticator code.']);
+        }
+
+        RateLimiter::clear($key);
+        RateLimiter::clear($this->throttleKey());
+        Session::forget('security.admin_mfa_pending');
+        Auth::login($user, (bool) ($pending['remember'] ?? false));
+        Session::regenerate();
+        Session::put('security.last_activity_at', time());
+        $this->mfaCode = '';
+        $this->awaitingMfa = false;
+        $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
+    }
+
+    public function cancelMfa(): void
+    {
+        Session::forget('security.admin_mfa_pending');
+        $this->awaitingMfa = false;
+        $this->mfaCode = '';
     }
 
     protected function ensureIsNotRateLimited(): void
@@ -95,6 +160,15 @@ new #[Layout('components.layouts.auth')] class extends Component {
         :status="session('status')"
     />
 
+    @if($awaitingMfa)
+      <form wire:submit="verifyMfa" class="tn21-form">
+        <p>Enter the 6-digit code from your authenticator app, or an unused recovery code.</p>
+        <flux:input wire:model="mfaCode" :label="__('Authenticator code')" name="mfaCode" type="text" required autocomplete="one-time-code" />
+        @error('mfaCode') <p role="alert">{{ $message }}</p> @enderror
+        <div class="tn21-submit"><flux:button variant="primary" type="submit">Verify and sign in</flux:button></div>
+        <button type="button" wire:click="cancelMfa" class="tn21-link">Back to sign in</button>
+      </form>
+    @else
     <form
         wire:submit="login"
         class="tn21-form"
@@ -183,5 +257,6 @@ new #[Layout('components.layouts.auth')] class extends Component {
         </a>
 
     </form>
+    @endif
 
 </div>

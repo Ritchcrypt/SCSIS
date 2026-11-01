@@ -116,6 +116,19 @@ new #[Layout('components.layouts.auth')] class extends Component {
                         ->delete();
                 }
 
+                // A password reset invalidates all mobile access tokens.
+                // Revoke their push registrations too, so a signed-out device
+                // cannot continue receiving account-specific notifications.
+                if (
+                    Schema::hasTable('mobile_push_tokens')
+                    && Schema::hasColumn('mobile_push_tokens', 'revoked_at')
+                ) {
+                    DB::table('mobile_push_tokens')
+                        ->where('user_id', $user->id)
+                        ->whereNull('revoked_at')
+                        ->update(['revoked_at' => now()]);
+                }
+
                 event(new PasswordReset($user));
             }
         );

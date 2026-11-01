@@ -130,6 +130,19 @@ return [
             'max_pixels' => 16000000,
         ],
 
+
+        // Public login-page image, stored privately and read through a fixed route.
+        'auth_background' => [
+            'disk' => 'local',
+            'directory' => 'auth-background',
+            'max_kilobytes' => 5120,
+            'allowed_extensions' => ['jpg', 'jpeg', 'png', 'webp'],
+            'allowed_mime_types' => ['image/jpeg', 'image/png', 'image/webp'],
+            'max_width' => 4096,
+            'max_height' => 4096,
+            'max_pixels' => 16000000,
+        ],
+
     ],
 
     /*

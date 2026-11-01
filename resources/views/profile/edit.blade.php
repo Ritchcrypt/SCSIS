@@ -529,6 +529,23 @@ html[data-theme='dark'] input.tn-password-input:-webkit-autofill {
         </form>
 
         <div class="border-t border-slate-200 px-6 py-5">
+            <section class="tn-session-security-panel rounded-2xl border p-5" aria-labelledby="account-mfa-title">
+                <h2 id="account-mfa-title" class="tn-session-security-title text-lg font-bold">Account Security</h2>
+                <p class="tn-session-security-description mt-1 text-sm">Two-Factor Authentication (MFA) — optional for all accounts.</p>
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <span class="tn-session-security-label text-sm font-semibold">Status:
+                        {{ ! empty($userRecord->mfa_secret) ? 'Enabled' : 'Not enabled' }}
+                    </span>
+                    <a href="{{ route('security.account-mfa.show') }}"
+                       class="inline-flex rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800">
+                        {{ ! empty($userRecord->mfa_secret) ? 'Manage Two-Factor Authentication' : 'Enable Two-Factor Authentication' }}
+                    </a>
+                </div>
+                <p class="tn-session-security-description mt-3 text-xs">Use an authenticator app for additional protection when signing in on the website or mobile app.</p>
+            </section>
+        </div>
+
+        <div class="border-t border-slate-200 px-6 py-5">
             <div class="tn-session-security-panel rounded-2xl border p-5">
                 <h2 class="tn-session-security-title text-lg font-bold">
                     Session Security

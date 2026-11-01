@@ -34,20 +34,8 @@
 
 <title>{{ $title ?? $headSystemName }}</title>
 
-@if ($headBrandingLogoUrl)
-    <link
-        rel="icon"
-        type="image/png"
-        sizes="32x32"
-        href="{{ $headBrandingLogoUrl }}"
-    >
-
-    <link
-        rel="shortcut icon"
-        type="image/png"
-        href="{{ $headBrandingLogoUrl }}"
-    >
-@endif
+<link rel="icon" type="image/png" sizes="32x32" href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12">
+<link rel="shortcut icon" type="image/png" href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12">
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 

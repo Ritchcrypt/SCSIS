@@ -7,12 +7,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Notifications\BrevoPasswordResetNotification;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
+
+    /** Both website and mobile reset links open the shared Laravel reset form. */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new BrevoPasswordResetNotification($token));
+    }
 
     protected $fillable = [
         'name',
@@ -35,6 +42,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'mfa_secret',
+        'mfa_recovery_codes',
     ];
 
     protected static function booted(): void
@@ -76,6 +85,7 @@ class User extends Authenticatable
             'status' => 'boolean',
             'date_of_birth' => 'date',
             'age_attested_at' => 'datetime',
+            'mfa_enabled_at' => 'datetime',
         ];
     }
 

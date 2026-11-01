@@ -170,8 +170,8 @@
 
             @if ($announcementsUrl)
                 <a href="{{ $announcementsUrl }}"
-                   class="text-sm font-bold text-blue-700 hover:text-blue-800">
-                    Open Announcements →
+                   class="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-400 hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                    Open Announcements
                 </a>
             @endif
         </div>

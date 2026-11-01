@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\IncidentMessage;
 use App\Models\MobileEmergencyAlert;
-use App\Models\CaseRecord;
 use App\Models\ResidentComplaint;
 use App\Models\TanodTask;
 use App\Models\User;
@@ -87,45 +86,6 @@ class SystemNotificationService
         return UserNotification::query()->create($payload);
     }
 
-
-    public function notifyCaseRecord(
-        CaseRecord $caseRecord,
-        string $event
-    ): void {
-        $event = strtolower(trim($event));
-
-        if (! in_array($event, ['created', 'updated', 'deleted'], true)) {
-            return;
-        }
-
-        $caseNumber = trim((string) $caseRecord->case_number);
-        $caseLabel = $caseNumber !== ''
-            ? 'Case #' . $caseNumber
-            : 'Case record #' . (int) $caseRecord->id;
-
-        $title = match ($event) {
-            'created' => 'Case record created',
-            'updated' => 'Case record updated',
-            'deleted' => 'Case record deleted',
-        };
-
-        $message = match ($event) {
-            'created' => $caseLabel . ' was created in Case Management.',
-            'updated' => $caseLabel . ' was updated in Case Management.',
-            'deleted' => $caseLabel . ' was deleted from Case Management.',
-        };
-
-        foreach ($this->activeUserIdsForRoles(['admin']) as $adminId) {
-            $this->send(
-                userId: $adminId,
-                type: 'case_' . $event,
-                sourceId: (int) $caseRecord->id,
-                title: $title,
-                message: $message,
-                replaceExisting: false
-            );
-        }
-    }
 
     public function notifyMobileEmergencyReporter(
         MobileEmergencyAlert $alert,

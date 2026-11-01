@@ -2,7 +2,6 @@
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
-use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 
@@ -20,11 +19,12 @@ new #[Layout('components.layouts.auth')] class extends Component {
 
         try {
             Password::sendResetLink($this->only('email'));
-        } catch (TransportExceptionInterface $exception) {
+        } catch (\Throwable $exception) {
             // PASSWORD_RESET_EMAIL_FAILURE_HANDLED: do not expose provider diagnostics to visitors.
             try {
                 Log::warning('Password reset email delivery failed.', [
-                    'mailer' => (string) config('mail.default'),
+                    'transport' => 'brevo_api',
+                    'reason' => \App\Support\PasswordResetFailure::classify($exception),
                     'exception_type' => get_class($exception),
                     'exception_code' => (string) $exception->getCode(),
                 ]);

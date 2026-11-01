@@ -63,6 +63,18 @@ class EmergencySosController extends Controller
         $requestId = $validated['request_id'];
         $installationId = $validated['installation_id'];
 
+        // A second, IP-scoped limiter cannot be evaded by changing the
+        // client-supplied installation_id. Keep the public SOS endpoint open.
+        $originKey = 'mobile-sos-origin|'.hash('sha256', (string) ($request->ip() ?? 'unknown'));
+        if (RateLimiter::tooManyAttempts($originKey, 30)) {
+            $retry = RateLimiter::availableIn($originKey);
+            return response()->json([
+                'message' => 'Too many emergency submissions. If this is urgent, call the emergency hotline.',
+                'retry_after' => $retry,
+            ], 429, ['Retry-After' => (string) $retry]);
+        }
+        RateLimiter::hit($originKey, 60);
+
         $existing = MobileEmergencyAlert::query()
             ->where('request_id', $requestId)
             ->first();
@@ -70,7 +82,7 @@ class EmergencySosController extends Controller
         if ($existing) {
             return response()->json([
                 'message' => 'Distress signal already received.',
-                'data' => $this->alertPayload($existing),
+                'data' => $this->duplicateReceipt(),
             ]);
         }
 
@@ -99,6 +111,10 @@ class EmergencySosController extends Controller
 
         $recentDuplicate = MobileEmergencyAlert::query()
             ->where('installation_id', $installationId)
+            // Do not suppress a different person's emergency merely because
+            // someone reused the public, client-supplied installation ID.
+            ->where('contact_number', $validated['contact_number'])
+            ->where('emergency_details', $validated['emergency_details'])
             ->where('status', 'active')
             ->where('triggered_at', '>=', now()->subSeconds(30))
             ->latest('id')
@@ -107,7 +123,7 @@ class EmergencySosController extends Controller
         if ($recentDuplicate) {
             return response()->json([
                 'message' => 'An active distress signal from this device was already received moments ago.',
-                'data' => $this->alertPayload($recentDuplicate),
+                'data' => $this->duplicateReceipt(),
             ]);
         }
 
@@ -177,6 +193,16 @@ class EmergencySosController extends Controller
             'message' => 'Distress signal sent successfully.',
             'data' => $this->alertPayload($alert),
         ], 201);
+    }
+
+    /**
+     * Duplicates are acknowledgement-only. Caller-controlled request and
+     * installation IDs are not authentication credentials, so never disclose
+     * another dispatch's contact information, narrative, or GPS position.
+     */
+    private function duplicateReceipt(): array
+    {
+        return ['received' => true];
     }
 
     private function resolveDevice(

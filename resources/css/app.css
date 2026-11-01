@@ -241,6 +241,8 @@ html[data-theme='custom'] {
     --tn-accent-hover: color-mix(in srgb, var(--tn-accent), #000000 14%);
     --tn-accent-soft: color-mix(in srgb, var(--tn-accent), #ffffff 86%);
     --tn-accent-text: color-mix(in srgb, var(--tn-accent), #000000 28%);
+    --tn-shell-deep: color-mix(in srgb, var(--tn-accent), #0f172a 74%);
+    --tn-shell-hover: color-mix(in srgb, var(--tn-accent), #0f172a 60%);
 }
 
 /* Custom is an application accent, not a role color. */
@@ -298,9 +300,115 @@ html[data-theme='custom'] .focus\:ring-blue-200:focus-visible {
     --tw-ring-color: var(--tn-ring) !important;
 }
 
+/*
+| Custom mode: complete the remaining fixed blue / indigo utilities.
+| These are shared by table headings, profile menus, pagination, buttons,
+| role badges and other modules. Light, dark and system are untouched.
+| Keep deep backgrounds dark enough for their existing white labels.
+*/
+html[data-theme='custom'] .bg-blue-950,
+html[data-theme='custom'] .bg-blue-900,
+html[data-theme='custom'] .bg-indigo-950,
+html[data-theme='custom'] .bg-indigo-900 {
+    background-color: var(--tn-shell-deep) !important;
+}
+
+html[data-theme='custom'] .bg-blue-800,
+html[data-theme='custom'] .bg-indigo-800 {
+    background-color: var(--tn-shell-hover) !important;
+}
+
+html[data-theme='custom'] .hover\:bg-blue-950:hover,
+html[data-theme='custom'] .hover\:bg-blue-900:hover,
+html[data-theme='custom'] .hover\:bg-indigo-900:hover {
+    background-color: var(--tn-shell-hover) !important;
+}
+
+html[data-theme='custom'] .bg-indigo-500,
+html[data-theme='custom'] .bg-indigo-600,
+html[data-theme='custom'] .bg-cyan-600 {
+    background-color: var(--tn-accent) !important;
+}
+
+html[data-theme='custom'] .bg-indigo-700,
+html[data-theme='custom'] .hover\:bg-indigo-700:hover {
+    background-color: var(--tn-accent-hover) !important;
+}
+
+html[data-theme='custom'] .bg-blue-200,
+html[data-theme='custom'] .bg-blue-300,
+html[data-theme='custom'] .bg-indigo-50,
+html[data-theme='custom'] .bg-indigo-100,
+html[data-theme='custom'] .bg-indigo-200,
+html[data-theme='custom'] .bg-cyan-50,
+html[data-theme='custom'] .bg-cyan-100,
+html[data-theme='custom'] .hover\:bg-indigo-50:hover,
+html[data-theme='custom'] .hover\:bg-indigo-100:hover {
+    background-color: var(--tn-accent-soft) !important;
+}
+
+html[data-theme='custom'] .text-blue-400,
+html[data-theme='custom'] .text-blue-500,
+html[data-theme='custom'] .text-indigo-500,
+html[data-theme='custom'] .text-indigo-600,
+html[data-theme='custom'] .text-indigo-700,
+html[data-theme='custom'] .text-indigo-800,
+html[data-theme='custom'] .text-indigo-900,
+html[data-theme='custom'] .text-cyan-600,
+html[data-theme='custom'] .text-cyan-700,
+html[data-theme='custom'] .text-cyan-800,
+html[data-theme='custom'] .hover\:text-indigo-700:hover {
+    color: var(--tn-accent-text) !important;
+}
+
+html[data-theme='custom'] .text-blue-100,
+html[data-theme='custom'] .text-blue-200,
+html[data-theme='custom'] .text-blue-300,
+html[data-theme='custom'] .text-indigo-100,
+html[data-theme='custom'] .text-indigo-200 {
+    color: var(--tn-accent-soft) !important;
+}
+
+html[data-theme='custom'] .border-blue-400,
+html[data-theme='custom'] .border-blue-500,
+html[data-theme='custom'] .border-blue-600,
+html[data-theme='custom'] .border-blue-700,
+html[data-theme='custom'] .border-blue-800,
+html[data-theme='custom'] .border-blue-900,
+html[data-theme='custom'] .border-indigo-100,
+html[data-theme='custom'] .border-indigo-200,
+html[data-theme='custom'] .border-indigo-300,
+html[data-theme='custom'] .border-indigo-400,
+html[data-theme='custom'] .border-cyan-200,
+html[data-theme='custom'] .border-cyan-300 {
+    border-color: var(--tn-border-strong) !important;
+}
+
+html[data-theme='custom'] .ring-blue-200,
+html[data-theme='custom'] .ring-blue-500,
+html[data-theme='custom'] .ring-indigo-200,
+html[data-theme='custom'] .focus\:ring-blue-300:focus,
+html[data-theme='custom'] .focus\:ring-blue-500:focus,
+html[data-theme='custom'] .focus\:ring-indigo-500:focus {
+    --tw-ring-color: var(--tn-ring) !important;
+}
+
+/* The User Management profile hero uses a blue gradient, not bg-blue-* classes. */
+html[data-theme='custom'] .from-blue-950 {
+    --tw-gradient-from: var(--tn-shell-deep) !important;
+}
+
+html[data-theme='custom'] .via-blue-900 {
+    --tw-gradient-via: var(--tn-shell-hover) !important;
+}
+
+html[data-theme='custom'] .to-blue-700 {
+    --tw-gradient-to: var(--tn-accent) !important;
+}
+
 /* Carry the selected accent through the authenticated navigation shell. */
 html[data-theme='custom'] #adminSidebar {
-    background-color: color-mix(in srgb, var(--tn-accent), #0f172a 74%) !important;
+    background-color: var(--tn-shell-deep) !important;
 }
 
 html[data-theme='custom'] #adminSidebar .border-blue-800,

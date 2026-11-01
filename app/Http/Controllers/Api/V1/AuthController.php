@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AdminTotpService;
 use App\Models\UserNotification;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Login;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
@@ -203,6 +205,7 @@ class AuthController extends Controller
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string'],
             'device_name' => ['required', 'string', 'max:255'],
+            'mfa_code' => ['nullable', 'string', 'max:32'],
         ]);
 
         $throttleKey = $this->throttleKey(
@@ -256,11 +259,33 @@ class AuthController extends Controller
             ], 422);
         }
 
+        // Password verification must not issue a token for any enrolled account
+        // until its second factor has been verified.
+        if (! empty($user->mfa_secret)) {
+            $code = trim((string) ($validated['mfa_code'] ?? ''));
+            if ($code === '') {
+                return response()->json([
+                    'mfa_required' => true,
+                    'message' => 'Enter your account authenticator code.',
+                ], 202);
+            }
+
+            if (! app(AdminTotpService::class)->verifyAndConsume($user, $code)) {
+                RateLimiter::hit($throttleKey, 60);
+                return response()->json([
+                    'mfa_required' => true,
+                    'message' => 'Invalid or previously used authenticator code.',
+                ], 422);
+            }
+        }
+
         RateLimiter::clear($throttleKey);
 
+        // Independent of Sanctum's null global expiration setting.
         $token = $user->createToken(
             $validated['device_name'],
-            ['mobile']
+            ['mobile'],
+            now()->addDays(30)
         );
 
         event(new Login('sanctum', $user, false));
@@ -311,13 +336,42 @@ class AuthController extends Controller
         | neutral so the API does not disclose whether an account exists.
         |
         */
-        Password::sendResetLink([
-            'email' => $validated['email'],
+        // The same Laravel broker and Brevo notification are used by web,
+        // mobile, and administrator-initiated password resets. Never disclose
+        // whether an account exists or expose provider response bodies.
+        try {
+            $status = Password::sendResetLink([
+                'email' => $validated['email'],
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('Mobile password reset delivery failed.', [
+                'exception_type' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'reason' => \App\Support\PasswordResetFailure::classify($exception),
+                'transport' => 'brevo_api',
+            ]);
+
+            return response()->json([
+                'message' => 'Password reset email is temporarily unavailable. Please try again later.',
+            ], 503)->header('Cache-Control', 'no-store, private');
+        }
+
+        // Both unknown-account and throttled responses must remain neutral.
+        if ($status === Password::RESET_LINK_SENT
+            || $status === Password::INVALID_USER
+            || $status === Password::RESET_THROTTLED) {
+            return response()->json([
+                'message' => 'A reset link will be sent if the account exists.',
+            ])->header('Cache-Control', 'no-store, private');
+        }
+
+        Log::warning('Mobile password reset broker returned an unexpected status.', [
+            'status' => (string) $status,
         ]);
 
         return response()->json([
-            'message' => 'A reset link will be sent if the account exists.',
-        ]);
+            'message' => 'Password reset email is temporarily unavailable. Please try again later.',
+        ], 503)->header('Cache-Control', 'no-store, private');
     }
     public function me(Request $request): JsonResponse
     {

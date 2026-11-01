@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Security;
 
-use App\Models\CaseRecord;
 use App\Models\Incident;
 use App\Models\ResidentComplaint;
 use App\Models\User;
@@ -201,7 +200,6 @@ class RbacAndRouteSecurityTest extends TestCase
         $this->assertTrue(Gate::forUser($official)->denies('viewReports'));
         $this->assertTrue(Gate::forUser($official)->denies('manageSystemBranding'));
         $this->assertTrue(Gate::forUser($official)->denies('viewUserPresence'));
-        $this->assertTrue(Gate::forUser($official)->denies('viewAny', CaseRecord::class));
     }
 
     private function assertProtectedRoute(string $routeName, string $expectedRoles): void

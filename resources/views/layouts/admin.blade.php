@@ -62,13 +62,13 @@
     rel="icon"
     type="image/png"
     sizes="32x32"
-    href="/tabangnow-tab-icon-v7.png?v=11"
+    href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12"
 >
 
 <link
     rel="shortcut icon"
     type="image/png"
-    href="/tabangnow-tab-icon-v7.png?v=11"
+    href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12"
 >
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -416,10 +416,12 @@
                 const selectedMode =
                     normalizeThemeMode(mode);
 
+                // Only render selection indicators for actual theme
+                // options. Hidden fields and the Custom Color submit
+                // button must not become selectable rows.
                 const controls = Array.from(
                     document.querySelectorAll(
-                        '[name="theme_mode"],'
-                        + '[data-theme-mode]'
+                        '[data-theme-option]'
                     )
                 );
 
@@ -1041,21 +1043,9 @@
 
                 $authInitial = strtoupper(mb_substr($authUser?->name ?? 'U', 0, 1));
 
-                $authProfileUrl = '#';
-
-if ($authUser) {
-    if (
-        $authUser->isAdmin()
-        && Route::has('admin.users.edit')
-    ) {
-        $authProfileUrl = route(
-            'admin.users.edit',
-            $authUser
-        );
-    } elseif (Route::has('profile.edit')) {
-        $authProfileUrl = route('profile.edit');
-    }
-}
+                $authProfileUrl = Route::has('profile.edit')
+    ? route('profile.edit')
+    : '#';
 
                 $navItems = match ($role) {
                     'admin' => [
@@ -1282,9 +1272,35 @@ if ($authUser) {
 
     $isActive = collect($activePatterns)
         ->contains(fn ($pattern) => request()->routeIs($pattern));
+
+    // Phase 1: opt-in only low-risk module index pages; both endpoints must qualify.
+    // Complex/maps/incidents/reports/users/auth continue using standard full requests.
+    $spaPilotRoutes = [
+        'admin.announcements.index',
+        'admin.emergency-mode.index',
+        'admin.tanod-alerts.index',
+        'admin.tanod-tasks.index',
+        'admin.tanods.index',
+        'admin.resident-complaints.index',
+        'admin.activity-logs.index',
+        'official.announcements.index',
+        'official.emergency-mode.index',
+        'official.tanods.index',
+        'official.resident-complaints.index',
+        'tanod.tanod-alerts.index',
+        'tanod.tanod-tasks.index',
+        'tanod.tanods.index',
+        'tanod.announcements.index',
+        'tanod.emergency-mode.index',
+        'resident.announcements.index',
+        'resident.emergency-mode.index',
+    ];
+    $isSpaPilotLink = in_array(request()->route()?->getName(), $spaPilotRoutes, true)
+        && in_array($item['route'], $spaPilotRoutes, true);
 @endphp
 
                     <a href="{{ route($item['route']) }}"
+                       @if ($isSpaPilotLink) wire:navigate.hover @endif
                        class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
                        {{ $isActive
                             ? 'bg-blue-600 font-semibold text-white'
@@ -1425,8 +1441,9 @@ if ($authUser) {
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const sidebar = document.getElementById('adminSidebar');
+        (() => {
+            function initializeSidebarForNavigation() {
+                const sidebar = document.getElementById('adminSidebar');
             const mainContent = document.getElementById('adminMainContent');
             const toggleButton = document.getElementById('sidebarToggleButton');
             const notificationBackdrop = document.getElementById('notificationBackdrop');
@@ -1435,6 +1452,10 @@ if ($authUser) {
             if (!sidebar || !mainContent || !toggleButton) {
                 return;
             }
+            if (toggleButton.dataset.tnSpaSidebarReady === '1') {
+                return;
+            }
+            toggleButton.dataset.tnSpaSidebarReady = '1';
 
             function applySidebarState(isCollapsed) {
                 sidebar.classList.toggle('-translate-x-full', isCollapsed);
@@ -1484,7 +1505,19 @@ if ($authUser) {
                     console.warn('Unable to save sidebar state.', error);
                 }
             });
-        });
+            }
+
+            // The Livewire body is swapped on navigation. Reattach only to the new button.
+            if (!window.__tabangNowSpaSidebarListenerInstalled) {
+                window.__tabangNowSpaSidebarListenerInstalled = true;
+                document.addEventListener('livewire:navigated', initializeSidebarForNavigation);
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeSidebarForNavigation, {once: true});
+            } else {
+                initializeSidebarForNavigation();
+            }
+        })();
     </script>
 
     <script>
@@ -1530,21 +1563,22 @@ if ($authUser) {
                 );
             }
 
-            function isHistoryTraversal(event = null) {
-                const navigationEntry = performance
-                    .getEntriesByType('navigation')[0];
-
-                return Boolean(
-                    event?.persisted
-                    || navigationEntry?.type
-                        === 'back_forward'
-                );
-            }
-
+            // A back/forward network navigation already passed Laravel auth.
+            // Only a document restored from bfcache needs a fresh auth check.
             function refreshThroughLaravel() {
                 concealAuthenticatedDocument();
                 window.location.reload();
             }
+
+            // Never show a cached protected module during browser Back/Forward.
+            // A full GET validates the current Laravel session and permissions.
+            document.addEventListener('livewire:navigate', function (event) {
+                if (!event.detail?.history) {
+                    return;
+                }
+                event.preventDefault();
+                window.location.assign(event.detail.url.href);
+            });
 
             window.addEventListener(
                 'pagehide',
@@ -1556,7 +1590,7 @@ if ($authUser) {
             window.addEventListener(
                 'pageshow',
                 function (event) {
-                    if (isHistoryTraversal(event)) {
+                    if (event.persisted) {
                         refreshThroughLaravel();
                         return;
                     }
@@ -1565,12 +1599,42 @@ if ($authUser) {
                 }
             );
 
-            window.addEventListener(
-                'popstate',
-                function () {
-                    refreshThroughLaravel();
+            // Clicking the link for the current page should not re-request it.
+            // Other navigation, modified clicks, downloads, and fragments work normally.
+            document.addEventListener('click', function (event) {
+                if (
+                    event.defaultPrevented
+                    || event.button !== 0
+                    || event.ctrlKey
+                    || event.metaKey
+                    || event.altKey
+                    || event.shiftKey
+                    || !(event.target instanceof Element)
+                ) {
+                    return;
                 }
-            );
+
+                const link = event.target.closest('#adminSidebar a[href]');
+
+                if (
+                    !link
+                    || link.hasAttribute('download')
+                    || (link.target && link.target !== '_self')
+                ) {
+                    return;
+                }
+
+                const destination = new URL(link.href, window.location.href);
+
+                if (
+                    destination.origin === window.location.origin
+                    && destination.pathname === window.location.pathname
+                    && destination.search === window.location.search
+                    && !destination.hash
+                ) {
+                    event.preventDefault();
+                }
+            });
         })();
     </script>
 </body>

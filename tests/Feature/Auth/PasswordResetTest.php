@@ -3,7 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
+use App\Notifications\BrevoPasswordResetNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -33,7 +33,7 @@ class PasswordResetTest extends TestCase
 
         Notification::assertSentTo(
             $user,
-            ResetPassword::class
+            BrevoPasswordResetNotification::class
         );
     }
 
@@ -49,8 +49,8 @@ class PasswordResetTest extends TestCase
 
         Notification::assertSentTo(
             $user,
-            ResetPassword::class,
-            function (ResetPassword $notification): bool {
+            BrevoPasswordResetNotification::class,
+            function (BrevoPasswordResetNotification $notification): bool {
                 $response = $this->get(
                     '/reset-password/' . $notification->token
                 );
@@ -76,8 +76,8 @@ class PasswordResetTest extends TestCase
 
         Notification::assertSentTo(
             $user,
-            ResetPassword::class,
-            function (ResetPassword $notification) use (
+            BrevoPasswordResetNotification::class,
+            function (BrevoPasswordResetNotification $notification) use (
                 $user,
                 $newPassword
             ): bool {
