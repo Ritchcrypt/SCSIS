@@ -21,6 +21,9 @@ import './presence-heartbeat';
 document.addEventListener('DOMContentLoaded', () => {
     initializeImageUploadPreviews();
 });
+// Vite assets run once. Re-initialize new file inputs after a Livewire page swap.
+// initializeImageUploadPreviews uses a per-input guard to prevent duplicate listeners.
+document.addEventListener('livewire:navigated', initializeImageUploadPreviews);
 
 function initializeImageUploadPreviews() {
     const fileInputs = document.querySelectorAll('input[type="file"]');

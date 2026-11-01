@@ -1272,9 +1272,35 @@
 
     $isActive = collect($activePatterns)
         ->contains(fn ($pattern) => request()->routeIs($pattern));
+
+    // Phase 1: opt-in only low-risk module index pages; both endpoints must qualify.
+    // Complex/maps/incidents/reports/users/auth continue using standard full requests.
+    $spaPilotRoutes = [
+        'admin.announcements.index',
+        'admin.emergency-mode.index',
+        'admin.tanod-alerts.index',
+        'admin.tanod-tasks.index',
+        'admin.tanods.index',
+        'admin.resident-complaints.index',
+        'admin.activity-logs.index',
+        'official.announcements.index',
+        'official.emergency-mode.index',
+        'official.tanods.index',
+        'official.resident-complaints.index',
+        'tanod.tanod-alerts.index',
+        'tanod.tanod-tasks.index',
+        'tanod.tanods.index',
+        'tanod.announcements.index',
+        'tanod.emergency-mode.index',
+        'resident.announcements.index',
+        'resident.emergency-mode.index',
+    ];
+    $isSpaPilotLink = in_array(request()->route()?->getName(), $spaPilotRoutes, true)
+        && in_array($item['route'], $spaPilotRoutes, true);
 @endphp
 
                     <a href="{{ route($item['route']) }}"
+                       @if ($isSpaPilotLink) wire:navigate.hover @endif
                        class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
                        {{ $isActive
                             ? 'bg-blue-600 font-semibold text-white'
@@ -1415,8 +1441,9 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const sidebar = document.getElementById('adminSidebar');
+        (() => {
+            function initializeSidebarForNavigation() {
+                const sidebar = document.getElementById('adminSidebar');
             const mainContent = document.getElementById('adminMainContent');
             const toggleButton = document.getElementById('sidebarToggleButton');
             const notificationBackdrop = document.getElementById('notificationBackdrop');
@@ -1425,6 +1452,10 @@
             if (!sidebar || !mainContent || !toggleButton) {
                 return;
             }
+            if (toggleButton.dataset.tnSpaSidebarReady === '1') {
+                return;
+            }
+            toggleButton.dataset.tnSpaSidebarReady = '1';
 
             function applySidebarState(isCollapsed) {
                 sidebar.classList.toggle('-translate-x-full', isCollapsed);
@@ -1474,7 +1505,19 @@
                     console.warn('Unable to save sidebar state.', error);
                 }
             });
-        });
+            }
+
+            // The Livewire body is swapped on navigation. Reattach only to the new button.
+            if (!window.__tabangNowSpaSidebarListenerInstalled) {
+                window.__tabangNowSpaSidebarListenerInstalled = true;
+                document.addEventListener('livewire:navigated', initializeSidebarForNavigation);
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeSidebarForNavigation, {once: true});
+            } else {
+                initializeSidebarForNavigation();
+            }
+        })();
     </script>
 
     <script>
@@ -1526,6 +1569,16 @@
                 concealAuthenticatedDocument();
                 window.location.reload();
             }
+
+            // Never show a cached protected module during browser Back/Forward.
+            // A full GET validates the current Laravel session and permissions.
+            document.addEventListener('livewire:navigate', function (event) {
+                if (!event.detail?.history) {
+                    return;
+                }
+                event.preventDefault();
+                window.location.assign(event.detail.url.href);
+            });
 
             window.addEventListener(
                 'pagehide',
