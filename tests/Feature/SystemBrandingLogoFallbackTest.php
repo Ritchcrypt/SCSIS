@@ -106,14 +106,53 @@ class SystemBrandingLogoFallbackTest extends TestCase
                     'images/tabangnow-favicon-final.svg',
                     false
                 )
-                ->assertSee(
+                ->assertDontSee(
                     'tabangnow-tab-icon-v7.png?v=12',
+                    false
+                )
+                ->assertDontSee(
+                    'tabangnow-tab-icon-v7.png?v=13',
+                    false
+                )
+                ->assertSee(
+                    '<link rel="icon" href="' . route('system-branding.logo') . '?v=',
                     false
                 )
                 ->assertDontSee(
                     'Secure community access',
                     false
                 );
+        }
+    }
+
+    public function test_authenticated_profile_and_mfa_use_the_same_uploaded_system_logo_as_public_auth(): void
+    {
+        Storage::fake('public');
+
+        $logoBytes = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        );
+
+        Storage::disk('public')->put('system-branding/parity.png', $logoBytes);
+
+        $setting = SystemSetting::query()->firstOrFail();
+        $setting->update(['system_logo_path' => 'system-branding/parity.png']);
+
+        $logoUrl = route('system-branding.logo') . '?v='
+            . optional($setting->updated_at)->timestamp;
+
+        $user = \App\Models\User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+        ]);
+
+        foreach (['/profile', '/security/account-mfa'] as $path) {
+            $this->actingAs($user)
+                ->get($path)
+                ->assertOk()
+                ->assertSee('<link rel="icon" href="' . $logoUrl . '">', false)
+                ->assertSee('<link rel="shortcut icon" href="' . $logoUrl . '">', false)
+                ->assertDontSee('tabangnow-tab-icon-v7.png?v=13', false);
         }
     }
 
@@ -133,7 +172,7 @@ class SystemBrandingLogoFallbackTest extends TestCase
                     false
                 )
                 ->assertSee(
-                    'tabangnow-tab-icon-v7.png?v=12',
+                    'tabangnow-tab-icon-v7.png?v=13',
                     false
                 )
                 ->assertDontSee(

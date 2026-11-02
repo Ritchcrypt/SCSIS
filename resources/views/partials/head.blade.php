@@ -34,8 +34,7 @@
 
 <title>{{ $title ?? $headSystemName }}</title>
 
-<link rel="icon" type="image/png" sizes="32x32" href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12">
-<link rel="shortcut icon" type="image/png" href="{{ asset('tabangnow-tab-icon-v7.png') }}?v=12">
+@include('partials.branding-favicon', ['brandingLogoUrl' => $headBrandingLogoUrl])
 
 <link rel="preconnect" href="https://fonts.bunny.net">
 
