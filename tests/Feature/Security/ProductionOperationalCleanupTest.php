@@ -157,6 +157,27 @@ class ProductionOperationalCleanupTest extends TestCase
         $this->assertSame(1, DB::table('announcements')->count());
     }
 
+    public function test_active_incidents_abort_even_when_all_other_safety_inputs_match(): void
+    {
+        User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $id = $this->seedOperationalData();
+
+        DB::table('incidents')->where('id', $id)->update(['status' => 'active']);
+
+        Artisan::call('tabangnow:operational-cleanup');
+        $snapshot = $this->readSnapshot(Artisan::output());
+
+        $result = Artisan::call('tabangnow:operational-cleanup', [
+            '--apply' => true,
+            '--confirm' => 'DELETE_OPERATIONS_KEEP_ALL_USERS',
+            '--backup-id' => 'verified-backup-reference-001',
+            '--expect-snapshot' => $snapshot,
+        ]);
+
+        $this->assertSame(1, $result);
+        $this->assertDatabaseHas('incidents', ['id' => $id, 'status' => 'active']);
+    }
+
     private function readSnapshot(string $output): string
     {
         $this->assertSame(
@@ -172,6 +193,7 @@ class ProductionOperationalCleanupTest extends TestCase
     {
         $id = DB::table('incidents')->insertGetId([
             'title' => 'Cleanup test incident',
+            'status' => 'resolved',
             'reporter_id' => $resident?->id,
             'created_at' => now(),
             'updated_at' => now(),
