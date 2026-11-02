@@ -4,6 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Account authentication security — TabangNow</title>
+  @include('partials.branding-favicon')
   <style>
     body{font:16px system-ui,Arial,sans-serif;background:#f4f7fb;color:#132136;margin:0;padding:28px 16px}
     main{max-width:670px;margin:auto;background:white;border:1px solid #d8e0ea;border-radius:14px;padding:24px}
