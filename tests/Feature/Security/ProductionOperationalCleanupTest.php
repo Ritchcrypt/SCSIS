@@ -17,13 +17,14 @@ class ProductionOperationalCleanupTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
         $resident = User::factory()->create(['role' => 'resident', 'is_active' => true]);
         $incidentId = $this->seedOperationalData($resident);
+        $userIdsBefore = DB::table('users')->orderBy('id')->pluck('id')->all();
 
         $result = Artisan::call('tabangnow:operational-cleanup');
 
         $this->assertSame(0, $result, Artisan::output());
         // Console output capture varies by runner; verify database immutability directly.
         $this->assertDatabaseHas('incidents', ['id' => $incidentId]);
-        $this->assertSame(2, DB::table('users')->count());
+        $this->assertSame($userIdsBefore, DB::table('users')->orderBy('id')->pluck('id')->all());
         $this->assertDatabaseHas('users', ['id' => $admin->id, 'role' => 'admin']);
         $this->assertDatabaseHas('users', ['id' => $resident->id, 'role' => 'resident']);
     }
