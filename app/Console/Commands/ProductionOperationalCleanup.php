@@ -92,6 +92,9 @@ final class ProductionOperationalCleanup extends Command
 
             $this->info('PRESERVED user accounts: ' . $snapshot['user_count']);
             $this->info('PRESERVED admin accounts: ' . $snapshot['admin_count']);
+            foreach ($snapshot['active_records'] as $name => $count) {
+                $this->line('ACTIVE ' . $name . ': ' . $count);
+            }
             $this->line('Activity logs, deleted-data archives, account credentials, MFA, role profiles and reference tables are deliberately excluded.');
             $digest = $this->digest($snapshot);
             $this->line('SNAPSHOT SHA256: ' . $digest);
@@ -107,6 +110,13 @@ final class ProductionOperationalCleanup extends Command
                 $current = $this->snapshot();
                 if (! hash_equals($digest, $this->digest($current))) {
                     throw new RuntimeException('Dataset changed since preview. No records deleted.');
+                }
+
+                if (array_sum($current['active_records']) > 0) {
+                    throw new RuntimeException(
+                        'Active incidents, SOS signals, tasks or complaints exist. '
+                        . 'Resolve and individually review them before any bulk cleanup.'
+                    );
                 }
 
                 foreach ($current['tables'] as $table => $expectedCount) {
@@ -215,10 +225,31 @@ final class ProductionOperationalCleanup extends Command
 
         return [
             'tables' => $counts,
+            'active_records' => $this->activeRecordCounts(),
             'user_count' => DB::table('users')->count(),
             'admin_count' => DB::table('users')->where('role', 'admin')->count(),
             'user_fingerprint' => $this->accountFingerprint(),
         ];
+    }
+
+    private function activeRecordCounts(): array
+    {
+        $sources = [
+            'incidents' => ['pending', 'dispatched', 'active', 'escalated'],
+            'mobile_emergency_alerts' => ['pending', 'active', 'acknowledged', 'triggered'],
+            'tanod_tasks' => ['open', 'pending', 'accepted', 'in_progress'],
+            'resident_complaints' => ['pending', 'active', 'in_progress'],
+        ];
+
+        $counts = [];
+        foreach ($sources as $table => $statuses) {
+            $counts[$table] = Schema::hasTable($table)
+                && Schema::hasColumn($table, 'status')
+                    ? DB::table($table)->whereIn('status', $statuses)->count()
+                    : 0;
+        }
+
+        return $counts;
     }
 
     private function accountFingerprint(): string
