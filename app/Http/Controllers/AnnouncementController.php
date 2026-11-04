@@ -416,16 +416,20 @@ $lockedAnnouncement->delete();
                 return;
             }
 
+            // Administrators oversee all Dao barangays. They may have no
+            // barangay_id, but should receive admin/everyone notices.
+            // Audience filtering below still prevents admin delivery for
+            // resident-only, tanod-only or official-only announcements.
             $usersQuery = User::query()
                 ->select([
                     'id',
                     'role',
                     'barangay_id',
                 ])
-                ->whereIn(
-                    'barangay_id',
-                    $targetBarangayIds
-                );
+                ->where(function ($query) use ($targetBarangayIds): void {
+                    $query->whereIn('barangay_id', $targetBarangayIds)
+                        ->orWhere('role', 'admin');
+                });
 
             if (
                 Schema::hasColumn(
