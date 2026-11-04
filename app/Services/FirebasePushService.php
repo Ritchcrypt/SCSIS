@@ -135,38 +135,47 @@ class FirebasePushService
             default => '86400s',
         };
 
+        /*
+         * CRITICAL / Code Red must run through the existing Flutter alarm
+         * handler, including in the Android background isolate. When an FCM
+         * notification payload is present Android auto-renders it and does
+         * not call that handler, so FLAG_INSISTENT and repeating vibration
+         * never start. Send high-priority DATA-ONLY for Code Red, retaining
+         * Android-managed notification + sound for Moderate, Low and Silent.
+         * Do not send both payload types for one alert: that duplicates sound.
+         */
+        $message = [
+            'token' => (string) $pushToken->fcm_token,
+            'data' => [
+                'notification_id' => (string) $notification->id,
+                'type' => $type,
+                'source_id' => $notification->source_id !== null
+                    ? (string) $notification->source_id
+                    : '',
+                'alert_tier' => $alertTier,
+                'title' => Str::limit($title, 120, ''),
+                'body' => Str::limit($body, 900, ''),
+            ],
+            'android' => [
+                'priority' => $highPriority ? 'high' : 'normal',
+                'ttl' => $ttl,
+            ],
+        ];
+
+        if ($deliveryTier !== 'critical') {
+            $message['notification'] = [
+                'title' => Str::limit($title, 120, ''),
+                'body' => Str::limit($body, 900, ''),
+            ];
+            $message['android']['notification'] = $androidPresentation;
+        }
+
         return Http::withToken($accessToken)
             ->acceptJson()
             ->timeout(12)
             ->post(
                 'https://fcm.googleapis.com/v1/projects/' . rawurlencode($projectId) . '/messages:send',
-                [
-                    'message' => [
-                        'token' => (string) $pushToken->fcm_token,
-                        // Android displays this when TabangNow is backgrounded
-                        // or closed. Foreground delivery stays in Flutter's
-                        // existing local-notification/alert implementation.
-                        'notification' => [
-                            'title' => Str::limit($title, 120, ''),
-                            'body' => Str::limit($body, 900, ''),
-                        ],
-                        'data' => [
-                            'notification_id' => (string) $notification->id,
-                            'type' => $type,
-                            'source_id' => $notification->source_id !== null
-                                ? (string) $notification->source_id
-                                : '',
-                            'alert_tier' => $alertTier,
-                            'title' => Str::limit($title, 120, ''),
-                            'body' => Str::limit($body, 900, ''),
-                        ],
-                        'android' => [
-                            'priority' => $highPriority ? 'high' : 'normal',
-                            'ttl' => $ttl,
-                            'notification' => $androidPresentation,
-                        ],
-                    ],
-                ]
+                ['message' => $message]
             );
     }
 
