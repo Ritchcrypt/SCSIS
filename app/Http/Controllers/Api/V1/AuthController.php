@@ -114,11 +114,19 @@ class AuthController extends Controller
                 'string',
                 'regex:/^09\d{9}$/',
             ],
-            'address' => ['required', 'string', 'max:500'],            'barangay_id' => [
-                'nullable',
+            'address' => ['required', 'string', 'max:500'],
+            'barangay_id' => [
+                'required',
                 'integer',
                 'exists:barangays,id',
             ],
+            'date_of_birth' => [
+                'required',
+                'date_format:Y-m-d',
+                'before_or_equal:'.now()->subYears(18)->toDateString(),
+                'after_or_equal:'.now()->subYears(120)->toDateString(),
+            ],
+            'age_confirmation' => ['accepted'],
             'password' => [
                 'required',
                 'string',
@@ -130,13 +138,23 @@ class AuthController extends Controller
             'contact_number.regex' => 'Enter a valid Philippine mobile number, such as 09123456789.',
             'address.required' => 'Complete address is required.',
             'address.max' => 'Address must not exceed 500 characters.',
+            'barangay_id.required' => 'Select your barangay of residence.',
+            'barangay_id.exists' => 'Choose a valid barangay from the list.',
+            'date_of_birth.required' => 'Date of birth is required.',
+            'date_of_birth.date_format' => 'Enter a valid date of birth.',
+            'date_of_birth.before_or_equal' => 'Resident registration is limited to persons 18 years old or older.',
+            'date_of_birth.after_or_equal' => 'Enter a plausible date of birth.',
+            'age_confirmation.accepted' => 'You must confirm that your date of birth is accurate and that you are at least 18 years old.',
         ]);
 
         $user = User::query()->create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'contact_number' => $validated['contact_number'],
-            'address' => $validated['address'],            'barangay_id' => isset($validated['barangay_id']) ? (int) $validated['barangay_id'] : null,
+            'address' => $validated['address'],
+            'barangay_id' => (int) $validated['barangay_id'],
+            'date_of_birth' => $validated['date_of_birth'],
+            'age_attested_at' => now(),
             'password' => Hash::make($validated['password']),
             'role' => 'resident',
             'is_active' => false,

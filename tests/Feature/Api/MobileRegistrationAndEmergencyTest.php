@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Barangay;
 use App\Models\MobileEmergencyAlert;
 use App\Models\User;
 use App\Models\UserNotification;
@@ -25,11 +26,19 @@ class MobileRegistrationAndEmergencyTest extends TestCase
 
         RateLimiter::clear('registration|127.0.0.1');
 
+        $barangay = Barangay::query()->create([
+            'barangay_name' => 'Mobile Registration Test',
+            'location' => 'Dao, Capiz',
+        ]);
+
         $response = $this->postJson('/api/v1/auth/register', [
             'name' => 'Mobile Resident',
             'email' => 'mobile.resident@example.com',
             'contact_number' => '+63 912 345 6789',
             'address' => 'Poblacion, Dao, Capiz',
+            'barangay_id' => $barangay->id,
+            'date_of_birth' => now()->subYears(23)->toDateString(),
+            'age_confirmation' => true,
             'password' => 'TabangNow#2026Secure',
             'password_confirmation' => 'TabangNow#2026Secure',
         ]);
@@ -46,6 +55,9 @@ class MobileRegistrationAndEmergencyTest extends TestCase
         $this->assertFalse((bool) $resident->is_active);
         $this->assertFalse((bool) $resident->status);
         $this->assertSame('09123456789', $resident->contact_number);
+        $this->assertSame($barangay->id, (int) $resident->barangay_id);
+        $this->assertSame(now()->subYears(23)->toDateString(), $resident->date_of_birth->toDateString());
+        $this->assertNotNull($resident->age_attested_at);
 
         $this->assertTrue(
             UserNotification::query()
@@ -54,6 +66,44 @@ class MobileRegistrationAndEmergencyTest extends TestCase
                 ->where('source_id', $resident->id)
                 ->exists()
         );
+    }
+
+    public function test_mobile_registration_rejects_underage_missing_consent_and_missing_barangay(): void
+    {
+        RateLimiter::clear('registration|127.0.0.1');
+
+        $barangay = Barangay::query()->create([
+            'barangay_name' => 'Mobile Registration Age Rule',
+            'location' => 'Dao, Capiz',
+        ]);
+
+        $valid = [
+            'name' => 'Age Validation Resident',
+            'email' => 'mobile.age.validation@example.com',
+            'contact_number' => '09123456789',
+            'address' => 'Poblacion, Dao, Capiz',
+            'barangay_id' => $barangay->id,
+            'date_of_birth' => now()->subYears(23)->toDateString(),
+            'age_confirmation' => true,
+            'password' => 'TabangNow#2026Secure',
+            'password_confirmation' => 'TabangNow#2026Secure',
+        ];
+
+        $this->postJson('/api/v1/auth/register', array_replace($valid, [
+            'date_of_birth' => now()->subYears(17)->toDateString(),
+        ]))->assertUnprocessable()->assertJsonValidationErrors('date_of_birth');
+
+        $this->postJson('/api/v1/auth/register', array_replace($valid, [
+            'age_confirmation' => false,
+        ]))->assertUnprocessable()->assertJsonValidationErrors('age_confirmation');
+
+        $this->postJson('/api/v1/auth/register', array_replace($valid, [
+            'barangay_id' => null,
+        ]))->assertUnprocessable()->assertJsonValidationErrors('barangay_id');
+
+        $this->assertDatabaseMissing('users', [
+            'email' => 'mobile.age.validation@example.com',
+        ]);
     }
 
     public function test_anonymous_sos_works_without_login_and_notifies_admin_and_official_only(): void

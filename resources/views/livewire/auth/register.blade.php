@@ -312,12 +312,12 @@ $this->address = (string) preg_replace(
     }
 }; ?>
 
-<div class="flex flex-col gap-6">
-    <div class="tn-auth-header">
-        <h1 style="font-size: clamp(17px, 2.1vw, 26px); font-weight: 850; line-height: 1.18; letter-spacing: -0.045em; white-space: nowrap;">
+<div class="tn21-form flex flex-col gap-6">
+    <div class="tn21-card-branding">
+        <h1 class="tn21-login-title" style="font-size: clamp(24px, 3vw, 32px); line-height: 1.18;">
             Create a resident account
         </h1>
-        <p>Register for access to TabangNow community services</p>
+        <p class="tn21-login-description">Register for access to TabangNow community services</p>
     </div>
 
     <x-auth-session-status

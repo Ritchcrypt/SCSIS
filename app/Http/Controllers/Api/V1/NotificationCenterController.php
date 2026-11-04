@@ -232,10 +232,9 @@ class NotificationCenterController extends Controller
                 : $this->target('dashboard');
         }
 
+        // Historical notifications must never open the retired Case Management module.
         if (in_array($type, ['case_created', 'case_updated', 'case_deleted'], true)) {
-            return $role === 'admin'
-                ? $this->target('caseManagement', $sourceId)
-                : $this->target('dashboard');
+            return $this->target('dashboard');
         }
 
         if (in_array($type, ['announcement', 'calamity'], true)) {
