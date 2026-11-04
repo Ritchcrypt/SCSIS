@@ -59,6 +59,15 @@ class NotificationAndroidPresentationTest extends TestCase
         );
     }
 
+    public function test_moderate_transport_priority_uses_existing_v2_channel(): void
+    {
+        $source = file_get_contents(dirname(__DIR__, 2).'/app/Services/FirebasePushService.php');
+
+        self::assertIsString($source);
+        self::assertStringContainsString("'tabangnow_moderate_v2' => 'moderate'", $source);
+        self::assertStringNotContainsString("'tabangnow_moderate_v1' => 'moderate'", $source);
+    }
+
     private function presentation(string $type, string $tier): array
     {
         $method = new ReflectionMethod(FirebasePushService::class, 'androidPresentation');
