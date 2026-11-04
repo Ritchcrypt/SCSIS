@@ -423,11 +423,6 @@ class IncidentController extends Controller
                 'can_message' => $canMessage,
                 'can_delete' => Gate::allows('delete', $incident),
                 'can_manage_barangays' => Gate::allows('manageBarangays'),
-                'can_view_related_cases' => (
-                    $request->user()?->isAdmin()
-                    || $request->user()?->isOfficial()
-                ),
-                'can_create_case' => $request->user()?->isAdmin() ?? false,
             ],
             'options' => [
                 'statuses' => $statuses,

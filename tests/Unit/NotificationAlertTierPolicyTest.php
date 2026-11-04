@@ -9,28 +9,44 @@ use ReflectionMethod;
 
 class NotificationAlertTierPolicyTest extends TestCase
 {
-    public function test_known_notification_types_have_expected_alert_tiers(): void
+    public function test_code_red_notification_types_always_use_critical_push_tier(): void
+    {
+        foreach ([
+            'announcement',
+            'calamity',
+            'mobile_emergency',
+            'emergency',
+            'incident',
+            'incident_reported',
+            'incident_message',
+            'incident_update',
+            'incident_updated',
+            'incident_status_update',
+            'assigned_incident',
+            'incident_assigned',
+            'new_assigned_incident',
+            'dispatch',
+            'escalation',
+            'tanod_alert',
+            'tanod_task',
+            'tanod_task_assigned',
+            'task_assigned',
+            'tanod_task_update',
+            'tanod_task_response',
+            'task_update',
+        ] as $type) {
+            self::assertSame('critical', $this->resolveTier($type), "[$type] must trigger Code Red.");
+        }
+    }
+
+    public function test_routine_updates_and_account_notifications_use_moderate_or_low(): void
     {
         $expected = [
-            // CRITICAL: immediate danger / public emergency.
-            'mobile_emergency' => 'critical',
-            'emergency' => 'critical',
-            'calamity' => 'critical',
-
-            // CRITICAL: incident messages preserve existing mobile Code Red.
-            // MODERATE: other actionable human-facing work/messages.
             'user_registration' => 'moderate',
             'resident_complaint' => 'moderate',
-            'incident_message' => 'critical',
-            'tanod_alert' => 'moderate',
             'community_problem' => 'moderate',
             'account_deactivated' => 'moderate',
             'mobile_emergency_acknowledged' => 'moderate',
-
-            // LOW: routine progress/status/information.
-            'incident_update' => 'low',
-            'incident_updated' => 'low',
-            'incident_status_update' => 'low',
             'status_update' => 'low',
             'resolved' => 'low',
             'mobile_emergency_received' => 'low',
@@ -40,11 +56,8 @@ class NotificationAlertTierPolicyTest extends TestCase
             'resident_complaint_proof' => 'low',
             'resident_complaint_deleted' => 'low',
             'account_activated' => 'low',
-            'tanod_task_update' => 'low',
-            'task_update' => 'low',
             'community' => 'low',
-
-            // SILENT: internal administrative/system activity.
+            'unknown_future_notification' => 'low',
             'case_created' => 'silent',
             'case_updated' => 'silent',
             'case_deleted' => 'silent',
@@ -52,47 +65,7 @@ class NotificationAlertTierPolicyTest extends TestCase
         ];
 
         foreach ($expected as $type => $tier) {
-            self::assertSame(
-                $tier,
-                $this->resolveTier($type),
-                "Unexpected TabangNow alert tier for [$type]."
-            );
-        }
-    }
-
-    public function test_source_dependent_notifications_have_safe_defaults(): void
-    {
-        $expected = [
-            // Announcement with no source record is informational.
-            'announcement' => 'low',
-
-            // New incident reports normally need attention.
-            'incident' => 'moderate',
-            'incident_reported' => 'moderate',
-
-            // Assignments/actions normally require attention.
-            'assigned_incident' => 'moderate',
-            'incident_assigned' => 'moderate',
-            'new_assigned_incident' => 'moderate',
-            'dispatch' => 'moderate',
-            'escalation' => 'moderate',
-
-            // Tanod Task assignments trigger Code Red.
-            'tanod_task' => 'critical',
-            'tanod_task_assigned' => 'critical',
-            'task_assigned' => 'critical',
-
-            // Future unknown informational notifications must never
-            // accidentally become Code Red.
-            'unknown_future_notification' => 'low',
-        ];
-
-        foreach ($expected as $type => $tier) {
-            self::assertSame(
-                $tier,
-                $this->resolveTier($type),
-                "Unexpected default TabangNow alert tier for [$type]."
-            );
+            self::assertSame($tier, $this->resolveTier($type), "Unexpected tier for [$type].");
         }
     }
 

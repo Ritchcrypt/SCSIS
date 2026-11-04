@@ -39,6 +39,8 @@ class MobileBarangayProfileSelectorTest extends TestCase
             'contact_number' => '09123456789',
             'address' => 'Dao, Capiz',
             'barangay_id' => $barangay->id,
+            'date_of_birth' => now()->subYears(23)->toDateString(),
+            'age_confirmation' => true,
             'password' => 'TabangNow#2026Secure',
             'password_confirmation' =>
                 'TabangNow#2026Secure',
@@ -48,6 +50,7 @@ class MobileBarangayProfileSelectorTest extends TestCase
         $this->assertDatabaseHas('users', [
             'email' => $email,
             'barangay_id' => $barangay->id,
+            'date_of_birth' => now()->subYears(23)->toDateString(),
         ]);
     }
 

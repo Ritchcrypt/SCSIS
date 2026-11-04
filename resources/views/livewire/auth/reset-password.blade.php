@@ -151,11 +151,11 @@ new #[Layout('components.layouts.auth')] class extends Component {
     }
 }; ?>
 
-<div class="flex flex-col gap-6">
-    <x-auth-header
-        title="Reset password"
-        description="Please enter your new password below"
-    />
+<div class="tn21-form flex flex-col gap-6">
+    <div class="tn21-card-branding">
+        <h1 class="tn21-login-title">Reset password</h1>
+        <p class="tn21-login-description">Please enter your new password below</p>
+    </div>
 
     <x-auth-session-status
         class="text-center"

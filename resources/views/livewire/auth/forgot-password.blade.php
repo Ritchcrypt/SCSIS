@@ -41,14 +41,17 @@ new #[Layout('components.layouts.auth')] class extends Component {
     }
 }; ?>
 
-<div class="flex flex-col gap-6">
-    <x-auth-header title="Forgot password" description="Enter your email to receive a password reset link" />
+<div class="tn21-form flex flex-col gap-6">
+    <div class="tn21-card-branding">
+        <h1 class="tn21-login-title">Forgot password</h1>
+        <p class="tn21-login-description">Enter your email to receive a password reset link</p>
+    </div>
 
     <!-- Session Status -->
     <x-auth-session-status class="text-center" :status="session('status')" />
 
     @if (session('mail_error'))
-        <div role="alert" class="rounded-lg border border-red-400/40 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+        <div role="alert" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {{ session('mail_error') }}
         </div>
     @endif
@@ -62,7 +65,7 @@ new #[Layout('components.layouts.auth')] class extends Component {
         <flux:button variant="primary" type="submit" class="w-full">{{ __('Email password reset link') }}</flux:button>
     </form>
 
-    <div class="space-x-1 text-center text-sm text-zinc-400">
+    <div class="space-x-1 text-center text-sm text-slate-600">
         Or, return to
         <x-text-link href="{{ route('login') }}">log in</x-text-link>
     </div>

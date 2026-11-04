@@ -15,10 +15,18 @@ class PublicDownloadController extends Controller
     public function index(): View
     {
         $sizeBytes = (int) config('tabangnow.mobile.apk_size_bytes', 0);
+        $sourceUrl = trim((string) config('tabangnow.mobile.apk_download_url', ''));
+        $expectedHash = trim((string) config('tabangnow.mobile.apk_sha256', ''));
+
+        // The stable /download page must not advertise a working APK before
+        // an HTTPS release asset and its 64-character SHA-256 are configured.
+        $downloadAvailable = $this->isValidHttpsUrl($sourceUrl)
+            && preg_match('/\A[a-fA-F0-9]{64}\z/D', $expectedHash) === 1;
 
         return view('download', [
+            'downloadAvailable' => $downloadAvailable,
             'version' => (string) config('tabangnow.mobile.version', '1.0.0'),
-            'sha256' => (string) config('tabangnow.mobile.apk_sha256', ''),
+            'sha256' => strtoupper($expectedHash),
             'sizeLabel' => $sizeBytes > 0
                 ? number_format($sizeBytes / 1024 / 1024, 1) . ' MiB'
                 : null,

@@ -82,6 +82,28 @@ class CaseManagementWebsiteRemovalTest extends TestCase
         }
     }
 
+    public function test_mobile_incident_contract_has_no_retired_case_permissions(): void
+    {
+        $source = (string) file_get_contents(
+            app_path('Http/Controllers/Api/V1/IncidentController.php')
+        );
+
+        $this->assertStringNotContainsString("'can_view_related_cases'", $source);
+        $this->assertStringNotContainsString("'can_create_case'", $source);
+        // Keep an empty field for older API clients until a future versioned API.
+        $this->assertStringContainsString("$" . "data['related_cases'] = [];", $source);
+    }
+
+    public function test_historical_case_notifications_route_only_to_dashboard(): void
+    {
+        $source = (string) file_get_contents(
+            app_path('Http/Controllers/Api/V1/NotificationCenterController.php')
+        );
+
+        $this->assertStringContainsString("'case_created', 'case_updated', 'case_deleted'", $source);
+        $this->assertStringNotContainsString("target('caseManagement'", $source);
+    }
+
     public function test_notification_open_flow_has_no_case_management_destination(): void
     {
         $source = (string) file_get_contents(

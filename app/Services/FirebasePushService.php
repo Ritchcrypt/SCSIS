@@ -159,10 +159,33 @@ class FirebasePushService
             ? (int) $notification->source_id
             : null;
 
+        // Shared Android Code Red policy. Actionable events in these modules
+        // must ring even when an incident/announcement has routine priority.
+        // Do NOT mark receipts, acknowledgements or generic resolved events
+        // as emergencies: those retain their established Moderate/Low tiers.
         if (in_array($type, [
+            'announcement',
+            'calamity',
             'mobile_emergency',
             'emergency',
-            'calamity',
+            'incident',
+            'incident_reported',
+            'incident_message',
+            'incident_update',
+            'incident_updated',
+            'incident_status_update',
+            'assigned_incident',
+            'incident_assigned',
+            'new_assigned_incident',
+            'dispatch',
+            'escalation',
+            'tanod_alert',
+            'tanod_task',
+            'tanod_task_assigned',
+            'task_assigned',
+            'tanod_task_update',
+            'tanod_task_response',
+            'task_update',
         ], true)) {
             return 'critical';
         }
