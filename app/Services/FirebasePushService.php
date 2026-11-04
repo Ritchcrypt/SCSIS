@@ -120,7 +120,7 @@ class FirebasePushService
         // The delivery priority and TTL must agree with the selected channel.
         $deliveryTier = match ($androidPresentation['channel_id']) {
             'tabangnow_notifications_v4' => 'critical',
-            'tabangnow_moderate_v1' => 'moderate',
+            'tabangnow_moderate_v2' => 'moderate',
             'tabangnow_silent_v1' => 'silent',
             default => 'low',
         };
