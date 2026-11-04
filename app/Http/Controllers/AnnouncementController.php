@@ -416,16 +416,20 @@ $lockedAnnouncement->delete();
                 return;
             }
 
+            // Administrators manage all barangays. Include active admins even
+            // without a barangay assignment; the audience filter below still
+            // prevents them receiving resident-only or other role-only notices.
             $usersQuery = User::query()
                 ->select([
                     'id',
                     'role',
                     'barangay_id',
                 ])
-                ->whereIn(
-                    'barangay_id',
-                    $targetBarangayIds
-                );
+                ->where(function ($query) use ($targetBarangayIds): void {
+                    $query
+                        ->whereIn('barangay_id', $targetBarangayIds)
+                        ->orWhere('role', 'admin');
+                });
 
             if (
                 Schema::hasColumn(

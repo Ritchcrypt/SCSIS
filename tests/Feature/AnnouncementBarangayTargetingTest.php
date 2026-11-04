@@ -86,6 +86,112 @@ class AnnouncementBarangayTargetingTest extends TestCase
         ]);
     }
 
+    public function test_everyone_notice_reaches_unassigned_admins_and_only_targeted_residents(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'barangay_id' => null,
+        ]);
+
+        $secondAdmin = User::factory()->create([
+            'role' => 'admin',
+            'barangay_id' => null,
+        ]);
+
+        $targetBarangay = Barangay::query()
+            ->where('barangay_name', 'Agtambi')
+            ->firstOrFail();
+
+        $otherBarangay = Barangay::query()
+            ->where('barangay_name', 'Duyoc')
+            ->firstOrFail();
+
+        $targetResident = User::factory()->create([
+            'role' => 'resident',
+            'barangay_id' => $targetBarangay->id,
+        ]);
+
+        $otherResident = User::factory()->create([
+            'role' => 'resident',
+            'barangay_id' => $otherBarangay->id,
+        ]);
+
+        $this->actingAs($admin)->post(
+            route('admin.announcements.store'),
+            [
+                'title' => 'Targeted Everyone Test Notice',
+                'content' => 'Only administrators and targeted residents receive this.',
+                'category' => 'general',
+                'priority' => 'normal',
+                'audience' => 'everyone',
+                'barangay_ids' => [$targetBarangay->id],
+            ]
+        )->assertRedirect();
+
+        $announcement = Announcement::query()
+            ->where('title', 'Targeted Everyone Test Notice')
+            ->firstOrFail();
+
+        foreach ([$admin, $secondAdmin, $targetResident] as $recipient) {
+            $this->assertDatabaseHas('notifications', [
+                'user_id' => $recipient->id,
+                'type' => 'announcement',
+                'source_id' => $announcement->id,
+            ]);
+        }
+
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $otherResident->id,
+            'type' => 'announcement',
+            'source_id' => $announcement->id,
+        ]);
+    }
+
+    public function test_admin_only_notice_reaches_active_admin_without_barangay(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'barangay_id' => null,
+        ]);
+
+        $targetBarangay = Barangay::query()
+            ->where('barangay_name', 'Agtambi')
+            ->firstOrFail();
+
+        $resident = User::factory()->create([
+            'role' => 'resident',
+            'barangay_id' => $targetBarangay->id,
+        ]);
+
+        $this->actingAs($admin)->post(
+            route('admin.announcements.store'),
+            [
+                'title' => 'Admin Only Test Notice',
+                'content' => 'Administrative announcement.',
+                'category' => 'general',
+                'priority' => 'normal',
+                'audience' => 'admin',
+                'barangay_ids' => [$targetBarangay->id],
+            ]
+        )->assertRedirect();
+
+        $announcement = Announcement::query()
+            ->where('title', 'Admin Only Test Notice')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $admin->id,
+            'type' => 'announcement',
+            'source_id' => $announcement->id,
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $resident->id,
+            'type' => 'announcement',
+            'source_id' => $announcement->id,
+        ]);
+    }
+
     public function test_resident_listing_is_limited_to_their_barangay(): void
     {
         $agtambi = Barangay::query()
