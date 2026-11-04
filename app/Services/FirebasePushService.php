@@ -114,12 +114,22 @@ class FirebasePushService
         string $alertTier
     ): Response {
         $type = strtolower(trim((string) ($notification->type ?? 'notification')));
-        $highPriority = in_array($alertTier, ['critical', 'moderate'], true);
+        $androidPresentation = $this->androidPresentation($type, $alertTier);
+        // Flutter has an established Code Red type policy that takes precedence
+        // over the database-derived alert tier (for example announcements).
+        // The delivery priority and TTL must agree with the selected channel.
+        $deliveryTier = match ($androidPresentation['channel_id']) {
+            'tabangnow_notifications_v4' => 'critical',
+            'tabangnow_moderate_v1' => 'moderate',
+            'tabangnow_silent_v1' => 'silent',
+            default => 'low',
+        };
+        $highPriority = in_array($deliveryTier, ['critical', 'moderate'], true);
 
         $title = trim((string) ($notification->title ?: 'TabangNow notification'));
         $body = trim((string) ($notification->message ?: $notification->title ?: 'You have a new notification.'));
 
-        $ttl = match ($alertTier) {
+        $ttl = match ($deliveryTier) {
             'critical' => '900s',
             'moderate' => '3600s',
             default => '86400s',
@@ -133,6 +143,13 @@ class FirebasePushService
                 [
                     'message' => [
                         'token' => (string) $pushToken->fcm_token,
+                        // Android displays this when TabangNow is backgrounded
+                        // or closed. Foreground delivery stays in Flutter's
+                        // existing local-notification/alert implementation.
+                        'notification' => [
+                            'title' => Str::limit($title, 120, ''),
+                            'body' => Str::limit($body, 900, ''),
+                        ],
                         'data' => [
                             'notification_id' => (string) $notification->id,
                             'type' => $type,
@@ -146,10 +163,63 @@ class FirebasePushService
                         'android' => [
                             'priority' => $highPriority ? 'high' : 'normal',
                             'ttl' => $ttl,
+                            'notification' => $androidPresentation,
                         ],
                     ],
                 ]
             );
+    }
+
+    /**
+     * Keep background Android sound/vibration routing identical to Flutter's
+     * existing _tierFromData policy. Android 8+ controls the actual vibration
+     * and sound through the user's notification-channel settings.
+     *
+     * The channel IDs and raw sound names already exist in released apps;
+     * changing them would require an app update and could override preferences.
+     * The silent channel deliberately has no sound property.
+     *
+     * @return array<string, string>
+     */
+    private function androidPresentation(string $type, string $alertTier): array
+    {
+        // Match Flutter's established Code Red types. Do not introduce new
+        // emergency categories or modify the existing sound files/channels.
+        $codeRedTypes = [
+            'announcement', 'calamity', 'mobile_emergency',
+            'emergency', 'incident', 'incident_reported',
+            'incident_message', 'incident_update', 'incident_updated',
+            'incident_status_update', 'assigned_incident', 'incident_assigned',
+            'new_assigned_incident', 'dispatch', 'escalation',
+            'tanod_alert', 'tanod_task', 'tanod_task_assigned',
+            'task_assigned', 'tanod_task_update', 'tanod_task_response',
+            'task_update',
+        ];
+
+        if (in_array($type, $codeRedTypes, true)) {
+            return [
+                'channel_id' => 'tabangnow_notifications_v4',
+                'sound' => 'tabangnow_notification_v4',
+            ];
+        }
+
+        // Match Flutter: a legacy `critical` alert tier on any other type
+        // becomes MODERATE, never a new Code Red alert category.
+        if ($alertTier === 'critical') {
+            $alertTier = 'moderate';
+        }
+
+        return match ($alertTier) {
+            'moderate' => [
+                'channel_id' => 'tabangnow_moderate_v1',
+                'sound' => 'tabangnow_moderate_v1',
+            ],
+            'low' => [
+                'channel_id' => 'tabangnow_low_v1',
+                'sound' => 'tabangnow_low_v1',
+            ],
+            default => ['channel_id' => 'tabangnow_silent_v1'],
+        };
     }
 
     private function resolveAlertTier(UserNotification $notification): string
