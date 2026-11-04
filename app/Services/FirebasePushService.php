@@ -211,11 +211,11 @@ class FirebasePushService
 
         return match ($alertTier) {
             'moderate' => [
-                'channel_id' => 'tabangnow_moderate_v1',
+                'channel_id' => 'tabangnow_moderate_v2',
                 'sound' => 'tabangnow_moderate_v1',
             ],
             'low' => [
-                'channel_id' => 'tabangnow_low_v1',
+                'channel_id' => 'tabangnow_low_v2',
                 'sound' => 'tabangnow_low_v1',
             ],
             default => ['channel_id' => 'tabangnow_silent_v1'],

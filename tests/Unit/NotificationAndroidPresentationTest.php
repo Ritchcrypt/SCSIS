@@ -36,7 +36,7 @@ class NotificationAndroidPresentationTest extends TestCase
             'resident_complaint', 'case_created', 'future_emergency',
         ] as $type) {
             self::assertSame(
-                ['channel_id' => 'tabangnow_moderate_v1', 'sound' => 'tabangnow_moderate_v1'],
+                ['channel_id' => 'tabangnow_moderate_v2', 'sound' => 'tabangnow_moderate_v1'],
                 $this->presentation($type, 'critical'),
                 "Non-Code-Red event {$type} must not ring Code Red"
             );
@@ -46,11 +46,11 @@ class NotificationAndroidPresentationTest extends TestCase
     public function test_existing_moderate_low_and_silent_channels_are_preserved(): void
     {
         self::assertSame(
-            ['channel_id' => 'tabangnow_moderate_v1', 'sound' => 'tabangnow_moderate_v1'],
+            ['channel_id' => 'tabangnow_moderate_v2', 'sound' => 'tabangnow_moderate_v1'],
             $this->presentation('resident_complaint', 'moderate')
         );
         self::assertSame(
-            ['channel_id' => 'tabangnow_low_v1', 'sound' => 'tabangnow_low_v1'],
+            ['channel_id' => 'tabangnow_low_v2', 'sound' => 'tabangnow_low_v1'],
             $this->presentation('account_activated', 'low')
         );
         self::assertSame(
