@@ -590,7 +590,6 @@ if (file_exists(__DIR__.'/settings.php')) {
 }
 
 
-// TABANGNOW_C21_PERMISSION_FIRST_EXTERNAL_LINKS_START
 // Direct external links only. No feeds, scraping, or remote article content.
 \Illuminate\Support\Facades\Route::middleware(['auth', 'active.user', 'role:admin'])
     ->prefix('admin')->name('admin.')->group(function () {
@@ -599,4 +598,3 @@ if (file_exists(__DIR__.'/settings.php')) {
         \Illuminate\Support\Facades\Route::delete('/dao-external-links/{id}', [\App\Http\Controllers\DashboardDaoNewsLinksController::class, 'destroy'])
             ->name('dao-news-links.destroy');
     });
-// TABANGNOW_C21_PERMISSION_FIRST_EXTERNAL_LINKS_END
