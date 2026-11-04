@@ -67,7 +67,7 @@
 
         <div class="rounded-xl border border-zinc-200 bg-white p-3 text-xs leading-5 text-zinc-700">
             <p class="font-semibold text-zinc-900">Installing on Android</p>
-            <p class="mt-1">Tap Download for Android, open the downloaded APK, and follow your phone's installation prompts. Only allow installation from the browser or file manager you used.</p>
+            <p class="mt-1">When the verified Android download is available, tap its button, open the APK, and follow your phone's installation prompts. Only allow installation from the browser or file manager you used.</p>
             <p class="mt-2">For security, download TabangNow only from this official website. You can disable the browser's install permission afterward.</p>
             @if ($downloadAvailable && $sha256 !== '')
                 <details class="mt-2">
