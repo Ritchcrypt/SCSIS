@@ -337,6 +337,12 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
         Route::post('/announcements', [AnnouncementController::class, 'store'])
             ->name('announcements.store');
 
+        Route::get('/announcements/{announcement}/edit', [AnnouncementController::class, 'edit'])
+            ->name('announcements.edit');
+
+        Route::patch('/announcements/{announcement}', [AnnouncementController::class, 'update'])
+            ->name('announcements.update');
+
         Route::patch('/announcements/{announcement}/toggle', [AnnouncementController::class, 'toggle'])
             ->name('announcements.toggle');
 
