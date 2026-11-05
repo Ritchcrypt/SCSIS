@@ -400,7 +400,23 @@
                             No official Dao barangays are available in the database.
                         </div>
                     @else
-                        <div class="mt-4 grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-blue-100 bg-white p-4 sm:grid-cols-2">
+                        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                            <span class="text-xs font-semibold text-slate-600">Choose the barangays to receive this announcement</span>
+                            <div class="flex items-center gap-2" aria-label="Barangay selection actions">
+                                <button type="button"
+                                        onclick="setAnnouncementBarangaySelection(true)"
+                                        class="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-800 transition hover:bg-blue-100">
+                                    Select All
+                                </button>
+                                <button type="button"
+                                        onclick="setAnnouncementBarangaySelection(false)"
+                                        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-100">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                        <div id="announcementTargetBarangays"
+                             class="mt-3 grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-blue-100 bg-white p-4 sm:grid-cols-2">
                             @foreach ($barangays as $barangay)
                                 <label class="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-blue-50">
                                     <input type="checkbox"
@@ -485,6 +501,22 @@
     </div>
 
     <script>
+        // Presentation-only helper. Never submits the announcement form or
+        // touches calamity, weather-feed, audience or notification settings.
+        function setAnnouncementBarangaySelection(checked) {
+            const list = document.getElementById('announcementTargetBarangays');
+
+            if (!list) {
+                return;
+            }
+
+            list.querySelectorAll('input[type="checkbox"][name="barangay_ids[]"]').forEach((box) => {
+                if (!box.disabled) {
+                    box.checked = checked;
+                }
+            });
+        }
+
         function openAnnouncementModal() {
             const modal = document.getElementById('announcementModal');
 
