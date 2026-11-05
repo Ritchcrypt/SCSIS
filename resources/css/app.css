@@ -2342,3 +2342,38 @@ html[data-theme='dark'] main .grid > a.bg-orange-50 .text-orange-900 {
         color: #f8fafc !important;
     }
 }
+
+/*
+|--------------------------------------------------------------------------
+| TabangNow Website — Consistent Desktop Arrow Cursor
+|--------------------------------------------------------------------------
+| Cosmetic only: action buttons and links use the normal system arrow
+| instead of the browser's pointing-hand cursor. Text inputs retain
+| their I-beam, and ordinary interactions/focus/hover are unchanged.
+*/
+:where(
+    a[href],
+    button,
+    summary,
+    [role="button"],
+    [role="link"],
+    [role="menuitem"],
+    input[type="button"],
+    input[type="submit"],
+    input[type="reset"],
+    input[type="checkbox"],
+    input[type="radio"],
+    label[for],
+    .tn-auth-remember
+),
+:where(
+    a[href],
+    button,
+    summary,
+    [role="button"],
+    [role="link"],
+    [role="menuitem"],
+    .tn-auth-remember
+) :where(*) {
+    cursor: default !important;
+}
