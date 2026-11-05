@@ -1248,6 +1248,16 @@
                 };
             @endphp
 
+            @php
+                // Separate review state; does not write to the notification bell or FCM.
+                $sidebarBadgeService = app(\App\Services\SidebarModuleBadgeService::class);
+                $sidebarBadgeCounts = $sidebarBadgeService->counts(
+                    $authUser,
+                    $navItems,
+                    request()->route()?->getName(),
+                    request()->isMethod('GET')
+                );
+            @endphp
             <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-5">
                 @foreach ($navItems as $item)
                     @continue(! Route::has($item['route']))
@@ -1286,16 +1296,25 @@
     ];
     $isSpaPilotLink = in_array(request()->route()?->getName(), $spaPilotRoutes, true)
         && in_array($item['route'], $spaPilotRoutes, true);
+    $badgeModule = $sidebarBadgeService->moduleForRoute($item['route']);
+    $badgeCount = $badgeModule ? (int) ($sidebarBadgeCounts[$badgeModule] ?? 0) : 0;
 @endphp
 
                     <a href="{{ route($item['route']) }}"
-                       @if ($isSpaPilotLink) wire:navigate.hover @endif
+                       @if ($isSpaPilotLink) wire:navigate @endif
                        class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
                        {{ $isActive
                             ? 'bg-blue-600 font-semibold text-white'
                             : 'font-medium text-blue-100 hover:bg-blue-900 hover:text-white' }}">
-                        <span>{{ $item['icon'] }}</span>
-                        <span>{{ $item['label'] }}</span>
+                        <span aria-hidden="true">{{ $item['icon'] }}</span>
+                        <span class="min-w-0 flex-1">{{ $item['label'] }}</span>
+                        @if ($badgeModule)
+                            <span data-tn-sidebar-badge="{{ $badgeModule }}"
+                                  aria-label="{{ $badgeCount }} unseen {{ $item['label'] }} updates"
+                                  class="shrink-0 min-w-5 justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-center text-xs font-bold leading-none text-white {{ $badgeCount > 0 ? 'inline-flex' : 'hidden' }}">
+                                {{ $badgeCount >= 99 ? '99+' : $badgeCount }}
+                            </span>
+                        @endif
                     </a>
                 @endforeach
             </nav>
@@ -1624,6 +1643,51 @@
                     event.preventDefault();
                 }
             });
+        })();
+    </script>
+    <script>
+        (() => {
+            if (window.__tabangNowModuleBadgePollingInstalled) return;
+            window.__tabangNowModuleBadgePollingInstalled = true;
+
+            let inFlight = false;
+            const endpoint = @json(route('sidebar-module-badges.index'));
+
+            async function refreshSidebarBadges() {
+                if (inFlight || document.visibilityState === 'hidden') return;
+                const badges = document.querySelectorAll('[data-tn-sidebar-badge]');
+                if (!badges.length) return;
+                inFlight = true;
+                try {
+                    const result = await fetch(endpoint, {
+                        credentials: 'same-origin',
+                        headers: {'Accept': 'application/json'},
+                        cache: 'no-store'
+                    });
+                    if (!result.ok) return;
+                    const payload = await result.json();
+                    const counts = payload?.counts ?? {};
+                    badges.forEach((badge) => {
+                        const key = badge.getAttribute('data-tn-sidebar-badge');
+                        const value = Math.max(0, Math.min(99, Number(counts[key] ?? 0) || 0));
+                        badge.textContent = value >= 99 ? '99+' : String(value);
+                        badge.classList.toggle('hidden', value === 0);
+                        badge.classList.toggle('inline-flex', value > 0);
+                        badge.setAttribute('aria-label', `${value} unseen module updates`);
+                    });
+                } catch (_) {
+                    // A badge refresh must never interrupt any app interaction.
+                } finally {
+                    inFlight = false;
+                }
+            }
+
+            // No extra refresh from the system notification bell.
+            document.addEventListener('livewire:navigated', refreshSidebarBadges);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') refreshSidebarBadges();
+            });
+            window.setInterval(refreshSidebarBadges, 60000);
         })();
     </script>
 </body>

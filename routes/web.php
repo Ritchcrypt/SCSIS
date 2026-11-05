@@ -58,6 +58,9 @@ Route::get('/download/apk', [PublicDownloadController::class, 'apk'])
 */
 
 Route::middleware(['auth', 'active.user'])->group(function () {
+    Route::get('/sidebar-module-badges', \App\Http\Controllers\SidebarModuleBadgeController::class)
+        ->middleware('throttle:30,1')
+        ->name('sidebar-module-badges.index');
     Route::get('/dashboard/welcome-photo', [DashboardWelcomeImageController::class, 'show'])
         ->name('dashboard-welcome.image');
     Route::get('/dashboard/welcome-photo/status', [DashboardWelcomeImageController::class, 'status'])
