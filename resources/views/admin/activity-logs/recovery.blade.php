@@ -17,10 +17,27 @@
             </p>
         </div>
 
-        <a href="{{ route('admin.activity-logs.index') }}"
-           class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
-            Back to Activity Logs
-        </a>
+        <div class="flex flex-wrap items-center gap-3">
+            <form method="POST"
+                  action="{{ route('admin.activity-logs.deleted-data.destroy-all') }}"
+                  data-confirm="Permanently delete ALL recovery records, including both recoverable and restored snapshots? This affects every page and filter. You will no longer be able to restore these deleted records. Live application data and Activity Logs will not be deleted. This cannot be undone."
+                  data-confirm-title="Delete all recovery records?"
+                  data-confirm-button="Delete All Records"
+                  data-confirm-tone="danger"
+                  onsubmit="return confirm('Permanently delete ALL recovery records? This cannot be undone.');">
+                @csrf
+                <button type="submit"
+                        @disabled(($summary['recoverable'] + $summary['restored']) === 0)
+                        class="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 shadow-sm transition hover:border-red-400 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+                    Delete Records
+                </button>
+            </form>
+
+            <a href="{{ route('admin.activity-logs.index') }}"
+               class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
+                Back to Activity Logs
+            </a>
+        </div>
     </div>
 
     @if (session('success'))
