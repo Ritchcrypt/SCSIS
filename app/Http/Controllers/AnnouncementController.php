@@ -295,6 +295,101 @@ class AnnouncementController extends Controller
             );
     }
 
+    /**
+     * Edit an existing publication without changing who originally received it.
+     * Audience/targeting and calamity delivery mode are immutable after publish.
+     */
+    public function edit(Request $request, Announcement $announcement): View
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+        Gate::authorize('update', $announcement);
+
+        $announcement->load('targetBarangays:id,barangay_name');
+
+        return view('announcements.edit', [
+            'announcement' => $announcement,
+            'categories' => $this->categories(),
+            'priorities' => $this->priorities(),
+        ]);
+    }
+
+    public function update(
+        Request $request,
+        Announcement $announcement
+    ): RedirectResponse {
+        abort_unless($request->user()?->isAdmin(), 403);
+        Gate::authorize('update', $announcement);
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'content' => ['required', 'string', 'max:5000'],
+            'category' => ['required', Rule::in(array_keys($this->categories()))],
+            'priority' => ['required', Rule::in(array_keys($this->priorities()))],
+        ]);
+
+        // A calamity-mode notification has a different delivery type and may
+        // trigger an emergency alarm. Editing must NEVER change that mode.
+        $oldCalamity = $announcement->category === 'calamity'
+            || (bool) $announcement->activate_calamity_mode;
+        $newCalamity = $validated['category'] === 'calamity'
+            || (bool) $announcement->activate_calamity_mode;
+        if ($oldCalamity !== $newCalamity) {
+            throw ValidationException::withMessages([
+                'category' => 'Cannot change an existing announcement into or out of calamity mode. Publish a new emergency notice instead.',
+            ]);
+        }
+
+        $newTitle = trim($validated['title']);
+        $newContent = trim($validated['content']);
+        $textChanged = $announcement->title !== $newTitle
+            || $announcement->content !== $newContent;
+
+        DB::transaction(function () use (
+            $announcement,
+            $validated,
+            $newTitle,
+            $newContent,
+            $textChanged
+        ): void {
+            $announcement->update([
+                'title' => $newTitle,
+                'content' => $newContent,
+                'category' => $validated['category'],
+                'priority' => $validated['priority'],
+            ]);
+
+            // Keep existing bell text current without a new delivery, without
+            // triggering model observers, and without touching read states.
+            if ($textChanged && Schema::hasTable('notifications')) {
+                DB::table('notifications')
+                    ->where('source_id', $announcement->id)
+                    ->whereIn('type', ['announcement', 'calamity'])
+                    ->update([
+                        'title' => mb_substr($newTitle, 0, 150),
+                        'message' => $newContent,
+                        'updated_at' => now(),
+                    ]);
+            }
+        });
+
+        $this->recordOperationalActivity(
+            event: 'announcement.updated',
+            category: 'announcement',
+            description: 'Administrator edited a published announcement.',
+            metadata: [
+                'announcement_id' => (int) $announcement->id,
+                'changed_fields' => array_keys($announcement->getChanges()),
+                'recipient_targeting_unchanged' => true,
+                'notification_redelivery' => false,
+            ],
+            request: $request,
+        );
+
+        return redirect()
+            ->route('admin.announcements.index')
+            ->with('success', 'Published announcement updated without sending another notification.');
+    }
+
     public function toggle(
         Request $request,
         Announcement $announcement
