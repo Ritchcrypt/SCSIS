@@ -32,6 +32,12 @@ class DeletedDataArchivePolicy
         return false;
     }
 
+    /** Collection purge is allowed for active admins; individual deletes stay forbidden. */
+    public function deleteAny(User $user): bool
+    {
+        return $this->isActiveAdministrator($user);
+    }
+
     public function delete(User $user, DeletedDataArchive $archive): bool
     {
         return false;
