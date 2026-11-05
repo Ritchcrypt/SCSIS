@@ -111,6 +111,39 @@ class DeletedDataRecoveryController extends Controller
         ]);
     }
 
+    /**
+     * Permanently discard recovery snapshots, not live application records.
+     * Only types exposed on this recovery page are in scope. Auditing is
+     * deliberately stored in the separate, untouched activity_logs table.
+     */
+    public function destroyAll(Request $request): RedirectResponse
+    {
+        Gate::authorize('deleteAny', DeletedDataArchive::class);
+
+        $deletedCount = DeletedDataArchive::query()
+            ->whereIn('resource_type', array_keys(self::TYPE_LABELS))
+            ->delete();
+
+        $this->activityLogger->record(
+            event: 'data_recovery.archives_purged',
+            category: 'data_recovery',
+            description: 'Administrator permanently deleted recovery snapshots.',
+            actor: $request->user(),
+            metadata: ['deleted_archive_count' => $deletedCount],
+            request: $request,
+        );
+
+        return redirect()
+            ->route('admin.activity-logs.deleted-data.index')
+            ->with(
+                'success',
+                $deletedCount === 1
+                    ? '1 recovery record was permanently deleted. Live application data was not affected.'
+                    : number_format($deletedCount)
+                        .' recovery records were permanently deleted. Live application data was not affected.'
+            );
+    }
+
     public function restore(
         Request $request,
         DeletedDataArchive $deletedDataArchive
