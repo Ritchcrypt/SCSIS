@@ -282,6 +282,9 @@ Route::middleware(['auth', 'active.user', 'role:admin'])
 
         Route::get('/activity-logs/deleted-data', [DeletedDataRecoveryController::class, 'index'])
             ->name('activity-logs.deleted-data.index');
+        Route::post('/activity-logs/deleted-data/delete-all', [DeletedDataRecoveryController::class, 'destroyAll'])
+            ->middleware('throttle:5,1')
+            ->name('activity-logs.deleted-data.destroy-all');
 
         Route::patch('/activity-logs/deleted-data/{deletedDataArchive}/restore', [DeletedDataRecoveryController::class, 'restore'])
             ->name('activity-logs.deleted-data.restore');
