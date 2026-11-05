@@ -61,6 +61,9 @@ Route::middleware(['auth', 'active.user'])->group(function () {
     Route::get('/sidebar-module-badges', \App\Http\Controllers\SidebarModuleBadgeController::class)
         ->middleware('throttle:30,1')
         ->name('sidebar-module-badges.index');
+    Route::post('/sidebar-module-badges/review', [\App\Http\Controllers\SidebarModuleBadgeController::class, 'review'])
+        ->middleware('throttle:60,1')
+        ->name('sidebar-module-badges.review');
     Route::get('/dashboard/welcome-photo', [DashboardWelcomeImageController::class, 'show'])
         ->name('dashboard-welcome.image');
     Route::get('/dashboard/welcome-photo/status', [DashboardWelcomeImageController::class, 'status'])

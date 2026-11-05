@@ -123,6 +123,38 @@ class SidebarModuleBadgeService
         return null;
     }
 
+    /** Mark only a module visible in this authenticated user's role menu. */
+    public function markModuleVisited(User $user, string $module): bool
+    {
+        if (! $user->isActive() || ! Schema::hasTable('sidebar_module_reviews')) {
+            return false;
+        }
+
+        $allowed = array_values(array_unique(array_filter(array_map(
+            fn (array $item): ?string => $this->moduleForRoute($item['route'] ?? null),
+            $this->menuRoutesForRole($user),
+        ))));
+
+        if (! in_array($module, $allowed, true)) {
+            return false;
+        }
+
+        $now = now()->toDateTimeString();
+        DB::table('sidebar_module_reviews')->upsert(
+            [[
+                'user_id' => $user->id,
+                'module' => $module,
+                'reviewed_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]],
+            ['user_id', 'module'],
+            ['reviewed_at', 'updated_at'],
+        );
+
+        return true;
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $navItems  The already-authorized role's menu.
      * @return array<string, int>  Keys are module names; no secret/user data in response.
@@ -196,6 +228,12 @@ class SidebarModuleBadgeService
 
     private function isPrefetch(): bool
     {
+        // A Livewire navigation GET may be only a hover-prefetch.
+        // Review is recorded by the POST endpoint after actual navigation.
+        if (request()->hasHeader('X-Livewire-Navigate')) {
+            return true;
+        }
+
         foreach (['Purpose', 'Sec-Purpose', 'X-Livewire-Navigate-Prefetch'] as $header) {
             if (str_contains(strtolower((string) request()->header($header, '')), 'prefetch')) {
                 return true;

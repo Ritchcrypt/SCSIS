@@ -90,6 +90,44 @@ class SidebarModuleBadgeTest extends TestCase
         $this->assertEquals($notificationsBefore, $notificationsAfter);
     }
 
+    public function test_livewire_hover_prefetch_does_not_acknowledge_a_module(): void
+    {
+        Carbon::setTestNow('2026-11-05 08:00:00');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $service = app(SidebarModuleBadgeService::class);
+        $menu = [['route' => 'admin.activity-logs.index']];
+        $this->assertSame(0, $service->counts($admin, $menu)['activity-logs']);
+
+        Carbon::setTestNow('2026-11-05 08:01:00');
+        DB::table('activity_logs')->insert([
+            'actor_id' => $admin->id,
+            'event' => 'sidebar.prefetch',
+            'category' => 'test',
+            'description' => 'Unreviewed event',
+            'created_at' => now(),
+        ]);
+
+        // Livewire hover-prefetch and actual SPA navigation use this same header.
+        request()->headers->set('X-Livewire-Navigate', '');
+        $this->assertSame(1, $service->counts($admin, $menu, 'admin.activity-logs.index', true)['activity-logs']);
+        request()->headers->remove('X-Livewire-Navigate');
+
+        Carbon::setTestNow('2026-11-05 08:02:00');
+        $this->actingAs($admin)
+            ->postJson(route('sidebar-module-badges.review'), ['module' => 'activity-logs'])
+            ->assertOk()
+            ->assertJsonPath('reviewed', true);
+        $this->assertSame(0, $service->counts($admin, $menu)['activity-logs']);
+    }
+
+    public function test_resident_cannot_review_admin_only_modules(): void
+    {
+        $resident = User::factory()->create(['role' => 'resident']);
+        $this->actingAs($resident)
+            ->postJson(route('sidebar-module-badges.review'), ['module' => 'activity-logs'])
+            ->assertForbidden();
+    }
+
     public function test_sidebar_badge_json_is_protected_from_guests(): void
     {
         $this->get(route('sidebar-module-badges.index'))

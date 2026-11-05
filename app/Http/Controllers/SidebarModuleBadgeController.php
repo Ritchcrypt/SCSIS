@@ -19,4 +19,19 @@ class SidebarModuleBadgeController extends Controller
             'counts' => $badges->counts($user, $items),
         ])->header('Cache-Control', 'private, no-store, max-age=0');
     }
+
+    public function review(Request $request, SidebarModuleBadgeService $badges): JsonResponse
+    {
+        $validated = $request->validate([
+            'module' => ['required', 'string', 'max:48'],
+        ]);
+
+        abort_unless(
+            $badges->markModuleVisited($request->user(), $validated['module']),
+            403,
+        );
+
+        return response()->json(['reviewed' => true])
+            ->header('Cache-Control', 'private, no-store, max-age=0');
+    }
 }

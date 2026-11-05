@@ -1258,7 +1258,8 @@
                     request()->isMethod('GET')
                 );
             @endphp
-            <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-5">
+            <nav data-tn-sidebar-current-module="{{ $sidebarBadgeService->moduleForRoute(request()->route()?->getName()) }}"
+                 class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-5">
                 @foreach ($navItems as $item)
                     @continue(! Route::has($item['route']))
 
@@ -1301,7 +1302,7 @@
 @endphp
 
                     <a href="{{ route($item['route']) }}"
-                       @if ($isSpaPilotLink) wire:navigate @endif
+                       @if ($isSpaPilotLink) wire:navigate.hover @endif
                        class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm
                        {{ $isActive
                             ? 'bg-blue-600 font-semibold text-white'
@@ -1652,6 +1653,7 @@
 
             let inFlight = false;
             const endpoint = @json(route('sidebar-module-badges.index'));
+            const reviewEndpoint = @json(route('sidebar-module-badges.review'));
 
             async function refreshSidebarBadges() {
                 if (inFlight || document.visibilityState === 'hidden') return;
@@ -1682,8 +1684,35 @@
                 }
             }
 
-            // No extra refresh from the system notification bell.
-            document.addEventListener('livewire:navigated', refreshSidebarBadges);
+            // Only after an actual navigation, never on a hover prefetch.
+            async function confirmModuleVisit() {
+                const module = document.querySelector('[data-tn-sidebar-current-module]')
+                    ?.getAttribute('data-tn-sidebar-current-module');
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+                if (!module || !csrf) {
+                    refreshSidebarBadges();
+                    return;
+                }
+                try {
+                    const response = await fetch(reviewEndpoint, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrf
+                        },
+                        body: JSON.stringify({module}),
+                        cache: 'no-store'
+                    });
+                    if (response.ok) refreshSidebarBadges();
+                } catch (_) {
+                    // Badge review must never interrupt ordinary navigation.
+                }
+            }
+
+            // The system notification bell remains completely independent.
+            document.addEventListener('livewire:navigated', confirmModuleVisit);
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') refreshSidebarBadges();
             });
