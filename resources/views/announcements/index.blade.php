@@ -214,6 +214,25 @@
 
                     @if ($canManageAnnouncements && $destroyRouteName)
     <div class="flex shrink-0 items-center gap-3">
+        @if ($role === 'admin')
+            <a href="{{ route('admin.announcements.edit', $announcement) }}"
+               title="Edit published announcement"
+               aria-label="Edit published announcement"
+               class="tn-action-icon inline-flex h-10 w-10 items-center justify-center rounded-xl border border-blue-300 bg-blue-50 text-blue-800 shadow-sm transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     class="h-5 w-5"
+                     viewBox="0 0 24 24"
+                     fill="none"
+                     stroke="currentColor"
+                     stroke-width="2"
+                     stroke-linecap="round"
+                     stroke-linejoin="round"
+                     aria-hidden="true">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L9 17l-4 1 1-4 10.5-10.5z" />
+                </svg>
+            </a>
+        @endif
         <form method="POST"
               action="{{ route($destroyRouteName, $announcement) }}"
               class="m-0">
